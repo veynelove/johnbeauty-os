@@ -5,7 +5,6 @@
 
 .global _ZN16InterruptManager22IgnoreInterruptRequestEv
 
-
 .macro HandleException num
 .global _ZN16InterruptManager26HandleInterruptRequest\num\()Ev
 _ZN16InterruptManager26HandleInterruptRequest\num\()Ev:
@@ -20,10 +19,8 @@ _ZN16InterruptManager26HandleInterruptRequest\num\()Ev:
 	jmp int_bottom
 .endm
 
-
 HandleInterruptRequest 0x00
 HandleInterruptRequest 0x01
-
 
 int_bottom:
 	pusha
@@ -45,7 +42,6 @@ int_bottom:
 	popa
 
 _ZN16InterruptManager22IgnoreInterruptRequestEv:
-
 	iret
 
 .data

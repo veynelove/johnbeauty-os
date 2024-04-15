@@ -1,6 +1,5 @@
 #include "interrupts.h"
 
-
 void printf(const char *str);
 
 InterruptManager::GateDescriptor InterruptManager::interruptDescriptorTable[256];
@@ -19,11 +18,8 @@ void InterruptManager::SetInterruptDescriptorTableEntry(
 	interruptDescriptorTable[interruptNumber].gdt_codeSegmentSelector = codeSegmentSelectorOffset;
 	interruptDescriptorTable[interruptNumber].access = IDT_DESC_PRESENT | DescriptorType | ((DescriptorPrivilegeLevel&3) <<5);
 	interruptDescriptorTable[interruptNumber].reserved = 0;
-	
-	
 }
 		
-
 InterruptManager::InterruptManager(GlobalDescriptorTable* gdt)
 {
 	uint16_t CodeSegment = gdt->CodeSegmentSelector();
@@ -40,9 +36,9 @@ InterruptManager::InterruptManager(GlobalDescriptorTable* gdt)
 	asm volatile("lidt %0" : : "m" (idt));
 
 }
+
 InterruptManager::~InterruptManager()
 {
-	
 }
 
 void InterruptManager::Activate()
@@ -53,6 +49,5 @@ void InterruptManager::Activate()
 uint32_t InterruptManager::handleInterrupt(uint8_t interruptNumber, uint32_t esp)
 {
     printf("INTERRUPT");
-
     return esp;
 }

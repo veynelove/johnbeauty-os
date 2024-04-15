@@ -1,6 +1,6 @@
 #include "gdt.h"
 
-GlobalDescriptorTable:: GlobalDescriptorTable()
+GlobalDescriptorTable::GlobalDescriptorTable()
 : nullSegmentSelector(0,0,0),
 unusedSegmentSelector(0,0,0),
 codeSegmentSelector(0,64*1024*1024,0x9A),
@@ -13,7 +13,7 @@ dataSegmentSelector(0,64*1024*1024,0x92)
 	asm volatile("lgdt (%0)": : "p" (((uint8_t *) i)+2));
 }
 
-GlobalDescriptorTable:: ~ GlobalDescriptorTable()
+GlobalDescriptorTable::~GlobalDescriptorTable()
 {
 }
 
@@ -30,12 +30,9 @@ uint16_t GlobalDescriptorTable::CodeSegmentSelector()
 GlobalDescriptorTable::SegmentDescriptor::SegmentDescriptor(uint32_t base, uint32_t limit, uint8_t flags)
 {
 	uint8_t* target = (uint8_t*)this;
-	if(limit <= 65536)
-	{
+	if(limit <= 65536) {
 		target[6] = 0x40;
-	}
-	else
-	{
+	} else {
 		if((limit & 0xFFF) != 0xFFF)
 			limit = (limit >>12) -1;
 		else 

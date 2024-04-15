@@ -3,11 +3,9 @@
 
 #include "types.h"
 
-class GlobalDescriptorTable
-{
+class GlobalDescriptorTable {
 	public:
-		class SegmentDescriptor
-		{
+		class SegmentDescriptor {
 			private:
 				uint16_t limit_lo;
 				uint16_t base_lo;

@@ -11,7 +11,6 @@ SECTIONS
         *(.text*)
         *(.rodata)
     }
-
     .data :
     {
         start_ctors = .;
@@ -21,13 +20,11 @@ SECTIONS
 
         *(.data)
     }
-
     .bss :
     {
         *(.bss)
     }
-
-
+    
     /DISCARD/ : 
     {
         *(.fini_array*)
