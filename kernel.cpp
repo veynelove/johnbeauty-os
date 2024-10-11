@@ -45,7 +45,7 @@ extern "C" void callConstructors()
 
 extern "C" void beautyMain(void* multiboot_structure, uint32_t magicnumber)
 {
-    printf("beauty!\n");
+    printf("johnbeauty!\n");
     printf("ta de hua yao fang zai xin li");
 	
     GlobalDescriptorTable gdt;
