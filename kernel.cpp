@@ -43,10 +43,10 @@ extern "C" void callConstructors()
         (*i)();
 }
 
-extern "C" void beautyMain(void* multiboot_structure, uint32_t magicnumber)
+extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 {
     printf("johnbeauty!\n");
-    printf("ta de hua yao fang zai xin li");
+    printf("this is a operation system by c++.\n");
 	
     GlobalDescriptorTable gdt;
 	InterruptManager interrupts(&gdt);
