@@ -21,7 +21,6 @@ public:
 class InterruptManager {
 friend class InterruptHandle;
 protected:
-
 	static InterruptManager *ActivateInterruptManager;
 	InterruptHandle *handles[256];
 

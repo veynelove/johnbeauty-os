@@ -1,5 +1,9 @@
 ### johnbeauty-os
-this is a operating system by c++
+this is a operating system by c++.
+源项目地址:https://www.bilibili.com/video/BV1Ng411x7As?spm_id_from=333.788.videopod.episodes&vd_source=89f02ddd7438a1e3a8d5c5fa0a9ba297&p=8
+
+# build
+1 使用"make johnkernel.iso"编译os镜像.
 
 # question
 
