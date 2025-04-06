@@ -13,3 +13,13 @@ this is a operating system by c++.
     在调用interrupts.Activate()后，启动虚拟机失败，提示虚拟cpu异常。将i[0]和[1]交换后，正常收到硬件中断，不理解为什么。
     i[1] = (uint32_t)this;
     i[0] = sizeof(GlobalDescriptorTable) << 16;
+
+2 在mouse.cpp第60行,源代码是:
+    for(uint8_t i=0;i<3;i++) {
+            if((buffer[0] & (0x01<<i)) != (buttons & (0x01<<i))) {
+                VideoMemory[80*y+x] = ((VideoMemory[80*y+x] & 0xF000)>>4)
+                    | ((VideoMemory[80*y+x] & 0x0F00)<<4)
+                    | ((VideoMemory[80*y+x] & 0x00FF));
+            }
+        }
+    如果添加Video这段代码,在光标点击移动时,移动初始位置的颜色不会恢复.

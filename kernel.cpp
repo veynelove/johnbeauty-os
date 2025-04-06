@@ -2,6 +2,7 @@
 #include "gdt.h"
 #include "interrupts.h"
 #include "keyboard.h"
+#include "mouse.h"
 
 void printf(const char* str)
 {
@@ -53,7 +54,8 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 	InterruptManager interrupts(&gdt);
 	
     KeyboardDriver keyboard(&interrupts);
-
+    MouseDriver mouse(&interrupts);
+    
 	interrupts.Activate();
     while (1);    
 }
