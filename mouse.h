@@ -4,12 +4,24 @@
 #include "types.h"
 #include "interrupts.h"
 #include "port.h"
+#include "driver.h"
 
-class MouseDriver : public InterruptHandle {
+class MouseEventHandler {
 public:
-    MouseDriver(InterruptManager *manager);
+    MouseEventHandler();
+
+    virtual void OnActivate();
+    virtual void OnMouseDown(uint8_t button);
+    virtual void OnMouseUp(uint8_t button);
+    virtual void OnMouseMove(int32_t xoffset, int32_t yoffset);
+};
+
+class MouseDriver : public InterruptHandle, public Driver {
+public:
+    MouseDriver(InterruptManager *manager, MouseEventHandler *handler);
     ~MouseDriver();
     virtual uint32_t HandleInterrupt(uint32_t esp);
+    virtual void Activate();
 private:
     Port8Bit dataport;
     Port8Bit commandport;
@@ -17,5 +29,7 @@ private:
     uint8_t buffer[3];
     uint8_t offset;
     uint8_t buttons;
+
+    MouseEventHandler *handler;
 };
 #endif
