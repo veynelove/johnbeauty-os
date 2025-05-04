@@ -1,13 +1,35 @@
-GPPPARAMS = -m32 -fno-use-cxa-atexit -nostdlib -fno-builtin -fno-rtti -fno-exceptions -fno-leading-underscore
+GPPPARAMS = -m32 -I. -fno-use-cxa-atexit -nostdlib -fno-builtin -fno-rtti -fno-exceptions -fno-leading-underscore
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 
-objects = loader.o gdt.o kernel.o port.o interruptstubs.o interrupts.o 
+objects = obj/kernel/loader.o \
+	obj/kernel/gdt.o \
+	obj/kernel/kernel.o \
+	obj/hdc/port.o \
+	obj/hdc/interruptstubs.o \
+	obj/hdc/interrupts.o \
+	obj/drivers/keyboard.o \
+	obj/drivers/mouse.o \
+	obj/drivers/driver.o
 
-%.o: %.cpp
+obj/drivers/%.o: drivers/%.cpp
+	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
-%.o: %.s
+obj/hdc/%.o: hdc/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/kernel/%.o: kernel/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/hdc/%.o: hdc/%.s
+	mkdir -p $(@D)
+	as ${ASPARAMS} -o $@ $<
+
+obj/kernel/%.o: kernel/%.s
+	mkdir -p $(@D)
 	as ${ASPARAMS} -o $@ $<
 
 johnkernel.bin: linker.ld ${objects}
@@ -32,7 +54,5 @@ johnkernel.iso: johnkernel.bin
 	rm -rf iso
 
 clean:
-	@find . -name "*.o" -delete
-	@find . -name "johnkernel.bin" -delete
-	@find . -name "johnkernel.iso" -delete
+	rm -rf obj johnkernel.bin johnkernel.iso
 	@echo 'clean success.'

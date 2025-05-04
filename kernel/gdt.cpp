@@ -1,5 +1,6 @@
-#include "gdt.h"
+#include <kernel/gdt.h>
 
+namespace JLOS::Kernel {
 GlobalDescriptorTable::GlobalDescriptorTable()
 : nullSegmentSelector(0,0,0),
 unusedSegmentSelector(0,0,0),
@@ -71,4 +72,5 @@ uint32_t GlobalDescriptorTable::SegmentDescriptor::Limit()
 	if((target[6] & 0xC0) == 0xC0)
 		result = (result <<12) | 0xFFF;
 	return result;
+}
 }

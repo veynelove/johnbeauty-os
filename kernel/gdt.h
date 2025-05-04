@@ -1,8 +1,10 @@
 #ifndef __GDT_H
 #define __GDT_H
 
-#include "types.h"
+#include <common/types.h>
 
+namespace JLOS {
+namespace Kernel {
 class GlobalDescriptorTable {
 	public:
 		class SegmentDescriptor {
@@ -29,5 +31,6 @@ class GlobalDescriptorTable {
 		uint16_t CodeSegmentSelector();
 		uint16_t DataSegmentSelector();
 };
-
+}
+}
 #endif
