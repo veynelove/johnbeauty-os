@@ -8,6 +8,7 @@ objects = obj/kernel/loader.o \
 	obj/hdc/port.o \
 	obj/hdc/interruptstubs.o \
 	obj/hdc/interrupts.o \
+	obj/hdc/pci.o \
 	obj/drivers/keyboard.o \
 	obj/drivers/mouse.o \
 	obj/drivers/driver.o

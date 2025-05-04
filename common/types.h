@@ -1,5 +1,5 @@
-#ifndef __TYPES_H
-#define __TYPES_H
+#ifndef __COMMON_TYPES_H
+#define __COMMON_TYPES_H
 
 namespace JLOS {
 typedef char int8_t;

@@ -1,5 +1,5 @@
-#ifndef __INTERUPTS_H
-#define __INTERUPTS_H
+#ifndef __HDC_INTERUPTS_H
+#define __HDC_INTERUPTS_H
 
 #include <common/types.h>
 #include <hdc/port.h>
@@ -10,18 +10,32 @@ namespace Hdc {
 class InterruptManager;
 
 class InterruptHandle {
+public:
+	virtual uint32_t HandleInterrupt(uint32_t esp);
 protected:
 	uint8_t interruptNumber;
 	InterruptManager *interruptManager;
 
 	InterruptHandle(uint8_t interruptNumber, InterruptManager *interruptManager);
 	~InterruptHandle();
-public:
-	virtual uint32_t HandleInterrupt(uint32_t esp);
 };
 
 class InterruptManager {
 friend class InterruptHandle;
+public:
+	InterruptManager(JLOS::Kernel::GlobalDescriptorTable* gdt);
+	~InterruptManager();
+
+	void Activate();
+	void Deactivate();
+
+	static uint32_t handleInterrupt(uint8_t interruptNumber, uint32_t esp);
+	uint32_t DoHandleInterrupt(uint8_t interruptNumber, uint32_t esp);
+
+	static void IgnoreInterruptRequest();
+	static void HandleInterruptRequest0x00();
+	static void HandleInterruptRequest0x01();
+	static void HandleInterruptRequest0x0C();
 protected:
 	static InterruptManager *ActivateInterruptManager;
 	InterruptHandle *handles[256];
@@ -52,20 +66,6 @@ protected:
 	Port8BitSlow picMasterData;
 	Port8BitSlow picSlaveCommand;
 	Port8BitSlow picSlaveData;
-public:
-	InterruptManager(JLOS::Kernel::GlobalDescriptorTable* gdt);
-	~InterruptManager();
-
-	void Activate();
-	void Deactivate();
-
-	static uint32_t handleInterrupt(uint8_t interruptNumber, uint32_t esp);
-	uint32_t DoHandleInterrupt(uint8_t interruptNumber, uint32_t esp);
-
-	static void IgnoreInterruptRequest();
-	static void HandleInterruptRequest0x00();
-	static void HandleInterruptRequest0x01();
-	static void HandleInterruptRequest0x0C();
 };
 }
 }
