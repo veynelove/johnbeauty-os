@@ -1,6 +1,7 @@
 #include <common/types.h>
 #include <kernel/gdt.h>
 #include <hdc/interrupts.h>
+#include <hdc/pci.h>
 #include <drivers/driver.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -13,9 +14,9 @@ void printf(const char* str)
     for(int i=0;str[i] != '\0';i++) {
         switch(str[i]) {
             case '\n':
-                    y++;
-                    x=0;
-                    break;
+                y++;
+                x=0;
+                break;
             default:
                 VideoMemory[80*y+x] = (VideoMemory[80*y+x] & 0xFF00) | str[i];
                 x++;
@@ -27,8 +28,9 @@ void printf(const char* str)
         }
         if(y>=25) {
             for(y=0;y<25;y++){
-                for(x=0;x<80;x++)
+                for(x=0;x<80;x++) {
                     VideoMemory[80*y+x] = (VideoMemory[80*y+x] & 0xFF00) | ' ';
+                }
             }
             x = 0;
             y = 0;
@@ -55,8 +57,6 @@ public:
 };
 
 class MouseToConsole : public JLOS::Drivers::MouseEventHandler {
-private:
-    int8_t x, y;
 public:
     MouseToConsole() {
         uint16_t *VideoMemory = (uint16_t *)0xb8000;
@@ -84,23 +84,24 @@ public:
             | ((VideoMemory[80*y+x] & 0x0F00)<<4)
             | ((VideoMemory[80*y+x] & 0x00FF));
     }
+private:
+    int8_t x, y;
 };
 
 typedef void (*constructor)();
 extern "C" constructor  start_ctors;
-
 extern "C" constructor  end_ctors;
 
 extern "C" void callConstructors()
 {
-    for(constructor* i = &start_ctors; i != &end_ctors; i++)
+    for(constructor* i = &start_ctors; i != &end_ctors; i++) {
         (*i)();
+    }
 }
 
 extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 {
-    printf("johnbeauty!\n");
-    printf("this is a operation system by c++.\n");
+    printf("johnbeauty always!\n");
 	
     GlobalDescriptorTable gdt;
 	JLOS::Hdc::InterruptManager interrupts(&gdt);
@@ -115,6 +116,9 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     MouseToConsole mousehandler;
     JLOS::Drivers::MouseDriver mouse(&interrupts, &mousehandler);
     drvManager.AddDriver(&mouse);
+
+    JLOS::Hdc::PeripheralComponentInterconnectController PCIController;
+    PCIController.SelectDrivers(&drvManager);
 
     printf("initializing Hardware, Stage 2.\n");
     drvManager.ActivateAll();
