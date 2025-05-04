@@ -1,10 +1,12 @@
 #ifndef __INTERUPTS_H
 #define __INTERUPTS_H
 
-#include "types.h"
-#include "port.h"
-#include "gdt.h"
+#include <common/types.h>
+#include <hdc/port.h>
+#include <kernel/gdt.h>
 
+namespace JLOS {
+namespace Hdc {
 class InterruptManager;
 
 class InterruptHandle {
@@ -51,7 +53,7 @@ protected:
 	Port8BitSlow picSlaveCommand;
 	Port8BitSlow picSlaveData;
 public:
-	InterruptManager(GlobalDescriptorTable* gdt);
+	InterruptManager(JLOS::Kernel::GlobalDescriptorTable* gdt);
 	~InterruptManager();
 
 	void Activate();
@@ -65,5 +67,6 @@ public:
 	static void HandleInterruptRequest0x01();
 	static void HandleInterruptRequest0x0C();
 };
-
+}
+}
 #endif

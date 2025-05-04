@@ -1,8 +1,11 @@
-#include "interrupts.h"
+#include <hdc/interrupts.h>
 
+namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(uint8_t);
+void printfHex(JLOS::uint8_t);
+}
 
+namespace JLOS::Hdc {
 InterruptHandle::InterruptHandle(uint8_t interruptNumber, InterruptManager *interruptManager)
 {
 	this->interruptNumber = interruptNumber;
@@ -40,7 +43,7 @@ void InterruptManager::SetInterruptDescriptorTableEntry(
 	interruptDescriptorTable[interruptNumber].reserved = 0;
 }
 		
-InterruptManager::InterruptManager(GlobalDescriptorTable* gdt)
+InterruptManager::InterruptManager(JLOS::Kernel::GlobalDescriptorTable* gdt)
 :picMasterCommand(0x20), picMasterData(0x21), picSlaveCommand(0xA0), picSlaveData(0xA1)
 {
 	uint16_t CodeSegment = gdt->CodeSegmentSelector();
@@ -103,8 +106,8 @@ uint32_t InterruptManager::DoHandleInterrupt(uint8_t interruptNumber, uint32_t e
 		esp = handles[interruptNumber]->HandleInterrupt(esp);
 	}
 	else if(interruptNumber != 0x20) {
-		printf("UNHANDLED INTERUPT 0x");
-		printfHex(interruptNumber);
+		JLOS::Kernel::printf("UNHANDLED INTERUPT 0x");
+		JLOS::Kernel::printfHex(interruptNumber);
 	}
 		
 	if(0x20<=interruptNumber && interruptNumber<0x30) {
@@ -113,4 +116,5 @@ uint32_t InterruptManager::DoHandleInterrupt(uint8_t interruptNumber, uint32_t e
 			picSlaveCommand.Write(0x20);
 	}
     return esp;
+}
 }

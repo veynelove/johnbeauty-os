@@ -1,5 +1,6 @@
-#include "driver.h"
+#include <drivers/driver.h>
 
+namespace JLOS::Drivers {
 Driver::Driver()
 {
 
@@ -40,4 +41,5 @@ void DriverManager::ActivateAll()
 {
     for(int i=0;i<numDrivers;i++)
         drivers[i]->Activate();
+}
 }

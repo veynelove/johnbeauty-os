@@ -1,11 +1,13 @@
 #ifndef __MOUSE_H
 #define __MOUSE_H
 
-#include "types.h"
-#include "interrupts.h"
-#include "port.h"
-#include "driver.h"
+#include <common/types.h>
+#include <hdc/interrupts.h>
+#include <hdc/port.h>
+#include <drivers/driver.h>
 
+namespace JLOS {
+namespace Drivers {
 class MouseEventHandler {
 public:
     MouseEventHandler();
@@ -16,15 +18,15 @@ public:
     virtual void OnMouseMove(int32_t xoffset, int32_t yoffset);
 };
 
-class MouseDriver : public InterruptHandle, public Driver {
+class MouseDriver : public JLOS::Hdc::InterruptHandle, public Driver {
 public:
-    MouseDriver(InterruptManager *manager, MouseEventHandler *handler);
+    MouseDriver(JLOS::Hdc::InterruptManager *manager, MouseEventHandler *handler);
     ~MouseDriver();
     virtual uint32_t HandleInterrupt(uint32_t esp);
     virtual void Activate();
 private:
-    Port8Bit dataport;
-    Port8Bit commandport;
+    JLOS::Hdc::Port8Bit dataport;
+    JLOS::Hdc::Port8Bit commandport;
 
     uint8_t buffer[3];
     uint8_t offset;
@@ -32,4 +34,6 @@ private:
 
     MouseEventHandler *handler;
 };
+}
+}
 #endif

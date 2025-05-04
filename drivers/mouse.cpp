@@ -1,5 +1,6 @@
-#include "mouse.h"
+#include <drivers/mouse.h>
 
+namespace JLOS::Drivers {
 MouseEventHandler::MouseEventHandler()
 {
 }
@@ -20,7 +21,7 @@ void MouseEventHandler::OnMouseMove(int32_t xoffset, int32_t yoffset)
 {
 }
 
-MouseDriver::MouseDriver(InterruptManager *manager, MouseEventHandler *handler)
+MouseDriver::MouseDriver(JLOS::Hdc::InterruptManager *manager, MouseEventHandler *handler)
 :InterruptHandle(0x2C,manager),dataport(0x60),commandport(0x64)
 {
     this->handler = handler;
@@ -73,4 +74,5 @@ uint32_t MouseDriver::HandleInterrupt(uint32_t esp)
         buttons = buffer[0];
     }
     return  esp;
+}
 }

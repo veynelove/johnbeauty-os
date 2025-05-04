@@ -1,6 +1,8 @@
 #ifndef __DRIVER_H
 #define __DRIVER_H
 
+namespace JLOS {
+namespace Drivers {
 class Driver {
 public:
     Driver();
@@ -20,4 +22,6 @@ private:
     Driver *drivers[255];
     int numDrivers;
 };
+}
+}
 #endif // __DRIVER_H

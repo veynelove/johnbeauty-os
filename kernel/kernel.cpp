@@ -1,10 +1,11 @@
-#include "types.h"
-#include "gdt.h"
-#include "interrupts.h"
-#include "driver.h"
-#include "keyboard.h"
-#include "mouse.h"
+#include <common/types.h>
+#include <kernel/gdt.h>
+#include <hdc/interrupts.h>
+#include <drivers/driver.h>
+#include <drivers/keyboard.h>
+#include <drivers/mouse.h>
 
+namespace JLOS::Kernel {
 void printf(const char* str)
 {
     static uint16_t*  VideoMemory = (uint16_t*)0xb8000;
@@ -44,7 +45,7 @@ void printfHex(uint8_t key)
     printf(foo);
 }
 
-class PrintfKeyboardEventHandler : public KeyboardEventHandler {
+class PrintfKeyboardEventHandler : public JLOS::Drivers::KeyboardEventHandler {
 public:
     void OnKeyDown(char c) {
         char *foo = " ";
@@ -53,7 +54,7 @@ public:
     }
 };
 
-class MouseToConsole : public MouseEventHandler {
+class MouseToConsole : public JLOS::Drivers::MouseEventHandler {
 private:
     int8_t x, y;
 public:
@@ -102,17 +103,17 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     printf("this is a operation system by c++.\n");
 	
     GlobalDescriptorTable gdt;
-	InterruptManager interrupts(&gdt);
+	JLOS::Hdc::InterruptManager interrupts(&gdt);
 	
     printf("initializing Hardware, Stage 1.\n");
-    DriverManager drvManager;
+    JLOS::Drivers::DriverManager drvManager;
     
     PrintfKeyboardEventHandler kbhandler;
-    KeyboardDriver keyboard(&interrupts, &kbhandler);
+    JLOS::Drivers::KeyboardDriver keyboard(&interrupts, &kbhandler);
     drvManager.AddDriver(&keyboard);
 
     MouseToConsole mousehandler;
-    MouseDriver mouse(&interrupts, &mousehandler);
+    JLOS::Drivers::MouseDriver mouse(&interrupts, &mousehandler);
     drvManager.AddDriver(&mouse);
 
     printf("initializing Hardware, Stage 2.\n");
@@ -121,4 +122,5 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 
 	interrupts.Activate();
     while (1);    
+}
 }

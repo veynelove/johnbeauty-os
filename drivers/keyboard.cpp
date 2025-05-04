@@ -1,8 +1,11 @@
-#include "keyboard.h"
+#include <drivers/keyboard.h>
 
-void printf(const char *);
-void printfHex(uint8_t);
+namespace JLOS::Kernel {
+void printf(const char *str);
+void printfHex(JLOS::uint8_t);
+}
 
+namespace JLOS::Drivers {
 KeyboardEventHandler::KeyboardEventHandler()
 {
 
@@ -18,7 +21,7 @@ void KeyboardEventHandler::OnKeyUp(char)
 
 }
 
-KeyboardDriver::KeyboardDriver(InterruptManager *manager, KeyboardEventHandler *handler)
+KeyboardDriver::KeyboardDriver(JLOS::Hdc::InterruptManager *manager, KeyboardEventHandler *handler)
 :InterruptHandle(0x21, manager), dataport(0x60), commandport(0x64)
 {
     this->handler = handler;
@@ -107,11 +110,12 @@ uint32_t KeyboardDriver::HandleInterrupt(uint32_t esp)
         
         default:
             if(key < 0x80) {
-                printf("KEYBOARD 0x");
-                printfHex(key);
+                JLOS::Kernel::printf("KEYBOARD 0x");
+                JLOS::Kernel::printfHex(key);
             }
             break;
         
     }
     return esp;
+}
 }
