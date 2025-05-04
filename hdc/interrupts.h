@@ -1,12 +1,31 @@
 #ifndef __INTERUPTS_H
 #define __INTERUPTS_H
 
-#include "types.h"
-#include "port.h"
-#include "gdt.h"
+#include <common/types.h>
+#include <hdc/port.h>
+#include <kernel/gdt.h>
+
+namespace JLOS {
+namespace Hdc {
+class InterruptManager;
+
+class InterruptHandle {
+protected:
+	uint8_t interruptNumber;
+	InterruptManager *interruptManager;
+
+	InterruptHandle(uint8_t interruptNumber, InterruptManager *interruptManager);
+	~InterruptHandle();
+public:
+	virtual uint32_t HandleInterrupt(uint32_t esp);
+};
 
 class InterruptManager {
+friend class InterruptHandle;
 protected:
+	static InterruptManager *ActivateInterruptManager;
+	InterruptHandle *handles[256];
+
 	struct GateDescriptor {
 		uint16_t handleAddressLowBits;
 		uint16_t gdt_codeSegmentSelector;
@@ -34,16 +53,20 @@ protected:
 	Port8BitSlow picSlaveCommand;
 	Port8BitSlow picSlaveData;
 public:
-	InterruptManager(GlobalDescriptorTable* gdt);
+	InterruptManager(JLOS::Kernel::GlobalDescriptorTable* gdt);
 	~InterruptManager();
 
 	void Activate();
+	void Deactivate();
 
 	static uint32_t handleInterrupt(uint8_t interruptNumber, uint32_t esp);
-	
+	uint32_t DoHandleInterrupt(uint8_t interruptNumber, uint32_t esp);
+
 	static void IgnoreInterruptRequest();
 	static void HandleInterruptRequest0x00();
 	static void HandleInterruptRequest0x01();
+	static void HandleInterruptRequest0x0C();
 };
-
+}
+}
 #endif

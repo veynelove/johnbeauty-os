@@ -1,5 +1,6 @@
-#include "port.h"
+#include <hdc/port.h>
 
+namespace JLOS::Hdc {
 Port::Port(uint16_t portnumber)
 {
 	this->portnumber = portnumber;
@@ -80,4 +81,5 @@ uint32_t Port32Bit::Read()
     uint32_t result;
 	__asm__ volatile("inl %1, %0" : "=a" (result) : "Nd" (portnumber));
     return result;
+}
 }

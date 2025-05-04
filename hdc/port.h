@@ -1,8 +1,10 @@
 #ifndef __PORT_H
 #define __PORT_H
 
-#include "types.h"
+#include <common/types.h>
 
+namespace JLOS {
+namespace Hdc {
 class Port {
 protected:
 	uint16_t portnumber;
@@ -40,5 +42,6 @@ public:
 	virtual void Write(uint32_t data);
 	virtual uint32_t Read();
 };
-	
+}
+}	
 #endif
