@@ -1,6 +1,7 @@
 #include <common/types.h>
 #include <kernel/gdt.h>
 #include <hdc/interrupts.h>
+#include <hdc/pci.h>
 #include <drivers/driver.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -115,6 +116,9 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     MouseToConsole mousehandler;
     JLOS::Drivers::MouseDriver mouse(&interrupts, &mousehandler);
     drvManager.AddDriver(&mouse);
+
+    JLOS::Hdc::PeripheralComponentInterconnectController PCIController;
+    PCIController.SelectDrivers(&drvManager);
 
     printf("initializing Hardware, Stage 2.\n");
     drvManager.ActivateAll();
