@@ -1,5 +1,5 @@
-#ifndef __MOUSE_H
-#define __MOUSE_H
+#ifndef __DRIVERS_MOUSE_H
+#define __DRIVERS_MOUSE_H
 
 #include <common/types.h>
 #include <hdc/interrupts.h>

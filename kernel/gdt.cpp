@@ -33,11 +33,14 @@ GlobalDescriptorTable::SegmentDescriptor::SegmentDescriptor(uint32_t base, uint3
 	uint8_t* target = (uint8_t*)this;
 	if(limit <= 65536) {
 		target[6] = 0x40;
-	} else {
-		if((limit & 0xFFF) != 0xFFF)
+	} 
+	else {
+		if((limit & 0xFFF) != 0xFFF) {
 			limit = (limit >>12) -1;
-		else 
+		}
+		else {
 			limit = limit >>12;
+		}
 		target[6] = 0xC0;
 	}
 	target[0] = limit & 0xFF;
@@ -54,7 +57,7 @@ GlobalDescriptorTable::SegmentDescriptor::SegmentDescriptor(uint32_t base, uint3
 
 uint32_t GlobalDescriptorTable::SegmentDescriptor::Base()
 {
-	uint8_t* target = (uint8_t*)this;
+	uint8_t *target = (uint8_t*)this;
 	uint32_t result = target[7];
 	result = (result <<8) + target[4];
 	result = (result <<8) + target[3];
@@ -64,13 +67,14 @@ uint32_t GlobalDescriptorTable::SegmentDescriptor::Base()
 
 uint32_t GlobalDescriptorTable::SegmentDescriptor::Limit()
 {
-	uint8_t* target = (uint8_t*)this;
+	uint8_t *target = (uint8_t*)this;
 	uint32_t result = target[6] & 0xF;
 	result = (result <<8) + target[1];
 	result = (result <<8) + target[0];
 	
-	if((target[6] & 0xC0) == 0xC0)
+	if((target[6] & 0xC0) == 0xC0) {
 		result = (result <<12) | 0xFFF;
+	}
 	return result;
 }
 }

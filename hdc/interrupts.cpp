@@ -15,8 +15,9 @@ InterruptHandle::InterruptHandle(uint8_t interruptNumber, InterruptManager *inte
 
 InterruptHandle::~InterruptHandle()
 {
-	if(interruptManager->handles[interruptNumber] == this)
+	if(interruptManager->handles[interruptNumber] == this) {
 		interruptManager->handles[interruptNumber] = nullptr;
+	}
 }
 
 uint32_t InterruptHandle::HandleInterrupt(uint32_t esp)
@@ -79,8 +80,9 @@ InterruptManager::~InterruptManager()
 
 void InterruptManager::Activate()
 {
-	if(ActivateInterruptManager != nullptr)
+	if(ActivateInterruptManager != nullptr) {
 		ActivateInterruptManager->Deactivate();
+	}
 	ActivateInterruptManager = this;
 	asm("sti");
 }
@@ -95,8 +97,9 @@ void InterruptManager::Deactivate()
 
 uint32_t InterruptManager::handleInterrupt(uint8_t interruptNumber, uint32_t esp)
 {
-	if(ActivateInterruptManager != nullptr)
+	if(ActivateInterruptManager != nullptr) {
 		return ActivateInterruptManager->DoHandleInterrupt(interruptNumber, esp);
+	}
     return esp;
 }
 

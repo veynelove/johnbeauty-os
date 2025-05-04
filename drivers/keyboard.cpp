@@ -33,8 +33,9 @@ KeyboardDriver::~KeyboardDriver()
 
 void KeyboardDriver::Activate()
 {
-    while(commandport.Read() & 0x1)
+    while(commandport.Read() & 0x1) {
         dataport.Read();
+    }
     commandport.Write(0xAE); //activate interrupts
     commandport.Write(0x20); //get current state
     uint8_t status = (dataport.Read() | 1) & ~0x10;
