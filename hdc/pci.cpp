@@ -69,7 +69,7 @@ void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *dri
                 PeripheralComponentInterconnectDeviceDesriptor dev = GetDeviceDescriptor(bus, device, function);
 
                 if(dev.vendor_id == 0x0000 || dev.vendor_id == 0xFFFF) {
-                    break;
+                    continue;
                 }
                 Kernel::printf("PCI BUS ");
                 Kernel::printfHex(bus & 0xFF);
