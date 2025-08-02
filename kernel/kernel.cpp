@@ -2,11 +2,12 @@
 #include <kernel/gdt.h>
 #include <hdc/interrupts.h>
 #include <hdc/pci.h>
-#include <drivers/driver.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 
-namespace JLOS::Kernel {
+namespace JLOS {
+namespace Kernel {
+
 void printf(const char* str)
 {
     static uint16_t*  VideoMemory = (uint16_t*)0xb8000;
@@ -126,5 +127,6 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 
 	interrupts.Activate();
     while (1);    
+}
 }
 }
