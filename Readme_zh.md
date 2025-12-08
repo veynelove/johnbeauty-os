@@ -4,6 +4,7 @@ this is a operating system by c++.
 
 # build
 1 使用"make johnkernel.iso"编译os镜像.
+2 使用 make clean 清理编译物;
 
 # question
 
@@ -25,4 +26,4 @@ this is a operating system by c++.
     如果添加Video这段代码,在光标点击移动时,移动初始位置的颜色不会恢复.
 
 ### tips
-1. 平安开心
+1. 刘姑娘平安开心

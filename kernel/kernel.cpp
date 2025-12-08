@@ -119,7 +119,7 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     drvManager.AddDriver(&mouse);
 
     JLOS::Hdc::PeripheralComponentInterconnectController PCIController;
-    PCIController.SelectDrivers(&drvManager);
+    PCIController.SelectDrivers(&drvManager, &interrupts);
 
     printf("initializing Hardware, Stage 2.\n");
     drvManager.ActivateAll();
