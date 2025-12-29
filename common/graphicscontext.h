@@ -4,6 +4,6 @@
 #include <drivers/vga.h>
 
 namespace JLOS {
-     typedef Drivers::VideoGraphicsArray GraphicsContext;
+typedef Drivers::VideoGraphicsArray GraphicsContext;
 }
 #endif

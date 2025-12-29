@@ -2,14 +2,9 @@
 namespace JLOS {
 namespace Gui {
 Desktop::Desktop(int32_t w, int32_t h, uint8_t r, uint8_t g, uint8_t b)
-: CompositeWidget(0, 0, 0, w, h, r, g, b), MouseEventHandler(), MouseX(w/2), MouseY(h/2)
-{
-}
+: CompositeWidget(0, 0, 0, w, h, r, g, b), MouseEventHandler(), MouseX(w/2), MouseY(h/2){}
 
-Desktop::~Desktop()
-{
-
-}
+Desktop::~Desktop(){}
 
 void Desktop::Draw(GraphicsContext *gc)
 {

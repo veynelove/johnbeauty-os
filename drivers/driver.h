@@ -14,14 +14,15 @@ public:
 };
 
 class DriverManager {
+private:   
+    Driver *drivers[255];
+    int numDrivers;
+
 public:
     DriverManager();
     void AddDriver(Driver *);
     void ActivateAll();
-private:   
-    Driver *drivers[255];
-    int numDrivers;
 };
 }
 }
-#endif // __DRIVER_H
+#endif

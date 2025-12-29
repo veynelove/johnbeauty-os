@@ -20,6 +20,7 @@ protected:
      uint8_t b;
 
      bool Focussable;
+
 public:
      Widget(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
           uint8_t r, uint8_t g, uint8_t b);
@@ -40,9 +41,10 @@ private:
      Widget *children[100];
      int numChildren;
      Widget *focussedChild;
+
 public:
      CompositeWidget(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
-          uint8_t r, uint8_t g, uint8_t b);
+          uint8_t r, uint8_t g, int32_t b);
      ~CompositeWidget();
      
      virtual void GetFocus(Widget *widget);

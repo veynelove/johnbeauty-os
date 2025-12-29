@@ -26,4 +26,4 @@ this is a operating system by c++.
     如果添加Video这段代码,在光标点击移动时,移动初始位置的颜色不会恢复.
 
 ### tips
-1. 平安开心
+1. 公主平安开心
