@@ -47,7 +47,7 @@ void InterruptManager::SetInterruptDescriptorTableEntry(uint8_t interruptNumber,
 }
 		
 InterruptManager::InterruptManager(uint16_t hardwareInterruptoffset,
-	Kernel::GlobalDescriptorTable* gdt, TaskManager *taskManager) : picMasterCommand(0x20),
+	Kernel::GlobalDescriptorTable* gdt, Kernel::TaskManager *taskManager) : picMasterCommand(0x20),
 	picMasterData(0x21), picSlaveCommand(0xA0), picSlaveData(0xA1)
 {
 	this->taskManager = taskManager;
@@ -172,7 +172,7 @@ uint32_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint32_t esp)
 	}
 	
 	if (interrupt == hardwareInterruptOffset) {
-		esp = (uint32_t)taskManager->Schedule((CPUState *)esp);
+		esp = (uint32_t)taskManager->Schedule((Kernel::CPUState *)esp);
 	}
 	//hardware interrupts must be acknowledged
 	if (hardwareInterruptOffset <= interrupt && interrupt < hardwareInterruptOffset + 16) {

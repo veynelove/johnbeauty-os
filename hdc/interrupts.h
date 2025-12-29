@@ -4,7 +4,7 @@
 #include <common/types.h>
 #include <hdc/port.h>
 #include <kernel/gdt.h>
-#include <multitasking.h>
+#include <kernel/multitasking.h>
 
 namespace JLOS {
 namespace Hdc {
@@ -26,7 +26,7 @@ friend class InterruptHandle;
 protected:
 	static InterruptManager *ActivateInterruptManager;
 	InterruptHandle *handles[256];
-	TaskManager *taskManager;
+	Kernel::TaskManager *taskManager;
 
 	struct GateDescriptor {
 		uint16_t handleAddressLowBits;
@@ -57,7 +57,7 @@ protected:
 
 public:
 	InterruptManager(uint16_t hardwareInterruptoffset, Kernel::GlobalDescriptorTable* gdt,
-		TaskManager *taskManager);
+		Kernel::TaskManager *taskManager);
 	~InterruptManager();
 
 	uint16_t hardwareInterruptOffset;

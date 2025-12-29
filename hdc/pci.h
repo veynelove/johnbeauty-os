@@ -5,6 +5,7 @@
 #include <common/types.h>
 #include <hdc/interrupts.h>
 #include <drivers/driver.h>
+#include <kernel/memorymanagerment.h>
 
 namespace JLOS {
 namespace Hdc {

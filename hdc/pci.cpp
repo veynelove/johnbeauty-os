@@ -50,7 +50,7 @@ bool PeripheralComponentInterconnectController::DeviceHasFunctions(uint16_t bus,
     return Read(bus, device, 0, 0x0E) & (1<<7);
 }
 
-void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *driverManager,
+void PeripheralComponentInterconnectController::SelectDrivers(Drivers::DriverManager *driverManager,
     InterruptManager *interrupts)
 {
     for (int bus = 0; bus < 8; bus++) {
@@ -69,11 +69,12 @@ void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *dri
                     if (bar.address && (bar.type == InputOutput)) {
                         dev.portBase = (uint32_t)bar.address;
                     }
-                    Driver *driver = GetDriver(dev, interrupts);
+                    Drivers::Driver *driver = GetDriver(dev, interrupts);
                     if (driver != 0) {
                         driverManager->AddDriver(driver);
                     }
                 }
+                /**
                 Kernel::printf("PCI BUS ");
                 Kernel::printfHex(bus & 0xFF);
                 Kernel::printf(", DEVICE ");
@@ -87,6 +88,7 @@ void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *dri
                 Kernel::printfHex((dev.device_id & 0xFF00) >> 8);
                 Kernel::printfHex(dev.device_id & 0xFF);
                 Kernel::printf("\n");
+                */
             }
         }
     }
@@ -118,13 +120,21 @@ BaseAddressRegister PeripheralComponentInterconnectController
     return result;
 }
 
-Driver *PeripheralComponentInterconnectController
+Drivers::Driver *PeripheralComponentInterconnectController
 ::GetDriver(PeripheralComponentInterconnectDeviceDesriptor dev, InterruptManager *interrupts)
 {
+    Drivers::Driver *driver = nullptr;
     switch ((dev.vendor_id)) {
         case 0x1022: //AMD
             switch (dev.device_id) {
                 case 0x2000: //am79c973
+                    /**
+                    driver = (amd_am79c973 *)Kernel::MemoryManager::
+                        activeMemoryManager->malloc(sizeof(amd_am79c973));
+                    if (driver) {
+                        new (driver) amd_am79c973(...);
+                    }
+                    */
                     Kernel::printf("AMD am79c973 ");
                     break;
             }
