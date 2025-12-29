@@ -4,6 +4,11 @@
 #include <hdc/pci.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
+#include <drivers/vga.h>
+#include <gui/desktop.h>
+#include <gui/window.h>
+
+// #define GRAPHICSMODE
 
 namespace JLOS {
 namespace Kernel {
@@ -105,28 +110,44 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     printf("johnbeauty always!\n");
 	
     GlobalDescriptorTable gdt;
-	JLOS::Hdc::InterruptManager interrupts(&gdt);
+	Hdc::InterruptManager interrupts(&gdt);
 	
     printf("initializing Hardware, Stage 1.\n");
-    JLOS::Drivers::DriverManager drvManager;
-    
+
+    Drivers::DriverManager drvManager;
+#ifdef GRAPHICSMODE
+    Gui::Desktop desktop(320, 200, 0x00, 0x00, 0xA8);    
+    Drivers::KeyboardDriver keyboard(&interrupts, &desktop);
+    Drivers::MouseDriver mouse(&interrupts, &desktop);
+#else 
     PrintfKeyboardEventHandler kbhandler;
-    JLOS::Drivers::KeyboardDriver keyboard(&interrupts, &kbhandler);
+    Drivers::KeyboardDriver keyboard(&interrupts, &kbhandler);
+    MouseToConsole mouseHandler;
+    Drivers::MouseDriver mouse(&interrupts, &mouseHandler);
+#endif
+    drvManager.AddDriver(&mouse);
     drvManager.AddDriver(&keyboard);
 
-    MouseToConsole mousehandler;
-    JLOS::Drivers::MouseDriver mouse(&interrupts, &mousehandler);
-    drvManager.AddDriver(&mouse);
-
-    JLOS::Hdc::PeripheralComponentInterconnectController PCIController;
+    Hdc::PeripheralComponentInterconnectController PCIController;
     PCIController.SelectDrivers(&drvManager, &interrupts);
 
     printf("initializing Hardware, Stage 2.\n");
     drvManager.ActivateAll();
     printf("initializing Hardware, Stage 3.\n");
-
-	interrupts.Activate();
-    while (1);    
+#ifdef GRAPHICSMODE
+    Drivers::VideoGraphicsArray vga;
+    vga.SetMode(320, 200, 8);
+    Gui::Window win1(&desktop, 10, 10, 20, 20, 0xA8, 0x00, 0x00);
+    desktop.AddChild(&win1);
+    Gui::Window win2(&desktop, 40, 15, 30, 30, 0x00, 0xA8, 0x00);
+    desktop.AddChild(&win2);
+#endif
+    interrupts.Activate(); //激活中断保证在最后执行
+    while (1) {
+#ifdef GRAPHICSMODE
+        desktop.Draw(&vga);
+#endif
+    }
 }
 }
 }
