@@ -4,20 +4,28 @@ LDPARAMS = -melf_i386
 
 objects = obj/kernel/loader.o \
 	obj/kernel/gdt.o \
-	obj/kernel/kernel.o \
 	obj/hdc/port.o \
 	obj/hdc/interruptstubs.o \
 	obj/hdc/interrupts.o \
 	obj/hdc/pci.o \
 	obj/drivers/keyboard.o \
 	obj/drivers/mouse.o \
-	obj/drivers/driver.o
+	obj/drivers/driver.o\
+	obj/drivers/vga.o\
+	obj/gui/desktop.o\
+	obj/gui/widget.o\
+	obj/gui/window.o\
+	obj/kernel/kernel.o \
 
 obj/drivers/%.o: drivers/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
 obj/hdc/%.o: hdc/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/gui/%.o: gui/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
