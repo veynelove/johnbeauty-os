@@ -1,10 +1,11 @@
-#ifndef __JLOS__MULTITASKING_H
-#define __JLOS__MULTITASKING_H
+#ifndef __JLOS__KERNEL_MULTITASKING_H
+#define __JLOS__KERNEL_MULTITASKING_H
 
 #include <common/types.h>
 #include <kernel/gdt.h>
 
 namespace JLOS {
+namespace Kernel {
 struct CPUState {
      uint32_t eax;
      uint32_t ebx;
@@ -51,5 +52,6 @@ public:
      bool AddTask(Task *task);
      CPUState *Schedule(CPUState *cpustate);
 };
+}
 }
 #endif

@@ -1,6 +1,7 @@
-#include <multitasking.h>
+#include <kernel/multitasking.h>
 
 namespace JLOS {
+namespace Kernel {
 Task::Task(Kernel::GlobalDescriptorTable *gdt, void entrypoint())
 {
      cpustate = (CPUState *)(stack + 4096 - sizeof(CPUState));
@@ -54,5 +55,6 @@ CPUState *TaskManager::Schedule(CPUState *cpustate)
           currentTask %= numTasks;
      }
      return tasks[currentTask]->cpustate;
+}
 }
 }
