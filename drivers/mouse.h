@@ -18,7 +18,7 @@ public:
     virtual void OnMouseMove(int32_t xoffset, int32_t yoffset);
 };
 
-class MouseDriver : public Hdc::InterruptHandle, public Driver {
+class MouseDriver : public Hdc::InterruptHandler, public Driver {
 private:
     Hdc::Port8Bit dataport;
     Hdc::Port8Bit commandport;

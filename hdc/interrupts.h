@@ -10,22 +10,22 @@ namespace JLOS {
 namespace Hdc {
 class InterruptManager;
 
-class InterruptHandle {
+class InterruptHandler {
 public:
 	virtual uint32_t HandleInterrupt(uint32_t esp);
 protected:
 	uint8_t interruptNumber;
 	InterruptManager *interruptManager;
 
-	InterruptHandle(uint8_t interruptNumber, InterruptManager *interruptManager);
-	~InterruptHandle();
+	InterruptHandler(uint8_t interruptNumber, InterruptManager *interruptManager);
+	~InterruptHandler();
 };
 
 class InterruptManager {
-friend class InterruptHandle;
+friend class InterruptHandler;
 protected:
 	static InterruptManager *ActivateInterruptManager;
-	InterruptHandle *handles[256];
+	InterruptHandler *handles[256];
 	Kernel::TaskManager *taskManager;
 
 	struct GateDescriptor {
