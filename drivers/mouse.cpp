@@ -4,36 +4,25 @@ namespace JLOS::Kernel {
 void printf(const char *);
 }
 
-namespace JLOS::Drivers {
-MouseEventHandler::MouseEventHandler()
-{
-}
+namespace JLOS {
+namespace Drivers {
+MouseEventHandler::MouseEventHandler(){}
 
-void MouseEventHandler::OnActivate()
-{
-}
+void MouseEventHandler::OnActivate(){}
 
-void MouseEventHandler::OnMouseDown(uint8_t button)
-{
-}
+void MouseEventHandler::OnMouseDown(uint8_t button){}
 
-void MouseEventHandler::OnMouseUp(uint8_t button)
-{
-}
+void MouseEventHandler::OnMouseUp(uint8_t button){}
 
-void MouseEventHandler::OnMouseMove(int32_t xoffset, int32_t yoffset)
-{
-}
+void MouseEventHandler::OnMouseMove(int32_t xoffset, int32_t yoffset){}
 
 MouseDriver::MouseDriver(JLOS::Hdc::InterruptManager *manager, MouseEventHandler *handler)
-:InterruptHandle(0x2C,manager),dataport(0x60),commandport(0x64)
+:InterruptHandle(0x2C, manager), dataport(0x60), commandport(0x64)
 {
     this->handler = handler;
 }
 
-MouseDriver::~MouseDriver()
-{
-}
+MouseDriver::~MouseDriver(){}
 
 void MouseDriver::Activate()
 {
@@ -54,20 +43,25 @@ void MouseDriver::Activate()
 uint32_t MouseDriver::HandleInterrupt(uint32_t esp)
 {
     uint8_t status = commandport.Read();
-    if(!(status & 0x20)) return esp;
-
+    if (!(status & 0x20)) {
+        return esp;
+    }
     buffer[offset] = dataport.Read();
-    if(handler == 0) return esp;
-    if(offset==0 && !(buffer[0] & 0x08)) return esp; 
+    if (handler == 0) {
+        return esp;
+    }
+    if (offset == 0 && !(buffer[0] & 0x08)) {
+        return esp;
+    } 
     offset = (offset + 1) % 3;
 
-    if(offset==0) {
+    if (offset == 0) {
         if(buffer[1] != 0 || buffer[2] != 0) {
             handler->OnMouseMove((int8_t)buffer[1], -((int8_t)buffer[2]));
         }
-        for(uint8_t i=0;i<3;i++) {
-            if((buffer[0] & (0x1<<i)) != (buttons & (0x1<<i))) {
-                if(buttons & (0x1<<i)) {
+        for (uint8_t i = 0; i < 3; i++) {
+            if((buffer[0] & (0x1 << i)) != (buttons & (0x1 << i))) {
+                if(buttons & (0x1 << i)) {
                     handler->OnMouseUp(i+1);
                 }
                 else {    
@@ -77,6 +71,7 @@ uint32_t MouseDriver::HandleInterrupt(uint32_t esp)
         }
         buttons = buffer[0];
     }
-    return  esp;
+    return esp;
+}
 }
 }

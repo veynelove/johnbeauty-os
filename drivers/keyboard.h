@@ -16,17 +16,17 @@ public:
     virtual void OnKeyUp(char);
 };
 
-class KeyboardDriver : public JLOS::Hdc::InterruptHandle, public Driver {
+class KeyboardDriver : public Hdc::InterruptHandle, public Driver {
+private:    
+    Hdc::Port8Bit dataport;
+    Hdc::Port8Bit commandport;
+    KeyboardEventHandler *handler;
+
 public:
-    KeyboardDriver(JLOS::Hdc::InterruptManager *manager, KeyboardEventHandler *handler);
+    KeyboardDriver(Hdc::InterruptManager *manager, KeyboardEventHandler *handler);
     ~KeyboardDriver();
     virtual uint32_t HandleInterrupt(uint32_t esp);
     virtual void Activate();
-private:    
-    JLOS::Hdc::Port8Bit dataport;
-    JLOS::Hdc::Port8Bit commandport;
-
-    KeyboardEventHandler *handler;
 };
 }
 }

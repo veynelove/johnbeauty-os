@@ -2,38 +2,29 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(JLOS::uint8_t);
+void printfHex(uint8_t);
 }
 
-namespace JLOS::Drivers {
-KeyboardEventHandler::KeyboardEventHandler()
-{
+namespace JLOS {
+namespace Drivers {
+KeyboardEventHandler::KeyboardEventHandler(){}
 
-}
+void KeyboardEventHandler::OnKeyDown(char){}
 
-void KeyboardEventHandler::OnKeyDown(char)
-{
+void KeyboardEventHandler::OnKeyUp(char){}
 
-}
-
-void KeyboardEventHandler::OnKeyUp(char)
-{
-
-}
-
-KeyboardDriver::KeyboardDriver(JLOS::Hdc::InterruptManager *manager, KeyboardEventHandler *handler)
+KeyboardDriver::KeyboardDriver(JLOS::Hdc::InterruptManager *manager,
+    KeyboardEventHandler *handler)
 :InterruptHandle(0x21, manager), dataport(0x60), commandport(0x64)
 {
     this->handler = handler;
 }
 
-KeyboardDriver::~KeyboardDriver()
-{
-}
+KeyboardDriver::~KeyboardDriver(){}
 
 void KeyboardDriver::Activate()
 {
-    while(commandport.Read() & 0x1) {
+    while (commandport.Read() & 0x1) {
         dataport.Read();
     }
     commandport.Write(0xAE); //activate interrupts
@@ -48,7 +39,7 @@ void KeyboardDriver::Activate()
 uint32_t KeyboardDriver::HandleInterrupt(uint32_t esp)
 {
     uint8_t key = dataport.Read();
-    if(handler == 0) return esp;
+    if (handler == 0) return esp;
     static bool Shift=false;
     switch(key) {
         case 0x29:if(Shift) handler->OnKeyDown('~');else handler->OnKeyDown('`');break;
@@ -111,12 +102,13 @@ uint32_t KeyboardDriver::HandleInterrupt(uint32_t esp)
         
         default:
             if(key < 0x80) {
-                JLOS::Kernel::printf("KEYBOARD 0x");
-                JLOS::Kernel::printfHex(key);
+                Kernel::printf("KEYBOARD 0x");
+                Kernel::printfHex(key);
             }
             break;
         
     }
     return esp;
+}
 }
 }

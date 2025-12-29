@@ -2,9 +2,8 @@
 
 namespace JLOS {
 namespace Gui {
-Window::Window(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
-          uint8_t r, uint8_t g, uint8_t b) : CompositeWidget(parent, x, y, w, h, r ,g ,b),
-          Dragging(false){}
+Window::Window(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h, uint8_t r,
+     uint8_t g, uint8_t b) : CompositeWidget(parent, x, y, w, h, r ,g ,b), Dragging(false){}
 
 Window::~Window(){}
 

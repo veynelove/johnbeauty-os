@@ -18,21 +18,20 @@ public:
     virtual void OnMouseMove(int32_t xoffset, int32_t yoffset);
 };
 
-class MouseDriver : public JLOS::Hdc::InterruptHandle, public Driver {
-public:
-    MouseDriver(JLOS::Hdc::InterruptManager *manager, MouseEventHandler *handler);
-    ~MouseDriver();
-    virtual uint32_t HandleInterrupt(uint32_t esp);
-    virtual void Activate();
+class MouseDriver : public Hdc::InterruptHandle, public Driver {
 private:
-    JLOS::Hdc::Port8Bit dataport;
-    JLOS::Hdc::Port8Bit commandport;
-
+    Hdc::Port8Bit dataport;
+    Hdc::Port8Bit commandport;
     uint8_t buffer[3];
     uint8_t offset;
     uint8_t buttons;
-
     MouseEventHandler *handler;
+
+public:
+    MouseDriver(Hdc::InterruptManager *manager, MouseEventHandler *handler);
+    ~MouseDriver();
+    virtual uint32_t HandleInterrupt(uint32_t esp);
+    virtual void Activate();
 };
 }
 }

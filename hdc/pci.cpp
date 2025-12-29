@@ -2,35 +2,26 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(JLOS::uint8_t);
+void printfHex(uint8_t);
 }
 
-namespace JLOS::Hdc {
-PeripheralComponentInterconnectDeviceDesriptor::PeripheralComponentInterconnectDeviceDesriptor()
-{
+namespace JLOS {
+namespace Hdc {
+PeripheralComponentInterconnectDeviceDesriptor
+::PeripheralComponentInterconnectDeviceDesriptor(){}
 
-}
-
-PeripheralComponentInterconnectDeviceDesriptor::~PeripheralComponentInterconnectDeviceDesriptor()
-{
-
-}
+PeripheralComponentInterconnectDeviceDesriptor
+::~PeripheralComponentInterconnectDeviceDesriptor(){}
 
 PeripheralComponentInterconnectController::PeripheralComponentInterconnectController()
-:dataPort(0xCFC), commandPort(0xCF8)
+:dataPort(0xCFC), commandPort(0xCF8){}
+
+PeripheralComponentInterconnectController::~PeripheralComponentInterconnectController(){}
+
+uint32_t PeripheralComponentInterconnectController::Read(uint16_t bus, uint16_t device,
+    uint16_t function, uint32_t registeroffset)
 {
-
-}
-
-PeripheralComponentInterconnectController::~PeripheralComponentInterconnectController()
-{
-
-}
-
-uint32_t PeripheralComponentInterconnectController::Read(uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset)
-{
-    uint32_t id = 
-        0x1 <<31
+    uint32_t id = 0x1 <<31
         | ((bus & 0xFF) << 16)
         | ((device & 0x1F) << 11)
         | ((function & 0x07) << 8)
@@ -41,11 +32,10 @@ uint32_t PeripheralComponentInterconnectController::Read(uint16_t bus, uint16_t 
     return result >> (8 * (registeroffset % 4));
 }
 
-void PeripheralComponentInterconnectController::Write(uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset,
-    uint32_t value)
+void PeripheralComponentInterconnectController::Write(uint16_t bus, uint16_t device,
+    uint16_t function, uint32_t registeroffset, uint32_t value)
 {
-    uint32_t id = 
-        0x1 <<31
+    uint32_t id = 0x1 <<31
         | ((bus & 0xFF) << 16)
         | ((device & 0x1F) << 11)
         | ((function & 0x07) << 8)
@@ -60,40 +50,39 @@ bool PeripheralComponentInterconnectController::DeviceHasFunctions(uint16_t bus,
     return Read(bus, device, 0, 0x0E) & (1<<7);
 }
 
-void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *driverManager, InterruptManager *interrupts)
+void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *driverManager,
+    InterruptManager *interrupts)
 {
-    for(int bus = 0; bus < 8; bus++) {
-        for(int device = 0; device < 32; device++) {
+    for (int bus = 0; bus < 8; bus++) {
+        for (int device = 0; device < 32; device++) {
             int numFunctions = DeviceHasFunctions(bus, device) ? 8 : 1;
-            for(int function = 0; function < numFunctions; function++) {
-                PeripheralComponentInterconnectDeviceDesriptor dev = GetDeviceDescriptor(bus, device, function);
+            for (int function = 0; function < numFunctions; function++) {
+                PeripheralComponentInterconnectDeviceDesriptor dev =
+                    GetDeviceDescriptor(bus, device, function);
 
-                if(dev.vendor_id == 0x0000 || dev.vendor_id == 0xFFFF) {
+                if (dev.vendor_id == 0x0000 || dev.vendor_id == 0xFFFF) {
                     continue;
                 }
-                for(int barNum = 0; barNum < 6; barNum++) {
-                    BaseAddressRegister bar = GetBaseAddressRegister(bus, device, function, barNum);
-                    if(bar.address && (bar.type == InputOutput)) {
+                for (int barNum = 0; barNum < 6; barNum++) {
+                    BaseAddressRegister bar =
+                        GetBaseAddressRegister(bus, device, function, barNum);
+                    if (bar.address && (bar.type == InputOutput)) {
                         dev.portBase = (uint32_t)bar.address;
                     }
                     Driver *driver = GetDriver(dev, interrupts);
-                    if(driver != 0) {
+                    if (driver != 0) {
                         driverManager->AddDriver(driver);
                     }
                 }
                 Kernel::printf("PCI BUS ");
                 Kernel::printfHex(bus & 0xFF);
-
                 Kernel::printf(", DEVICE ");
                 Kernel::printfHex(device & 0xFF);
-
                 Kernel::printf(", FUNCTION ");
                 Kernel::printfHex(function & 0xFF);
-
                 Kernel::printf(" = VENDOR ");
                 Kernel::printfHex((dev.vendor_id & 0xFF00) >> 8);
                 Kernel::printfHex(dev.vendor_id & 0xFF);
-
                 Kernel::printf(", DEVICE ");
                 Kernel::printfHex((dev.device_id & 0xFF00) >> 8);
                 Kernel::printfHex(dev.device_id & 0xFF);
@@ -103,23 +92,24 @@ void PeripheralComponentInterconnectController::SelectDrivers(DriverManager *dri
     }
 }
 
-BaseAddressRegister PeripheralComponentInterconnectController::GetBaseAddressRegister(uint16_t bus, uint16_t device, uint16_t function, uint16_t bar)
+BaseAddressRegister PeripheralComponentInterconnectController
+::GetBaseAddressRegister(uint16_t bus, uint16_t device, uint16_t function, uint16_t bar)
 {
     BaseAddressRegister result;
     uint32_t headertype = Read(bus, device, function, 0x0E) & 0x7F;
     int maxbars = 6 - (4*headertype);
-    if(bar >= maxbars) {
+    if (bar >= maxbars) {
         return result;
     }
     uint32_t bar_value = Read(bus, device, function, 0x10 + 4*bar);
     result.type = (bar_value & 0x1) ? InputOutput : MemoryMapping;
     uint32_t temp;
-    if(result.type == MemoryMapping) {
+    if (result.type == MemoryMapping) {
         switch (((bar_value >> 1) && 0x3)) {
             case 0: //32 BitMode;
             case 1: //32 BitMode;
             case 2: //32 BitMode;
-                break;
+            break;
         }
     } else { //InputOutput
         result.address = (uint8_t *)(bar_value & ~0x3);
@@ -128,24 +118,25 @@ BaseAddressRegister PeripheralComponentInterconnectController::GetBaseAddressReg
     return result;
 }
 
-Driver *PeripheralComponentInterconnectController::GetDriver(PeripheralComponentInterconnectDeviceDesriptor dev, InterruptManager *interrupts)
+Driver *PeripheralComponentInterconnectController
+::GetDriver(PeripheralComponentInterconnectDeviceDesriptor dev, InterruptManager *interrupts)
 {
     switch ((dev.vendor_id)) {
         case 0x1022: //AMD
-            switch(dev.device_id) {
+            switch (dev.device_id) {
                 case 0x2000: //am79c973
-                    JLOS::Kernel::printf("AMD am79c973 ");
+                    Kernel::printf("AMD am79c973 ");
                     break;
             }
             break;
         case 0x8086: //Intel
             break;
     }
-    switch(dev.class_id) {
+    switch (dev.class_id) {
         case 0x03: //graphics
-            switch(dev.subclass_id) {
+            switch (dev.subclass_id) {
                 case 0x00: //VGA
-                    JLOS::Kernel::printf("VGA ");
+                    Kernel::printf("VGA ");
                     break;
             }
             break;
@@ -153,7 +144,8 @@ Driver *PeripheralComponentInterconnectController::GetDriver(PeripheralComponent
     return 0;
 }
 
-PeripheralComponentInterconnectDeviceDesriptor PeripheralComponentInterconnectController::GetDeviceDescriptor(uint16_t bus, uint16_t device, uint16_t function)
+PeripheralComponentInterconnectDeviceDesriptor PeripheralComponentInterconnectController
+::GetDeviceDescriptor(uint16_t bus, uint16_t device, uint16_t function)
 {
     PeripheralComponentInterconnectDeviceDesriptor result;
     result.bus = bus;
@@ -171,5 +163,6 @@ PeripheralComponentInterconnectDeviceDesriptor PeripheralComponentInterconnectCo
     result.interrupt = Read(bus, device, function, 0x3c);
 
     return result; 
+}
 }
 }
