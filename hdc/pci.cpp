@@ -1,4 +1,5 @@
 #include <hdc/pci.h>
+#include <drivers/amd_am79c973.h>
 
 namespace JLOS::Kernel {
 void printf(const char *str);
@@ -69,10 +70,10 @@ void PeripheralComponentInterconnectController::SelectDrivers(Drivers::DriverMan
                     if (bar.address && (bar.type == InputOutput)) {
                         dev.portBase = (uint32_t)bar.address;
                     }
-                    Drivers::Driver *driver = GetDriver(dev, interrupts);
-                    if (driver != 0) {
-                        driverManager->AddDriver(driver);
-                    }
+                }
+                Drivers::Driver *driver = GetDriver(dev, interrupts);
+                if (driver != 0) {
+                    driverManager->AddDriver(driver);
                 }
                 /**
                 Kernel::printf("PCI BUS ");
@@ -128,13 +129,12 @@ Drivers::Driver *PeripheralComponentInterconnectController
         case 0x1022: //AMD
             switch (dev.device_id) {
                 case 0x2000: //am79c973
-                    /**
-                    driver = (amd_am79c973 *)Kernel::MemoryManager::
-                        activeMemoryManager->malloc(sizeof(amd_am79c973));
+                    driver = (Drivers::amd_am79c973 *)Kernel::MemoryManager::
+                        activeMemoryManager->malloc(sizeof(Drivers::amd_am79c973));
                     if (driver) {
-                        new (driver) amd_am79c973(...);
+                        new (driver) Drivers::amd_am79c973(&dev, interrupts);
+                        return driver;
                     }
-                    */
                     Kernel::printf("AMD am79c973 ");
                     break;
             }

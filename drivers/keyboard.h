@@ -16,7 +16,7 @@ public:
     virtual void OnKeyUp(char);
 };
 
-class KeyboardDriver : public Hdc::InterruptHandle, public Driver {
+class KeyboardDriver : public Hdc::InterruptHandler, public Driver {
 private:    
     Hdc::Port8Bit dataport;
     Hdc::Port8Bit commandport;
