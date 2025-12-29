@@ -16,6 +16,7 @@ objects = obj/kernel/loader.o \
 	obj/gui/widget.o\
 	obj/gui/window.o\
 	obj/kernel/kernel.o \
+	obj/multitasking.o\
 
 obj/drivers/%.o: drivers/%.cpp
 	mkdir -p $(@D)
@@ -26,6 +27,10 @@ obj/hdc/%.o: hdc/%.cpp
 	g++ ${GPPPARAMS} -o $@ -c $<
 
 obj/gui/%.o: gui/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/%.o: %.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 

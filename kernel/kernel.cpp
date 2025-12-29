@@ -7,35 +7,31 @@
 #include <drivers/vga.h>
 #include <gui/desktop.h>
 #include <gui/window.h>
+#include <multitasking.h>
 
 // #define GRAPHICSMODE
 
 namespace JLOS {
 namespace Kernel {
-
 void printf(const char* str)
 {
     static uint16_t*  VideoMemory = (uint16_t*)0xb8000;
-    static uint8_t x=0, y=0;
-    for(int i=0;str[i] != '\0';i++) {
-        switch(str[i]) {
-            case '\n':
-                y++;
-                x=0;
-                break;
+    static uint8_t x = 0, y = 0;
+    for (int i = 0; str[i] != '\0'; i++) {
+        switch (str[i]) {
+            case '\n': y++; x = 0; break;
             default:
-                VideoMemory[80*y+x] = (VideoMemory[80*y+x] & 0xFF00) | str[i];
-                x++;
-                break;
-        }     
-        if(x>=80) {
-            y++;
-            x=0;
+                VideoMemory[80 * y + x] = (VideoMemory[80 * y + x] & 0xFF00) | str[i];
+                x++; break;
         }
-        if(y>=25) {
-            for(y=0;y<25;y++){
-                for(x=0;x<80;x++) {
-                    VideoMemory[80*y+x] = (VideoMemory[80*y+x] & 0xFF00) | ' ';
+        if (x >= 80) {
+            y++;
+            x = 0;
+        }
+        if (y >= 25) {
+            for (y = 0; y < 25; y++) {
+                for (x = 0; x < 80; x++) {
+                    VideoMemory[80 * y + x] = (VideoMemory[80 * y + x] & 0xFF00) | ' ';
                 }
             }
             x = 0;
@@ -48,7 +44,7 @@ void printfHex(uint8_t key)
 {
     char *foo = "00";
     char *hex = "0123456789ABCDEF";
-    foo[0] = hex[(key>>4) & 0x0F];
+    foo[0] = hex[(key >> 4) & 0x0F];
     foo[1] = hex[key & 0x0F];
     printf(foo);
 }
@@ -63,44 +59,59 @@ public:
 };
 
 class MouseToConsole : public JLOS::Drivers::MouseEventHandler {
+private:
+    int8_t x, y;
+
 public:
     MouseToConsole() {
         uint16_t *VideoMemory = (uint16_t *)0xb8000;
         x = 40;
         y = 12;
-        VideoMemory[80*y+x] = ((VideoMemory[80*y+x] & 0xF000)>>4)
-            | ((VideoMemory[80*y+x] & 0x0F00)<<4)
-            | ((VideoMemory[80*y+x] & 0x00FF));
+        VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4)
+            | ((VideoMemory[80 * y + x] & 0x0F00) << 4)
+            | ((VideoMemory[80 * y + x] & 0x00FF));
     }
 
     void OnMouseMove(int32_t xoffset, int32_t yoffset) {
         static uint16_t *VideoMemory = (uint16_t *)0xb8000;
-        VideoMemory[80*y+x] = ((VideoMemory[80*y+x] & 0xF000)>>4)
-            | ((VideoMemory[80*y+x] & 0x0F00)<<4)
-            | ((VideoMemory[80*y+x] & 0x00FF));
+        VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4)
+            | ((VideoMemory[80 * y + x] & 0x0F00) << 4)
+            | ((VideoMemory[80 * y + x] & 0x00FF));
 
         x += xoffset;
-        if(x<0) x=0;
-        if(x>=80) x=79;
+        if (x < 0) x = 0;
+        if (x >= 80) x = 79;
         y += yoffset;
-        if(y<0) y=0;
-        if(y>=25) y=24;
+        if (y < 0) y = 0;
+        if (y >= 25) y = 24;
 
-        VideoMemory[80*y+x] = ((VideoMemory[80*y+x] & 0xF000)>>4)
-            | ((VideoMemory[80*y+x] & 0x0F00)<<4)
-            | ((VideoMemory[80*y+x] & 0x00FF));
+        VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4)
+            | ((VideoMemory[80 * y + x] & 0x0F00) << 4)
+            | ((VideoMemory[80 * y + x] & 0x00FF));
     }
-private:
-    int8_t x, y;
 };
 
+void taskA()
+{
+    while(true) {
+        printf("A");
+    }
+}
+
+void taskB()
+{
+    while(true) {
+        printf("B");
+    }
+}
+
 typedef void (*constructor)();
-extern "C" constructor  start_ctors;
-extern "C" constructor  end_ctors;
+extern "C" constructor start_ctors;
+extern "C" constructor end_ctors;
 
 extern "C" void callConstructors()
 {
-    for(constructor* i = &start_ctors; i != &end_ctors; i++) {
+    for (constructor* i = &start_ctors; i != &end_ctors; i++) {
         (*i)();
     }
 }
@@ -110,7 +121,13 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     printf("johnbeauty always!\n");
 	
     GlobalDescriptorTable gdt;
-	Hdc::InterruptManager interrupts(&gdt);
+    TaskManager taskManager;
+    Task task1(&gdt, taskA);
+    Task task2(&gdt, taskB);
+    taskManager.AddTask(&task1);
+    taskManager.AddTask(&task2);
+
+	Hdc::InterruptManager interrupts(0x20, &gdt, &taskManager);
 	
     printf("initializing Hardware, Stage 1.\n");
 

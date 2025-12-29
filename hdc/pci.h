@@ -8,7 +8,6 @@
 
 namespace JLOS {
 namespace Hdc {
-using namespace Drivers;
 
 enum BaseAddressRegisterType {
     MemoryMapping = 0,
@@ -46,6 +45,10 @@ public:
 };
 
 class PeripheralComponentInterconnectController {
+private:
+    Port32Bit dataPort;
+    Port32Bit commandPort;
+
 public:
     PeripheralComponentInterconnectController();
     ~PeripheralComponentInterconnectController();
@@ -55,14 +58,13 @@ public:
         uint32_t value);
     bool DeviceHasFunctions(uint16_t bus, uint16_t device);
 
-    void SelectDrivers(DriverManager *driverManager, InterruptManager *interrupts);
-    Driver *GetDriver(PeripheralComponentInterconnectDeviceDesriptor dev, InterruptManager *interrupts);
-    PeripheralComponentInterconnectDeviceDesriptor GetDeviceDescriptor(uint16_t bus, uint16_t device, uint16_t function);
-    BaseAddressRegister GetBaseAddressRegister(uint16_t bus, uint16_t device, uint16_t function,
-        uint16_t bar);
-private:
-    Port32Bit dataPort;
-    Port32Bit commandPort;
+    void SelectDrivers(Drivers::DriverManager *driverManager, InterruptManager *interrupts);
+    Drivers::Driver *GetDriver(PeripheralComponentInterconnectDeviceDesriptor dev,
+        InterruptManager *interrupts);
+    PeripheralComponentInterconnectDeviceDesriptor GetDeviceDescriptor(uint16_t bus,
+        uint16_t device, uint16_t function);
+    BaseAddressRegister GetBaseAddressRegister(uint16_t bus, uint16_t device,
+        uint16_t function, uint16_t bar);
 };
 }
 }
