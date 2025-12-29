@@ -9,7 +9,7 @@
 namespace JLOS {
 namespace Drivers {
 class VideoGraphicsArray {
-protected:
+private:
      Hdc::Port8Bit miscPort;
      Hdc::Port8Bit crtcIndexPort;
      Hdc::Port8Bit crtcDataPort;
@@ -24,17 +24,20 @@ protected:
 
      void WriteRegisters(uint8_t *registers);
      uint8_t *GetFrameBufferSegment(uint8_t r, uint8_t g, uint8_t b);
+     uint8_t *GetFrameBufferSegment();
 
-     virtual void PutPixel(uint32_t x, uint32_t y, uint8_t colorIndex);
-     virtual uint8_t GetColorIndex(uint32_t x, uint32_t y, uint8_t colorIndex);
+     virtual uint8_t GetColorIndex(uint32_t r, uint32_t g, uint8_t b);
 
 public:
      VideoGraphicsArray();
-     virtual ~VideoGraphicsArray();
+     ~VideoGraphicsArray();
 
      virtual bool SupportMode(uint32_t width, uint32_t height, uint32_t colordepth);
      virtual bool SetMode(uint32_t width, uint32_t height, uint32_t colordepth);
-     virtual void PutPixel(uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b);
+     virtual void PutPixel(int32_t x, int32_t y, uint8_t r, uint8_t g, uint8_t b);
+     virtual void PutPixel(int32_t x, int32_t y, uint8_t colorIndex);
+
+     virtual void FillRectangle(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint8_t r, uint8_t g, uint8_t b);
 };
 }
 }
