@@ -15,7 +15,7 @@ void KeyboardEventHandler::OnKeyUp(char){}
 
 KeyboardDriver::KeyboardDriver(JLOS::Hdc::InterruptManager *manager,
     KeyboardEventHandler *handler)
-:InterruptHandle(0x21, manager), dataport(0x60), commandport(0x64)
+:InterruptHandler(0x21, manager), dataport(0x60), commandport(0x64)
 {
     this->handler = handler;
 }

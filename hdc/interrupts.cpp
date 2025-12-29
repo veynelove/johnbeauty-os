@@ -7,21 +7,21 @@ void printfHex(uint8_t);
 
 namespace JLOS {
 namespace Hdc {
-InterruptHandle::InterruptHandle(uint8_t interruptNumber, InterruptManager *interruptManager)
+InterruptHandler::InterruptHandler(uint8_t interruptNumber, InterruptManager *interruptManager)
 {
 	this->interruptNumber = interruptNumber;
 	this->interruptManager = interruptManager;
 	interruptManager->handles[interruptNumber] = this;
 }
 
-InterruptHandle::~InterruptHandle()
+InterruptHandler::~InterruptHandler()
 {
 	if (interruptManager->handles[interruptNumber] == this) {
 		interruptManager->handles[interruptNumber] = nullptr;
 	}
 }
 
-uint32_t InterruptHandle::HandleInterrupt(uint32_t esp)
+uint32_t InterruptHandler::HandleInterrupt(uint32_t esp)
 {
 	return esp;
 }
