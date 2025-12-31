@@ -5,10 +5,12 @@
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <drivers/vga.h>
+#include <drivers/ata.h>
 #include <gui/desktop.h>
 #include <gui/window.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
+#include <drivers/amd_am79c973.h>
 
 // #define GRAPHICSMODE
 
@@ -175,6 +177,27 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     Gui::Window win2(&desktop, 40, 15, 30, 30, 0x00, 0xA8, 0x00);
     desktop.AddChild(&win2);
 #endif
+    /** drvManager drivers is private, this code for Test. 
+    Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
+    eth0->Send((uint8_t *)"Hello NetWork", 13);
+    */
+    // interrupt 14
+    Drivers::AdvancedTechnologAttachment ata0m(0x1F0, true);
+    printf("ATA Primary Master: ");
+    ata0m.Identify();
+    Drivers::AdvancedTechnologAttachment ata0s(0x1F0, false);
+    printf("ATA Primary Master: ");
+    ata0s.Identify();
+    char *atabuffer = "https://www.baidu.com";
+    ata0s.Write28(0, (uint8_t *)atabuffer, 22);
+    ata0s.Flush();
+
+    ata0s.Read28(0, (uint8_t *)atabuffer, 22);
+    // interrupt 15
+    Drivers::AdvancedTechnologAttachment ata1m(0x170, true);
+    Drivers::AdvancedTechnologAttachment ata1s(0x170, false);
+    //third: 0x1E8
+    //fourth: 0x168
     interrupts.Activate(); //激活中断保证在最后执行
     while (1) {
 #ifdef GRAPHICSMODE
