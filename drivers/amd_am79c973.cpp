@@ -9,7 +9,7 @@ namespace JLOS {
 namespace Drivers {
 amd_am79c973::amd_am79c973(Hdc::PeripheralComponentInterconnectDeviceDesriptor *dev,
      Hdc::InterruptManager *interrupts) : Driver(),
-     InterruptHandler(dev->interrupt + interrupts->hardwareInterruptOffset, interrupts),
+     InterruptHandler(interrupts, dev->interrupt + interrupts->HardwareInterruptOffset()),
      MACAddress0Port(dev->portBase),
      MACAddress2Port(dev->portBase + 0x02),
      MACAddress4Port(dev->portBase + 0x04),

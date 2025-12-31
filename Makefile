@@ -19,6 +19,7 @@ objects = obj/kernel/loader.o \
 	obj/gui/window.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
+	obj/kernel/syscalls.o \
 	obj/kernel/kernel.o \
 
 obj/drivers/%.o: drivers/%.cpp

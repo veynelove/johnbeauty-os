@@ -10,6 +10,7 @@
 #include <gui/window.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
+#include <kernel/syscalls.h>
 #include <drivers/amd_am79c973.h>
 
 // #define GRAPHICSMODE
@@ -94,17 +95,22 @@ public:
     }
 };
 
+void sysprintf(char *str)
+{
+    asm("int $0x80" : : "a" (4), "b" (str));
+}
+
 void taskA()
 {
     while(true) {
-        printf("A");
+        sysprintf("A");
     }
 }
 
 void taskB()
 {
     while(true) {
-        printf("B");
+        sysprintf("B");
     }
 }
 
@@ -119,11 +125,8 @@ extern "C" void callConstructors()
     }
 }
 
-extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
+extern "C" void memory_manager(const void *multiboot_structure)
 {
-    printf("johnbeauty always!\n");
-	
-    GlobalDescriptorTable gdt;
     uint32_t *memupper = (uint32_t *)((size_t)multiboot_structure + 8);
     size_t heap = 10*1024*1024;
     MemoryManager memoryManager(heap, (*memupper) * 1024 - heap - 10*1024);
@@ -139,16 +142,66 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
     printfHex(((size_t)allocated >> 8) & 0xFF);
     printfHex((size_t)allocated & 0xFF);
     printf("\n");
+}
+
+extern "C" void multi_task_test(GlobalDescriptorTable gdt, TaskManager taskManager)
+{
+    Task task1(&gdt, taskA);
+    Task task2(&gdt, taskB);
+    taskManager.AddTask(&task1);
+    taskManager.AddTask(&task2);
+}
+
+extern "C" void hard_driver_test()
+{
+    //interrupt 14
+    Drivers::AdvancedTechnologAttachment ata0m(0x1F0, true);
+    printf("ATA Primary Master: ");
+    ata0m.Identify();
+    Drivers::AdvancedTechnologAttachment ata0s(0x1F0, false);
+    printf("ATA Primary Master: ");
+    ata0s.Identify();
+    char *atabuffer = "https://www.baidu.com";
+    ata0s.Write28(0, (uint8_t *)atabuffer, 22);
+    ata0s.Flush();
+
+    ata0s.Read28(0, (uint8_t *)atabuffer, 22);
+    //interrupt 15
+    Drivers::AdvancedTechnologAttachment ata1m(0x170, true);
+    Drivers::AdvancedTechnologAttachment ata1s(0x170, false);
+    //third: 0x1E8
+    //fourth: 0x168
+}
+
+extern "C" void ethnent_test(Drivers::DriverManager drvManager)
+{
+    /** drvManager drivers is private, this code for Test. 
+    Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
+    eth0->Send((uint8_t *)"Hello NetWork", 13);
+    */
+}
+
+extern "C" void vga_test(Gui::Desktop desktop)
+{
+    Drivers::VideoGraphicsArray vga;
+    vga.SetMode(320, 200, 8);
+    Gui::Window win1(&desktop, 10, 10, 20, 20, 0xA8, 0x00, 0x00);
+    desktop.AddChild(&win1);
+    Gui::Window win2(&desktop, 40, 15, 30, 30, 0x00, 0xA8, 0x00);
+    desktop.AddChild(&win2);
+}
+
+extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
+{
+    printf("Princess Yihan is safe and happy!\n");
+
+    GlobalDescriptorTable gdt;
+    memory_manager(multiboot_structure);
     TaskManager taskManager;
-    // Task task1(&gdt, taskA);
-    // Task task2(&gdt, taskB);
-    // taskManager.AddTask(&task1);
-    // taskManager.AddTask(&task2);
-
 	Hdc::InterruptManager interrupts(0x20, &gdt, &taskManager);
-	
-    printf("initializing Hardware, Stage 1.\n");
+    SyscallHandler syscalls(&interrupts, 0x80);
 
+    printf("initializing Hardware, Stage 1.\n");
     Drivers::DriverManager drvManager;
 #ifdef GRAPHICSMODE
     Gui::Desktop desktop(320, 200, 0x00, 0x00, 0xA8);    
@@ -162,42 +215,15 @@ extern "C" void johnbeautyMain(void* multiboot_structure, uint32_t magicnumber)
 #endif
     drvManager.AddDriver(&mouse);
     drvManager.AddDriver(&keyboard);
-
     Hdc::PeripheralComponentInterconnectController PCIController;
     PCIController.SelectDrivers(&drvManager, &interrupts);
 
     printf("initializing Hardware, Stage 2.\n");
     drvManager.ActivateAll();
-    printf("initializing Hardware, Stage 3.\n");
 #ifdef GRAPHICSMODE
-    Drivers::VideoGraphicsArray vga;
-    vga.SetMode(320, 200, 8);
-    Gui::Window win1(&desktop, 10, 10, 20, 20, 0xA8, 0x00, 0x00);
-    desktop.AddChild(&win1);
-    Gui::Window win2(&desktop, 40, 15, 30, 30, 0x00, 0xA8, 0x00);
-    desktop.AddChild(&win2);
+    vga_test(desktop);
 #endif
-    /** drvManager drivers is private, this code for Test. 
-    Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
-    eth0->Send((uint8_t *)"Hello NetWork", 13);
-    */
-    // interrupt 14
-    Drivers::AdvancedTechnologAttachment ata0m(0x1F0, true);
-    printf("ATA Primary Master: ");
-    ata0m.Identify();
-    Drivers::AdvancedTechnologAttachment ata0s(0x1F0, false);
-    printf("ATA Primary Master: ");
-    ata0s.Identify();
-    char *atabuffer = "https://www.baidu.com";
-    ata0s.Write28(0, (uint8_t *)atabuffer, 22);
-    ata0s.Flush();
-
-    ata0s.Read28(0, (uint8_t *)atabuffer, 22);
-    // interrupt 15
-    Drivers::AdvancedTechnologAttachment ata1m(0x170, true);
-    Drivers::AdvancedTechnologAttachment ata1s(0x170, false);
-    //third: 0x1E8
-    //fourth: 0x168
+    printf("initializing Hardware, Stage 3.\n");
     interrupts.Activate(); //激活中断保证在最后执行
     while (1) {
 #ifdef GRAPHICSMODE
