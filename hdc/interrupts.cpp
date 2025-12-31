@@ -7,7 +7,7 @@ void printfHex(uint8_t);
 
 namespace JLOS {
 namespace Hdc {
-InterruptHandler::InterruptHandler(uint8_t interruptNumber, InterruptManager *interruptManager)
+InterruptHandler::InterruptHandler(InterruptManager *interruptManager, uint8_t interruptNumber)
 {
 	this->interruptNumber = interruptNumber;
 	this->interruptManager = interruptManager;
@@ -93,6 +93,7 @@ InterruptManager::InterruptManager(uint16_t hardwareInterruptoffset,
 		&HandleInterruptRequest0x0F, 0, IDT_INTERRUPT_GATE);
 	SetInterruptDescriptorTableEntry(hardwareInterruptOffset + 0x31, CodeSegment,
 		&HandleInterruptRequest0x31, 0, IDT_INTERRUPT_GATE);
+	
 	SetInterruptDescriptorTableEntry(					    0x80, CodeSegment,
 		&HandleInterruptRequest0x80, 0, IDT_INTERRUPT_GATE);
 
@@ -119,8 +120,8 @@ InterruptManager::InterruptManager(uint16_t hardwareInterruptoffset,
 
 	picMasterCommand.Write(0x11);
 	picSlaveCommand.Write(0x11);
-	picMasterData.Write(0x20);
-	picSlaveData.Write(0x28); 
+	picMasterData.Write(hardwareInterruptoffset);
+	picSlaveData.Write(hardwareInterruptoffset + 8);
 	picMasterData.Write(0x04);
 	picSlaveData.Write(0x02); 
 	picMasterData.Write(0x01);
@@ -159,6 +160,11 @@ uint32_t InterruptManager::handleInterrupt(uint8_t interrupt, uint32_t esp)
 		return ActivateInterruptManager->DoHandleInterrupt(interrupt, esp);
 	}
     return esp;
+}
+
+uint16_t InterruptManager::HardwareInterruptOffset()
+{
+	return hardwareInterruptOffset;
 }
 
 uint32_t InterruptManager::DoHandleInterrupt(uint8_t interrupt, uint32_t esp)
