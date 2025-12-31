@@ -13,11 +13,13 @@ objects = obj/kernel/loader.o \
 	obj/drivers/driver.o \
 	obj/drivers/vga.o \
 	obj/drivers/amd_am79c973.o \
+	obj/drivers/ata.o \
 	obj/gui/desktop.o \
 	obj/gui/widget.o \
 	obj/gui/window.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
+	obj/kernel/syscalls.o \
 	obj/kernel/kernel.o \
 
 obj/drivers/%.o: drivers/%.cpp

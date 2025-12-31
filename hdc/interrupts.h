@@ -17,7 +17,7 @@ protected:
 	uint8_t interruptNumber;
 	InterruptManager *interruptManager;
 
-	InterruptHandler(uint8_t interruptNumber, InterruptManager *interruptManager);
+	InterruptHandler(InterruptManager *interruptManager, uint8_t interruptNumber);
 	~InterruptHandler();
 };
 
@@ -25,6 +25,7 @@ class InterruptManager {
 friend class InterruptHandler;
 protected:
 	static InterruptManager *ActivateInterruptManager;
+	uint16_t hardwareInterruptOffset;
 	InterruptHandler *handles[256];
 	Kernel::TaskManager *taskManager;
 
@@ -60,11 +61,10 @@ public:
 		Kernel::TaskManager *taskManager);
 	~InterruptManager();
 
-	uint16_t hardwareInterruptOffset;
-
 	void Activate();
 	void Deactivate();
 	static uint32_t handleInterrupt(uint8_t interrupt, uint32_t esp);
+	uint16_t HardwareInterruptOffset();
 	uint32_t DoHandleInterrupt(uint8_t interrupt, uint32_t esp);
 
 	static void IgnoreInterruptRequest();
@@ -107,6 +107,7 @@ public:
 	static void HandleInterruptRequest0x0E();
 	static void HandleInterruptRequest0x0F();
 	static void HandleInterruptRequest0x31();
+
 	static void HandleInterruptRequest0x80();
 };
 }

@@ -59,6 +59,9 @@ public:
      void Activate() override;
      int Reset() override;
      uint32_t HandleInterrupt(uint32_t esp) override;
+
+     void Send(uint8_t *buffer, int size);
+     void Receive();
 };
 }
 }

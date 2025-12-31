@@ -146,7 +146,7 @@ Drivers::Driver *PeripheralComponentInterconnectController
         case 0x03: //graphics
             switch (dev.subclass_id) {
                 case 0x00: //VGA
-                    Kernel::printf("VGA ");
+                    Kernel::printf("VGA\n");
                     break;
             }
             break;
