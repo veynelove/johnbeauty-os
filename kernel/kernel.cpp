@@ -10,6 +10,7 @@
 #include <net/etherframe.h>
 #include <net/arp.h>
 #include <net/ipv4.h>
+#include <net/icmp.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -238,12 +239,14 @@ extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
     uint8_t subnet1 = 255, subnet2 = 255, subnet3 = 255, subnet4 = 0;
     uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
     Net::InternetProtocolProvider ipv4(&etherframe, &arp, gip_be, subnet_be);
-    //etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
-    //eth0->Send((uint8_t *)"Hello NetWork", 13);
+    Net::InternetControlMessageProtocol icmp(&ipv4);
+
     interrupts.Activate(); //激活中断保证在最后执行
+
     printf("\n\n");
-    //arp.Resolve(gip_be);
-    ipv4.Send(gip_be, 0x01, (uint8_t *)"foobar", 6);
+    arp.BroadcastMACAddress(gip_be);
+    icmp.RequestEchoReply(gip_be);
+
     while (1) {
 #ifdef GRAPHICSMODE
         desktop.Draw(&vga);

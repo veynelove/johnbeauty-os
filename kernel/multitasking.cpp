@@ -14,17 +14,8 @@ Task::Task(Kernel::GlobalDescriptorTable *gdt, void entrypoint())
      cpustate->edi = 0;
      cpustate->ebp = 0;
 
-     // cpustate->gs = 0;
-     // cpustate->fs = 0;
-     // cpustate->es = 0;
-     // cpustate->ds = 0;
-
-     //cpustate->error = 0;
-
-     //cpustate->esp = 0;
      cpustate->eip = (uint32_t)entrypoint;
      cpustate->cs = gdt->CodeSegmentSelector();
-     //cpustate->ss = 0;
      cpustate->eflags = 0x202;
 }
 

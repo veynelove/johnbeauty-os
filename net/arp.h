@@ -33,6 +33,7 @@ public:
      void RequestMACAddress(uint32_t IP_BE);
      uint64_t GetMACFromCache(uint32_t IP_BE);
      uint64_t Resolve(uint32_t IP_BE);
+     void BroadcastMACAddress(uint32_t IP_BE);
 };
 }
 }
