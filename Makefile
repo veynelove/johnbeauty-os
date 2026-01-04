@@ -18,6 +18,7 @@ objects = obj/kernel/loader.o \
 	obj/gui/widget.o \
 	obj/gui/window.o \
 	obj/net/etherframe.o \
+	obj/net/arp.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \

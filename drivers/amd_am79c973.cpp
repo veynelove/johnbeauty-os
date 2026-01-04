@@ -155,6 +155,11 @@ void amd_am79c973::Send(uint8_t *buffer, int size)
      {
           *dst = *src;     
      }
+     Kernel::printf("Sending: ");
+     for (int i = 0; i < size; i++) {
+          Kernel::printfHex(buffer[i]);
+          Kernel::printf(" ");
+     }
      sendBufferDescr[sendDescriptor].avail = 0;
      sendBufferDescr[sendDescriptor].flags2 = 0;
      sendBufferDescr[sendDescriptor].flags = 0x8300F000 | ((uint16_t)((-size) & 0xFFF));
@@ -179,6 +184,11 @@ void amd_am79c973::Receive()
                          Send(buffer, size);
                     }
                }
+               size = 64;
+               for (int i = 0; i < size; i++) {
+                    Kernel::printfHex(buffer[i]);
+                    Kernel::printf(" ");
+               }
           }
           recvBufferDescr[currentRecvBuffer].flags2 = 0;
           recvBufferDescr[currentRecvBuffer].flags = 0x8000F7FF;
@@ -193,6 +203,16 @@ void amd_am79c973::SetHandler(RawDataHandler *handler)
 uint64_t amd_am79c973::GetMACAddress()
 {
      return initBlock.physicalAddress;
+}
+
+void amd_am79c973::SetIPAddress(uint32_t ip)
+{
+     initBlock.logicalAddress = ip;
+}
+
+uint32_t amd_am79c973::GetIPAddress()
+{
+     return initBlock.logicalAddress;
 }
 }
 }

@@ -8,8 +8,8 @@
 namespace JLOS {
 namespace Net {
 struct EtherFrameHeader {
-     uint64_t dstMAC_BE;
-     uint64_t srcMAC_BE;
+     uint64_t dstMAC_BE{48};
+     uint64_t srcMAC_BE{48};
      uint64_t etherType_BE;
 } __attribute__((packed));
 
@@ -39,6 +39,9 @@ public:
      
      bool OnRawDataReceived(uint8_t *buffer, uint32_t size);
      void Send(uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size);
+
+     uint64_t GetMACAddress();
+     uint32_t GetIPAddress();
 };
 }
 }

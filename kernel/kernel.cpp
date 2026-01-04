@@ -8,6 +8,7 @@
 #include <gui/desktop.h>
 #include <gui/window.h>
 #include <net/etherframe.h>
+#include <net/arp.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -173,13 +174,18 @@ extern "C" void hard_driver_test()
     //fourth: 0x168
 }
 
-extern "C" void ethnet_test(Drivers::DriverManager drvManager)
+extern "C" Net::AddressResolutionProtocol ethnet_test(Drivers::DriverManager drvManager)
 {
-    /** drivers is private
+    uint8_t ip1 = 10, ip2 = 0, ip3 = 2, ip4 = 15;
+    uint32_t ip_be = (((uint32_t)ip4 << 24) | ((uint32_t)ip3 << 16)
+                     | ((uint32_t)ip2 << 8) | (uint32_t)ip1);
+
     Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
+    eth0->SetIPAddress(ip_be);
     Net::EtherFrameProvider etherframe(eth0);
-    etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
-    */
+    Net::AddressResolutionProtocol arp(&etherframe);
+    return arp;
+    //etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
     //eth0->Send((uint8_t *)"Hello NetWork", 13);
 }
 
@@ -226,7 +232,15 @@ extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
     vga_test(desktop);
 #endif
     printf("initializing Hardware, Stage 3.\n");
+    /** arp test
+    Net::AddressResolutionProtocol arp = ethnet_test(drvManager);
+    uint8_t gip1 = 10, gip2 = 0, gip3 = 2, gip4 = 2;
+    uint32_t gip_be = (((uint32_t)gip4 << 24) | ((uint32_t)gip3 << 16)
+                     | ((uint32_t)gip2 << 8) | (uint32_t)gip1);
+    */
     interrupts.Activate(); //激活中断保证在最后执行
+    printf("\n\n");
+    //arp.Resolve(gip_be);
     while (1) {
 #ifdef GRAPHICSMODE
         desktop.Draw(&vga);
