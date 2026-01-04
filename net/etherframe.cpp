@@ -2,10 +2,6 @@
 
 namespace JLOS {
 namespace Net {
-
-#define SWAP_ENDIAN_16(x) ((((x) & 0x00FF) << 8) \
-     | (((x) & 0xFF00) >> 8))
-
 EtherFrameHandler::EtherFrameHandler(EtherFrameProvider *backend, uint16_t etherType_BE)
 : etherType_BE(SWAP_ENDIAN_16(etherType_BE)), backend(backend)
 {
@@ -14,7 +10,9 @@ EtherFrameHandler::EtherFrameHandler(EtherFrameProvider *backend, uint16_t ether
 
 EtherFrameHandler::~EtherFrameHandler()
 {
-     backend->handlers[etherType_BE] = nullptr;
+     if (backend->handlers[etherType_BE] == this) {
+          backend->handlers[etherType_BE] = nullptr;
+     }
 }
 
 bool EtherFrameHandler::OnEtherFrameReceived(uint8_t *etherframePayload, uint32_t size)
@@ -39,6 +37,9 @@ EtherFrameProvider::~EtherFrameProvider(){}
 
 bool EtherFrameProvider::OnRawDataReceived(uint8_t *buffer, uint32_t size)
 {
+     if (size < sizeof(EtherFrameHeader)) {
+          return false;
+     }
      EtherFrameHeader *frame = (EtherFrameHeader *)buffer;
      bool sendBack = false;
      if (frame->dstMAC_BE == 0xFFFFFFFFFFFF
@@ -53,7 +54,6 @@ bool EtherFrameProvider::OnRawDataReceived(uint8_t *buffer, uint32_t size)
           frame->srcMAC_BE = backend->GetMACAddress();
      }
      return sendBack;
-
 }
 
 void EtherFrameProvider::Send(uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size)
@@ -71,6 +71,7 @@ void EtherFrameProvider::Send(uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t
           dst[i] = src[i];
      }
      backend->Send(buffer2, size + sizeof(EtherFrameHeader));
+     Kernel::MemoryManager::activeMemoryManager->free(buffer2);
 }
 
 uint64_t EtherFrameProvider::GetMACAddress()

@@ -9,6 +9,7 @@
 #include <gui/window.h>
 #include <net/etherframe.h>
 #include <net/arp.h>
+#include <net/ipv4.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -18,6 +19,12 @@
 
 namespace JLOS {
 namespace Kernel {
+#define BYTES_TO_BE32(x4, x3, x2, x1) \
+    ((((uint32_t)(x4) & 0xFF) << 24) | \
+     (((uint32_t)(x3) & 0xFF) << 16) | \
+     (((uint32_t)(x2) & 0xFF) << 8)  | \
+      ((uint32_t)(x1) & 0xFF))
+
 void printf(const char* str)
 {
     static uint16_t*  VideoMemory = (uint16_t*)0xb8000;
@@ -174,21 +181,6 @@ extern "C" void hard_driver_test()
     //fourth: 0x168
 }
 
-extern "C" Net::AddressResolutionProtocol ethnet_test(Drivers::DriverManager drvManager)
-{
-    uint8_t ip1 = 10, ip2 = 0, ip3 = 2, ip4 = 15;
-    uint32_t ip_be = (((uint32_t)ip4 << 24) | ((uint32_t)ip3 << 16)
-                     | ((uint32_t)ip2 << 8) | (uint32_t)ip1);
-
-    Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
-    eth0->SetIPAddress(ip_be);
-    Net::EtherFrameProvider etherframe(eth0);
-    Net::AddressResolutionProtocol arp(&etherframe);
-    return arp;
-    //etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
-    //eth0->Send((uint8_t *)"Hello NetWork", 13);
-}
-
 extern "C" void vga_test(Gui::Desktop desktop)
 {
     Drivers::VideoGraphicsArray vga;
@@ -232,15 +224,26 @@ extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
     vga_test(desktop);
 #endif
     printf("initializing Hardware, Stage 3.\n");
-    /** arp test
-    Net::AddressResolutionProtocol arp = ethnet_test(drvManager);
+    Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
+    // IP address
+    uint32_t ip_be = BYTES_TO_BE32(15, 2, 0, 10);
+    eth0->SetIPAddress(ip_be);
+    Net::EtherFrameProvider etherframe(eth0);
+    Net::AddressResolutionProtocol arp(&etherframe);
+
+    // IP Address of the default gateway
     uint8_t gip1 = 10, gip2 = 0, gip3 = 2, gip4 = 2;
-    uint32_t gip_be = (((uint32_t)gip4 << 24) | ((uint32_t)gip3 << 16)
-                     | ((uint32_t)gip2 << 8) | (uint32_t)gip1);
-    */
+    uint32_t gip_be = BYTES_TO_BE32(2, 2, 0, 10);
+
+    uint8_t subnet1 = 255, subnet2 = 255, subnet3 = 255, subnet4 = 0;
+    uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
+    Net::InternetProtocolProvider ipv4(&etherframe, &arp, gip_be, subnet_be);
+    //etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
+    //eth0->Send((uint8_t *)"Hello NetWork", 13);
     interrupts.Activate(); //激活中断保证在最后执行
     printf("\n\n");
     //arp.Resolve(gip_be);
+    ipv4.Send(gip_be, 0x01, (uint8_t *)"foobar", 6);
     while (1) {
 #ifdef GRAPHICSMODE
         desktop.Draw(&vga);
