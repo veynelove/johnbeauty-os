@@ -33,7 +33,7 @@ public:
 
      virtual bool OnInternetProtocolReceived(uint32_t srcIP_BE, uint32_t dstIP_BE,
           uint8_t *internetProtocolPayload, uint32_t size);
-     void Send(uint32_t dstIP_BE, uint8_t *internetProtocolPayload, uint8_t *buffer, uint32_t size);
+     void Send(uint32_t dstIP_BE, uint8_t *internetProtocolPayload, uint32_t size);
 };
 
 class InternetProtocolProvider : public EtherFrameHandler {

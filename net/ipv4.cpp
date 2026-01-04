@@ -21,7 +21,7 @@ bool InternetProtocolHandler::OnInternetProtocolReceived(uint32_t srcIP_BE, uint
 }
 
 void InternetProtocolHandler::Send(uint32_t dstIP_BE, uint8_t *internetProtocolPayload,
-     uint8_t *buffer, uint32_t size)
+     uint32_t size)
 {
      backend->Send(dstIP_BE, ip_protocol, internetProtocolPayload, size);
 }
@@ -113,7 +113,7 @@ uint16_t InternetProtocolProvider::CheckSum(uint16_t *data, uint32_t lengthInByt
      while (temp & 0xFFFF0000) {
           temp = (temp & 0xFFFF) + (temp >> 16);
      }
-     return SWAP_ENDIAN_16(temp);
+     return SWAP_ENDIAN_16(~temp);
 }
 }
 }

@@ -20,6 +20,7 @@ objects = obj/kernel/loader.o \
 	obj/net/etherframe.o \
 	obj/net/arp.o \
 	obj/net/ipv4.o \
+	obj/net/icmp.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \
