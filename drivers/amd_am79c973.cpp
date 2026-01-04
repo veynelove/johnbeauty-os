@@ -7,6 +7,27 @@ void printfHex(uint8_t);
 
 namespace JLOS {
 namespace Drivers {
+RawDataHandler::RawDataHandler(amd_am79c973 *backend)
+{
+     this->backend = backend;
+     backend->SetHandler(this);
+}
+
+RawDataHandler::~RawDataHandler()
+{
+     backend->SetHandler(0);
+}
+
+bool RawDataHandler::OnRawDataReceived(uint8_t *buffer, uint32_t size)
+{
+     return false;
+}
+
+void RawDataHandler::Send(uint8_t *buffer, uint32_t size)
+{
+
+}
+
 amd_am79c973::amd_am79c973(Hdc::PeripheralComponentInterconnectDeviceDesriptor *dev,
      Hdc::InterruptManager *interrupts) : Driver(),
      InterruptHandler(interrupts, dev->interrupt + interrupts->HardwareInterruptOffset()),
@@ -18,6 +39,7 @@ amd_am79c973::amd_am79c973(Hdc::PeripheralComponentInterconnectDeviceDesriptor *
      resetPort(dev->portBase + 0x14),
      busControlRegisterDataPort(dev->portBase + 0x16)
 {
+     this->handler = 0;
      currentSendBuffer = 0;
      currentRecvBuffer = 0;
 
@@ -133,6 +155,11 @@ void amd_am79c973::Send(uint8_t *buffer, int size)
      {
           *dst = *src;     
      }
+     Kernel::printf("Sending: ");
+     for (int i = 0; i < size; i++) {
+          Kernel::printfHex(buffer[i]);
+          Kernel::printf(" ");
+     }
      sendBufferDescr[sendDescriptor].avail = 0;
      sendBufferDescr[sendDescriptor].flags2 = 0;
      sendBufferDescr[sendDescriptor].flags = 0x8300F000 | ((uint16_t)((-size) & 0xFFF));
@@ -152,6 +179,12 @@ void amd_am79c973::Receive()
                     size -=4;
                }
                uint8_t *buffer = (uint8_t *)(recvBufferDescr[currentRecvBuffer].address);
+               if (handler) {
+                    if (handler->OnRawDataReceived(buffer, size)) {
+                         Send(buffer, size);
+                    }
+               }
+               size = 64;
                for (int i = 0; i < size; i++) {
                     Kernel::printfHex(buffer[i]);
                     Kernel::printf(" ");
@@ -160,6 +193,26 @@ void amd_am79c973::Receive()
           recvBufferDescr[currentRecvBuffer].flags2 = 0;
           recvBufferDescr[currentRecvBuffer].flags = 0x8000F7FF;
      }
+}
+
+void amd_am79c973::SetHandler(RawDataHandler *handler)
+{
+     this->handler = handler;
+}
+
+uint64_t amd_am79c973::GetMACAddress()
+{
+     return initBlock.physicalAddress;
+}
+
+void amd_am79c973::SetIPAddress(uint32_t ip)
+{
+     initBlock.logicalAddress = ip;
+}
+
+uint32_t amd_am79c973::GetIPAddress()
+{
+     return initBlock.logicalAddress;
 }
 }
 }
