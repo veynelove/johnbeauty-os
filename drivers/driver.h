@@ -15,8 +15,10 @@ public:
 
 class DriverManager {
 private:   
-    Driver *drivers[255];
     int numDrivers;
+
+public:
+    Driver *drivers[255]; // set public not a good idea;
 
 public:
     DriverManager();
