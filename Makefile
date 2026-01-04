@@ -17,6 +17,7 @@ objects = obj/kernel/loader.o \
 	obj/gui/desktop.o \
 	obj/gui/widget.o \
 	obj/gui/window.o \
+	obj/net/etherframe.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \
@@ -30,17 +31,21 @@ obj/hdc/%.o: hdc/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
+obj/hdc/%.o: hdc/%.s
+	mkdir -p $(@D)
+	as ${ASPARAMS} -o $@ $<
+
 obj/gui/%.o: gui/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/net/%.o: net/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
 obj/kernel/%.o: kernel/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
-
-obj/hdc/%.o: hdc/%.s
-	mkdir -p $(@D)
-	as ${ASPARAMS} -o $@ $<
 
 obj/kernel/%.o: kernel/%.s
 	mkdir -p $(@D)

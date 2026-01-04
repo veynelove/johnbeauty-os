@@ -1,17 +1,17 @@
-#include <common/types.h>
-#include <kernel/gdt.h>
 #include <hdc/interrupts.h>
 #include <hdc/pci.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <drivers/vga.h>
 #include <drivers/ata.h>
+#include <drivers/amd_am79c973.h>
 #include <gui/desktop.h>
 #include <gui/window.h>
+#include <net/etherframe.h>
+#include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
 #include <kernel/syscalls.h>
-#include <drivers/amd_am79c973.h>
 
 // #define GRAPHICSMODE
 
@@ -173,12 +173,14 @@ extern "C" void hard_driver_test()
     //fourth: 0x168
 }
 
-extern "C" void ethnent_test(Drivers::DriverManager drvManager)
+extern "C" void ethnet_test(Drivers::DriverManager drvManager)
 {
-    /** drvManager drivers is private, this code for Test. 
+    /** drivers is private
     Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
-    eth0->Send((uint8_t *)"Hello NetWork", 13);
+    Net::EtherFrameProvider etherframe(eth0);
+    etherframe.Send(0xFFFFFFFFFFFF, 0x0608, (uint8_t *)"F00", 3);
     */
+    //eth0->Send((uint8_t *)"Hello NetWork", 13);
 }
 
 extern "C" void vga_test(Gui::Desktop desktop)
