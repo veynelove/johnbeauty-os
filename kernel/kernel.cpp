@@ -11,6 +11,7 @@
 #include <net/arp.h>
 #include <net/ipv4.h>
 #include <net/icmp.h>
+#include <net/udp.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -62,7 +63,7 @@ void printfHex(uint8_t key)
     printf(foo);
 }
 
-class PrintfKeyboardEventHandler : public JLOS::Drivers::KeyboardEventHandler {
+class PrintfKeyboardEventHandler : public Drivers::KeyboardEventHandler {
 public:
     void OnKeyDown(char c) {
         char *foo = " ";
@@ -71,7 +72,7 @@ public:
     }
 };
 
-class MouseToConsole : public JLOS::Drivers::MouseEventHandler {
+class MouseToConsole : public Drivers::MouseEventHandler {
 private:
     int8_t x, y;
 
@@ -101,6 +102,18 @@ public:
         VideoMemory[80 * y + x] = ((VideoMemory[80 * y + x] & 0xF000) >> 4)
             | ((VideoMemory[80 * y + x] & 0x0F00) << 4)
             | ((VideoMemory[80 * y + x] & 0x00FF));
+    }
+};
+
+class PrintfUDPHandler : public Net::UserDatagramProtocolHandler {
+public:
+    void HandleUserDatagramProtocolMessage(Net::UserDatagramProtocolSocket *socket,
+          uint8_t *data, uint16_t size) {
+        char *foo = " ";
+        for (int i = 0; i < size; i++) {
+            foo[0] = data[i];
+            printf(foo);
+        }
     }
 };
 
@@ -227,25 +240,31 @@ extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
     printf("initializing Hardware, Stage 3.\n");
     Drivers::amd_am79c973 *eth0 = (Drivers::amd_am79c973 *)(drvManager.drivers[2]);
     // IP address
-    uint32_t ip_be = BYTES_TO_BE32(15, 2, 0, 10);
+    uint32_t ip_be = BYTES_TO_BE32(103, 0, 168, 192);
     eth0->SetIPAddress(ip_be);
     Net::EtherFrameProvider etherframe(eth0);
     Net::AddressResolutionProtocol arp(&etherframe);
 
     // IP Address of the default gateway
-    uint8_t gip1 = 10, gip2 = 0, gip3 = 2, gip4 = 2;
-    uint32_t gip_be = BYTES_TO_BE32(2, 2, 0, 10);
+    uint32_t gip_be = BYTES_TO_BE32(1, 0, 168, 192);
 
-    uint8_t subnet1 = 255, subnet2 = 255, subnet3 = 255, subnet4 = 0;
     uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
     Net::InternetProtocolProvider ipv4(&etherframe, &arp, gip_be, subnet_be);
     Net::InternetControlMessageProtocol icmp(&ipv4);
+    Net::UserDatagramProtocolProvider udp(&ipv4);
 
     interrupts.Activate(); //激活中断保证在最后执行
 
     printf("\n\n");
     arp.BroadcastMACAddress(gip_be);
     icmp.RequestEchoReply(gip_be);
+    PrintfUDPHandler udphandler;
+
+    // Net::UserDatagramProtocolSocket *udpsocket = udp.Connect(gip_be, 1234);
+    // udp.Bind(udpsocket, &udphandler);
+    // udpsocket->Send((uint8_t *)"Hello UDP!", 10);
+    Net::UserDatagramProtocolSocket *udpsocket = udp.Listen(1234);
+    udp.Bind(udpsocket, &udphandler);
 
     while (1) {
 #ifdef GRAPHICSMODE
