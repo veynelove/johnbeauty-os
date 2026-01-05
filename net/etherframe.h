@@ -30,6 +30,7 @@ public:
 
      virtual bool OnEtherFrameReceived(uint8_t *etherframePayload, uint32_t size);
      void Send(uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size);
+     uint32_t GetIPAddress();
 };
 
 class EtherFrameProvider : public Drivers::RawDataHandler {
