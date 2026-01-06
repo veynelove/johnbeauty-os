@@ -22,6 +22,7 @@ objects = obj/kernel/loader.o \
 	obj/net/ipv4.o \
 	obj/net/icmp.o \
 	obj/net/udp.o \
+	obj/net/tcp.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \
