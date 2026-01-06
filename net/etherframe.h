@@ -10,6 +10,10 @@ namespace Net {
 #define SWAP_ENDIAN_16(x) ((((x) & 0x00FF) << 8) \
      | (((x) & 0xFF00) >> 8))
 
+#define SWAP_ENDIAN_32(x) (((x) & 0xFF000000 >> 24) \
+     | ((x) & 0x00FF0000 >> 8) | ((x) & 0x0000FF00 << 8) \
+     | ((x) & 0x000000FF << 24))
+
 struct EtherFrameHeader {
      uint64_t dstMAC_BE{48};
      uint64_t srcMAC_BE{48};

@@ -155,8 +155,8 @@ void amd_am79c973::Send(uint8_t *buffer, int size)
      {
           *dst = *src;     
      }
-     Kernel::printf("Sending: ");
-     for (int i = 0; i < size; i++) {
+     Kernel::printf("SEND: ");
+     for (int i = (14 + 20); i < size; i++) {
           Kernel::printfHex(buffer[i]);
           Kernel::printf(" ");
      }
@@ -169,7 +169,7 @@ void amd_am79c973::Send(uint8_t *buffer, int size)
 
 void amd_am79c973::Receive()
 {
-     Kernel::printf("AMD am79c973 DATA RECEIVED\n");
+     Kernel::printf("RECV\n");
      for (; (recvBufferDescr[currentRecvBuffer].flags & 0x80000000) == 0;
           currentRecvBuffer = (currentRecvBuffer + 1) % 8) {
           if (!(recvBufferDescr[currentRecvBuffer].flags & 0x40000000)
@@ -179,16 +179,16 @@ void amd_am79c973::Receive()
                     size -=4;
                }
                uint8_t *buffer = (uint8_t *)(recvBufferDescr[currentRecvBuffer].address);
+               for (int i = (14 + 20); i < size; i++) {
+                    Kernel::printfHex(buffer[i]);
+                    Kernel::printf(" ");
+               }
                if (handler) {
                     if (handler->OnRawDataReceived(buffer, size)) {
                          Send(buffer, size);
                     }
                }
                size = 64;
-               for (int i = 0; i < size; i++) {
-                    Kernel::printfHex(buffer[i]);
-                    Kernel::printf(" ");
-               }
           }
           recvBufferDescr[currentRecvBuffer].flags2 = 0;
           recvBufferDescr[currentRecvBuffer].flags = 0x8000F7FF;

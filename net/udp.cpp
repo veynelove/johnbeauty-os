@@ -7,8 +7,8 @@ UserDatagramProtocolHandler::UserDatagramProtocolHandler(){}
 
 UserDatagramProtocolHandler::~UserDatagramProtocolHandler(){}
 
-void UserDatagramProtocolHandler::HandleUserDatagramProtocolMessage(UserDatagramProtocolSocket *socket,
-     uint8_t *data, uint16_t size){}
+void UserDatagramProtocolHandler::HandleUserDatagramProtocolMessage(
+     UserDatagramProtocolSocket *socket, uint8_t *data, uint16_t size){}
 
 UserDatagramProtocolSocket::UserDatagramProtocolSocket(UserDatagramProtocolProvider *backend)
 : backend(backend), handler(0), listening(false){}
@@ -75,7 +75,8 @@ bool UserDatagramProtocolProvider::OnInternetProtocolReceived(uint32_t srcIP_BE,
 UserDatagramProtocolSocket *UserDatagramProtocolProvider::Connect(uint32_t ip, uint16_t port)
 {
      UserDatagramProtocolSocket *socket =
-          (UserDatagramProtocolSocket *)Kernel::MemoryManager::activeMemoryManager->malloc(sizeof(UserDatagramProtocolSocket));
+          (UserDatagramProtocolSocket *)Kernel::MemoryManager::activeMemoryManager->malloc(
+               sizeof(UserDatagramProtocolSocket));
      if (socket) {
           new (socket) UserDatagramProtocolSocket(this);
           socket->remotePort = port;
@@ -92,7 +93,8 @@ UserDatagramProtocolSocket *UserDatagramProtocolProvider::Connect(uint32_t ip, u
 UserDatagramProtocolSocket *UserDatagramProtocolProvider::Listen(uint16_t port)
 {
      UserDatagramProtocolSocket *socket =
-          (UserDatagramProtocolSocket *)Kernel::MemoryManager::activeMemoryManager->malloc(sizeof(UserDatagramProtocolSocket));
+          (UserDatagramProtocolSocket *)Kernel::MemoryManager::activeMemoryManager->malloc(
+               sizeof(UserDatagramProtocolSocket));
      if (socket) {
           new (socket) UserDatagramProtocolSocket(this);
           socket->listening = true;
@@ -132,7 +134,8 @@ void UserDatagramProtocolProvider::Send(UserDatagramProtocolSocket *socket, uint
      Kernel::MemoryManager::activeMemoryManager->free(buffer);
 }
 
-void UserDatagramProtocolProvider::Bind(UserDatagramProtocolSocket *socket, UserDatagramProtocolHandler *handler)
+void UserDatagramProtocolProvider::Bind(UserDatagramProtocolSocket *socket,
+     UserDatagramProtocolHandler *handler)
 {
      socket->handler = handler;
 }

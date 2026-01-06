@@ -12,6 +12,7 @@
 #include <net/ipv4.h>
 #include <net/icmp.h>
 #include <net/udp.h>
+#include <net/tcp.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -114,6 +115,28 @@ public:
             foo[0] = data[i];
             printf(foo);
         }
+    }
+};
+
+class PrintfTCPHandler : public Net::TransmissionControlProtocolHandler {
+public:
+    bool HandleTransMissionControlProtocolMessage(Net::TransmissionControlProtocolSocket *socket,
+          uint8_t *data, uint16_t size) {
+        char *foo = " ";
+        for (int i = 0; i < size; i++) {
+            foo[0] = data[i];
+            printf(foo);
+        }
+        if (size > 9 
+            && data[0] == 'G' && data[1] == 'E'
+            && data[2] == 'T' && data[3] == ' '
+            && data[4] == '/' && data[5] == ' '
+            && data[6] == 'H' && data[7] == 'T'
+            && data[8] == 'T' && data[9] == 'P') {
+            socket->Send((uint8_t *)"HTTP/1.1 200 OK\r\nServer: JLOS\r\nContent-Type: text/html\r\n\r\n<html><head><title>John beauty</title></head><body><b>johnbeauty</b>JohnLove Operating System</body></html>\r\n", 177);
+            socket->Disconnect();
+        }
+        return true;
     }
 };
 
@@ -252,19 +275,25 @@ extern "C" void johnbeautyMain(void *multiboot_structure, uint32_t magicnumber)
     Net::InternetProtocolProvider ipv4(&etherframe, &arp, gip_be, subnet_be);
     Net::InternetControlMessageProtocol icmp(&ipv4);
     Net::UserDatagramProtocolProvider udp(&ipv4);
+    Net::TransmissionControlProtocolProvider tcp(&ipv4);
 
     interrupts.Activate(); //激活中断保证在最后执行
 
     printf("\n\n");
     arp.BroadcastMACAddress(gip_be);
-    icmp.RequestEchoReply(gip_be);
-    PrintfUDPHandler udphandler;
+    PrintfTCPHandler tcphandler;
+    Net::TransmissionControlProtocolSocket *tcpsocket = tcp.Listen(1234);
+    tcp.Bind(tcpsocket, &tcphandler);
+    //tcpsocket->Send((uint8_t *)"Hello TCP!", 10);
+
+    //icmp.RequestEchoReply(gip_be);
+    //PrintfUDPHandler udphandler;
 
     // Net::UserDatagramProtocolSocket *udpsocket = udp.Connect(gip_be, 1234);
     // udp.Bind(udpsocket, &udphandler);
     // udpsocket->Send((uint8_t *)"Hello UDP!", 10);
-    Net::UserDatagramProtocolSocket *udpsocket = udp.Listen(1234);
-    udp.Bind(udpsocket, &udphandler);
+    //Net::UserDatagramProtocolSocket *udpsocket = udp.Listen(1234);
+    //udp.Bind(udpsocket, &udphandler);
 
     while (1) {
 #ifdef GRAPHICSMODE
