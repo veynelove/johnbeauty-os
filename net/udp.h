@@ -1,16 +1,13 @@
 #ifndef __JLOS_NET_UDP_H
 #define __JLOS_NET_UDP_H
 
-#include <net/etherframe.h>
 #include <net/ipv4.h>
 
 namespace JLOS {
 namespace Net {
 struct UserDatagramProtocolHeader {
      uint16_t srcPort;
-     uint32_t srcIP;
      uint16_t dstPort;
-     uint32_t dstIP;
      uint16_t length;
      uint16_t checksum;
 } __attribute__((packed));
