@@ -13,6 +13,8 @@
 #include <net/icmp.h>
 #include <net/udp.h>
 #include <net/tcp.h>
+#include <filesystem/msdospath.h>
+#include <filesystem/fat.h>
 #include <kernel/gdt.h>
 #include <kernel/multitasking.h>
 #include <kernel/memorymanagerment.h>
@@ -206,11 +208,13 @@ extern "C" void hard_driver_test()
     Drivers::AdvancedTechnologAttachment ata0s(0x1F0, false);
     printf("ATA Primary Master: ");
     ata0s.Identify();
-    char *atabuffer = "https://www.baidu.com";
-    ata0s.Write28(0, (uint8_t *)atabuffer, 22);
-    ata0s.Flush();
+    printf("\n\n\n\n\n\n\n\n\n\n");
+    FileSystem::MSDOSPartitionTable::ReadPartitions(&ata0s);
+    //char *atabuffer = "https://www.baidu.com";
+    //ata0s.Write28(0, (uint8_t *)atabuffer, 22);
+    //ata0s.Flush();
 
-    ata0s.Read28(0, (uint8_t *)atabuffer, 22);
+    //ata0s.Read28(0, (uint8_t *)atabuffer, 22);
     //interrupt 15
     Drivers::AdvancedTechnologAttachment ata1m(0x170, true);
     Drivers::AdvancedTechnologAttachment ata1s(0x170, false);
