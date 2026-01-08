@@ -2,6 +2,7 @@
 #define __JLOS_FILESYSTEM_MSDOSPATH_H
 
 #include <drivers/ata.h>
+#include <filesystem/fat.h>
 
 namespace JLOS {
 namespace FileSystem {

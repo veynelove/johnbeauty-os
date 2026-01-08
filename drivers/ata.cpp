@@ -85,11 +85,12 @@ void AdvancedTechnologAttachment::Read28(uint32_t sector, uint8_t *data, int siz
      Kernel::printf("Reading from ATA.");
      for (uint16_t i = 0; i < size; i += 2) {
           uint16_t wdata = dataPort.Read();
+          /**
           char *foo = " \0";
           foo[1] = (wdata >> 8) & 0x00FF;
           foo[0] = wdata & 0x00FF;
           Kernel::printf(foo);
-          
+          */
           data[i] = wdata & 0x00FF;
           if (i + 1 < size) {
                data[i + 1] = (wdata >> 8) & 0x00FF;

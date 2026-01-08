@@ -24,6 +24,7 @@ objects = obj/kernel/loader.o \
 	obj/net/udp.o \
 	obj/net/tcp.o \
 	obj/filesystem/msdospath.o \
+	obj/filesystem/fat.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \

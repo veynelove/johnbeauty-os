@@ -22,6 +22,9 @@ void MSDOSPartitionTable::ReadPartitions(Drivers::AdvancedTechnologAttachment *h
           return;
      }
      for (int i = 0; i < 4; i++) {
+          if (mbr.primaryPartition[i].partition_id == 0) {
+               continue;
+          }
           Kernel::printf(" Partition ");
           Kernel::printfHex(i & 0xFF);
           if (mbr.primaryPartition[i].bootable == 0x80) {
@@ -30,6 +33,8 @@ void MSDOSPartitionTable::ReadPartitions(Drivers::AdvancedTechnologAttachment *h
                Kernel::printf(" not bootable. Type ");
           }
           Kernel::printfHex(mbr.primaryPartition[i].partition_id);
+
+          ReadBiosBlock(hd, mbr.primaryPartition[i].start_lba);
      }
 }
 }
