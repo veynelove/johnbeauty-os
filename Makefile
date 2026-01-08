@@ -23,6 +23,7 @@ objects = obj/kernel/loader.o \
 	obj/net/icmp.o \
 	obj/net/udp.o \
 	obj/net/tcp.o \
+	obj/filesystem/msdospath.o \
 	obj/kernel/multitasking.o \
 	obj/kernel/memorymanagerment.o \
 	obj/kernel/syscalls.o \
@@ -45,6 +46,10 @@ obj/gui/%.o: gui/%.cpp
 	g++ ${GPPPARAMS} -o $@ -c $<
 
 obj/net/%.o: net/%.cpp
+	mkdir -p $(@D)
+	g++ ${GPPPARAMS} -o $@ -c $<
+
+obj/filesystem/%.o: filesystem/%.cpp
 	mkdir -p $(@D)
 	g++ ${GPPPARAMS} -o $@ -c $<
 
