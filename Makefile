@@ -1,88 +1,46 @@
+# ==================john_kernel=================
+JLOS := johnkernel
+
 GPPPARAMS = -m32 -I. -fno-use-cxa-atexit -nostdlib -fno-builtin -fno-rtti -fno-exceptions -fno-leading-underscore
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 
-objects = obj/kernel/loader.o \
-	obj/kernel/gdt.o \
-	obj/hdc/port.o \
-	obj/hdc/interruptstubs.o \
-	obj/hdc/interrupts.o \
-	obj/hdc/pci.o \
-	obj/drivers/keyboard.o \
-	obj/drivers/mouse.o \
-	obj/drivers/driver.o \
-	obj/drivers/vga.o \
-	obj/drivers/amd_am79c973.o \
-	obj/drivers/ata.o \
-	obj/gui/desktop.o \
-	obj/gui/widget.o \
-	obj/gui/window.o \
-	obj/net/etherframe.o \
-	obj/net/arp.o \
-	obj/net/ipv4.o \
-	obj/net/icmp.o \
-	obj/net/udp.o \
-	obj/net/tcp.o \
-	obj/filesystem/msdospath.o \
-	obj/filesystem/fat.o \
-	obj/kernel/multitasking.o \
-	obj/kernel/memorymanagerment.o \
-	obj/kernel/syscalls.o \
-	obj/kernel/kernel.o \
+SRC_DIRS := kernel hdc drivers gui net filesystem
+OBJ_DIR := obj
 
-obj/drivers/%.o: drivers/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
+CPP_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
+AS_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.s))
+CPP_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CPP_SRCS))
+AS_OBJS := $(patsubst %.s,$(OBJ_DIR)/%.o,$(AS_SRCS))
+OBJS := $(CPP_OBJS) $(AS_OBJS)
 
-obj/hdc/%.o: hdc/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(@D)
+	@g++ $(GPPPARAMS) -o $@ -c $<
 
-obj/hdc/%.o: hdc/%.s
-	mkdir -p $(@D)
-	as ${ASPARAMS} -o $@ $<
+$(OBJ_DIR)/%.o: %.s
+	@mkdir -p $(@D)
+	@as $(ASPARAMS) -o $@ $<
 
-obj/gui/%.o: gui/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
+$(JLOS).bin: linker.ld  $(OBJS)
+	@ld $(LDPARAMS) -T $< -o $@  $(OBJS)
 
-obj/net/%.o: net/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
+install: $(JLOS).bin
+	@sudo cp $< /boot/$(JLOS)/.bin
 
-obj/filesystem/%.o: filesystem/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
-
-obj/kernel/%.o: kernel/%.cpp
-	mkdir -p $(@D)
-	g++ ${GPPPARAMS} -o $@ -c $<
-
-obj/kernel/%.o: kernel/%.s
-	mkdir -p $(@D)
-	as ${ASPARAMS} -o $@ $<
-
-johnkernel.bin: linker.ld ${objects}
-	ld ${LDPARAMS} -T $< -o $@ ${objects}
-
-install: johnkernel.bin
-	sudo cp $< /boot/johnkernel.bin
-
-johnkernel.iso: johnkernel.bin
-	mkdir iso
-	mkdir iso/boot
-	mkdir iso/boot/grub
-	cp $< iso/boot/
-	echo 'set timeout=0' >> iso/boot/grub/grub.cfg
-	echo 'set default=0' >> iso/boot/grub/grub.cfg
-	echo '' >> iso/boot/grub/grub.cfg
-	echo 'menuentry "johnbeauty oprating system" {' >> iso/boot/grub/grub.cfg
-	echo ' multiboot /boot/johnkernel.bin' >> iso/boot/grub/grub.cfg
-	echo ' boot' >> iso/boot/grub/grub.cfg
-	echo '}' >> iso/boot/grub/grub.cfg
-	grub-mkrescue --output=$@ iso
-	rm -rf iso
+$(JLOS).iso: $(JLOS).bin
+	@mkdir -p iso/boot/grub
+	@cp $< iso/boot/$(JLOS).bin
+	@echo 'set timeout=0' >> iso/boot/grub/grub.cfg
+	@echo 'set default=0' >> iso/boot/grub/grub.cfg
+	@echo '' >> iso/boot/grub/grub.cfg
+	@echo 'menuentry "johnbeauty operating system" {' >> iso/boot/grub/grub.cfg
+	@echo ' multiboot /boot/$(JLOS).bin' >> iso/boot/grub/grub.cfg
+	@echo ' boot' >> iso/boot/grub/grub.cfg
+	@echo '}' >> iso/boot/grub/grub.cfg
+	@grub-mkrescue --output=$@ iso
+	@rm -rf iso
 
 clean:
-	rm -rf obj johnkernel.bin johnkernel.iso
+	@rm -rf $(OBJ_DIR) $(JLOS).bin $(JLOS).iso
 	@echo 'clean success.'
