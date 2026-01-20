@@ -39,7 +39,7 @@ void printf(const char* str)
             case '\n': y++; x = 0; break;
             default:
                 VideoMemory[80 * y + x] = (VideoMemory[80 * y + x] & 0xFF00) | str[i];
-                x++; break;
+                x++;
         }
         if (x >= 80) {
             y++;
@@ -162,12 +162,12 @@ void taskB()
 }
 
 typedef void (*constructor)();
-extern "C" constructor start_ctors;
-extern "C" constructor end_ctors;
+extern "C" constructor __init_array_start;
+extern "C" constructor __init_array_end;
 
 extern "C" void callConstructors()
 {
-    for (constructor* i = &start_ctors; i != &end_ctors; i++) {
+    for (constructor* i = &__init_array_start; i != &__init_array_end; i++) {
         (*i)();
     }
 }
