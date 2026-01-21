@@ -15,4 +15,17 @@ typedef long long int              int64_t;
 typedef const char *               string;
 typedef uint32_t                   size_t;
 }
+
+namespace JLOS {
+namespace Kernel {
+constexpr uint8_t HEAP_STACT = (10 * 1024 * 1024);
+constexpr size_t HEAP_RESERVED_SIZE = (10 * 1024);
+
+#define BYTES_TO_BE32(x4, x3, x2, x1) \
+    ((((uint32_t)(x4) & 0xFF) << 24) | \
+     (((uint32_t)(x3) & 0xFF) << 16) | \
+     (((uint32_t)(x2) & 0xFF) << 8)  | \
+      ((uint32_t)(x1) & 0xFF))
+}
+}
 #endif

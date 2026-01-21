@@ -2,217 +2,217 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(uint8_t);
+void printf_hex(uint8_t);
 }
 
 namespace JLOS {
 namespace Drivers {
-RawDataHandler::RawDataHandler(amd_am79c973 *backend)
+rawdata_handler::rawdata_handler(amd_am79c973 *backend)
 {
      this->backend = backend;
-     backend->SetHandler(this);
+     backend->set_handler(this);
 }
 
-RawDataHandler::~RawDataHandler()
+rawdata_handler::~rawdata_handler()
 {
-     backend->SetHandler(0);
+     backend->set_handler(0);
 }
 
-bool RawDataHandler::OnRawDataReceived(uint8_t *buffer, uint32_t size)
+bool rawdata_handler::on_raw_data_received(uint8_t *buffer, uint32_t m_size)
 {
      return false;
 }
 
-void RawDataHandler::Send(uint8_t *buffer, uint32_t size)
+void rawdata_handler::send(uint8_t *buffer, uint32_t m_size)
 {
 
 }
 
-amd_am79c973::amd_am79c973(Hdc::PeripheralComponentInterconnectDeviceDesriptor *dev,
-     Hdc::InterruptManager *interrupts) : Driver(),
-     InterruptHandler(interrupts, dev->interrupt + interrupts->HardwareInterruptOffset()),
-     MACAddress0Port(dev->portBase),
-     MACAddress2Port(dev->portBase + 0x02),
-     MACAddress4Port(dev->portBase + 0x04),
-     registerDataPort(dev->portBase + 0x10),
-     registerAddressPort(dev->portBase + 0x12),
-     resetPort(dev->portBase + 0x14),
-     busControlRegisterDataPort(dev->portBase + 0x16)
+amd_am79c973::amd_am79c973(Hdc::peripheral_component_interconnect_device_desriptor *dev,
+     Hdc::interrupt_manager *interrupts) : driver(),
+     interrupt_handler(interrupts, dev->m_interrupt + interrupts->hardware_interrupt_offset()),
+     m_mac_address0_port(dev->m_port_base),
+     m_mac_address2_port(dev->m_port_base + 0x02),
+     m_mac_address4_port(dev->m_port_base + 0x04),
+     m_register_data_port(dev->m_port_base + 0x10),
+     m_register_address_port(dev->m_port_base + 0x12),
+     m_reset_port(dev->m_port_base + 0x14),
+     m_bus_control_register_data_port(dev->m_port_base + 0x16)
 {
      this->handler = 0;
-     currentSendBuffer = 0;
-     currentRecvBuffer = 0;
+     m_current_send_buffer = 0;
+     m_current_recv_buffer = 0;
 
-     uint64_t MAC0 = MACAddress0Port.Read() % 256;
-     uint64_t MAC1 = MACAddress0Port.Read() / 256;
-     uint64_t MAC2 = MACAddress2Port.Read() % 256;
-     uint64_t MAC3 = MACAddress2Port.Read() / 256;
-     uint64_t MAC4 = MACAddress4Port.Read() % 256;
-     uint64_t MAC5 = MACAddress4Port.Read() / 256;
+     uint64_t MAC0 = m_mac_address0_port.read() % 256;
+     uint64_t MAC1 = m_mac_address0_port.read() / 256;
+     uint64_t MAC2 = m_mac_address2_port.read() % 256;
+     uint64_t MAC3 = m_mac_address2_port.read() / 256;
+     uint64_t MAC4 = m_mac_address4_port.read() % 256;
+     uint64_t MAC5 = m_mac_address4_port.read() / 256;
      uint64_t MAC = MAC5 << 40
                   | MAC4 << 32
                   | MAC3 << 24
                   | MAC2 << 16
                   | MAC1 << 8
                   | MAC0;
-     //32 bit mode
-     registerAddressPort.Write(20);
-     busControlRegisterDataPort.Write(0x102);
+     //32 bit m_mode
+     m_register_address_port.write(20);
+     m_bus_control_register_data_port.write(0x102);
 
      //STOP reset
-     registerAddressPort.Write(0);
-     registerDataPort.Write(0x04);
+     m_register_address_port.write(0);
+     m_register_data_port.write(0x04);
 
-     //initBlock
-     initBlock.mode = 0x0000; // promiscuous mode = false
-     initBlock.reserved1 = 0;
-     initBlock.numSendBuffers = 3;
-     initBlock.reserved2 = 0;
-     initBlock.numRecvBuffers = 3;
-     initBlock.physicalAddress = MAC;
-     initBlock.reserved3 = 0;
-     initBlock.logicalAddress = 0;
+     //m_init_block
+     m_init_block.m_mode = 0x0000; // promiscuous m_mode = false
+     m_init_block.reserved1 = 0;
+     m_init_block.num_send_buffers = 3;
+     m_init_block.reserved2 = 0;
+     m_init_block.num_recv_buffers = 3;
+     m_init_block.physical_address = MAC;
+     m_init_block.m_reserved3 = 0;
+     m_init_block.m_logical_address = 0;
 
-     sendBufferDescr = 
-          (BufferDescriptor *)(((uint32_t)(&sendBufferDescMemory[0]) + 15) & ~((uint32_t)0xF));
-     initBlock.sendBufferDescrAddress = (uint32_t)sendBufferDescr;
-     recvBufferDescr = 
-          (BufferDescriptor *)(((uint32_t)(&recvBufferDescMemory[0]) + 15) & ~((uint32_t)0xF));
-     initBlock.recvBufferDescrAddress = (uint32_t)recvBufferDescr;
+     send_buffer_descr = 
+          (buffer_descriptor *)(((uint32_t)(&send_buffer_desc_memory[0]) + 15) & ~((uint32_t)0xF));
+     m_init_block.m_send_buffer_descr_address = (uint32_t)send_buffer_descr;
+     recv_buffer_descr = 
+          (buffer_descriptor *)(((uint32_t)(&recv_buffer_desc_memory[0]) + 15) & ~((uint32_t)0xF));
+     m_init_block.m_recv_buffer_descr_address = (uint32_t)recv_buffer_descr;
 
      for (uint8_t i = 0; i < 8; i++) {
-          sendBufferDescr[i].address = (((uint32_t)&sendBuffers[i]) + 15) & ~(uint32_t)0xF;
-          sendBufferDescr[i].flags = (0x7FF | 0xF000);
-          sendBufferDescr[i].flags2 = 0;
-          sendBufferDescr[i].avail = 0;
+          send_buffer_descr[i].m_address = (((uint32_t)&send_buffers[i]) + 15) & ~(uint32_t)0xF;
+          send_buffer_descr[i].m_flags = (0x7FF | 0xF000);
+          send_buffer_descr[i].m_flags2 = 0;
+          send_buffer_descr[i].m_avail = 0;
 
-          recvBufferDescr[i].address = (((uint32_t)&recvBuffers[i]) + 15) & ~(uint32_t)0xF;
-          recvBufferDescr[i].flags = (0xF7FF | 0x80000000);
-          recvBufferDescr[i].flags2 = 0;
-          recvBufferDescr[i].avail = 0;
+          recv_buffer_descr[i].m_address = (((uint32_t)&recv_buffers[i]) + 15) & ~(uint32_t)0xF;
+          recv_buffer_descr[i].m_flags = (0xF7FF | 0x80000000);
+          recv_buffer_descr[i].m_flags2 = 0;
+          recv_buffer_descr[i].m_avail = 0;
      }
 
-     registerAddressPort.Write(1);
-     registerDataPort.Write((uint32_t)(&initBlock) & 0xFFFF);
-     registerAddressPort.Write(2);
-     registerDataPort.Write(((uint32_t)(&initBlock) >> 16) & 0xFFFF);
+     m_register_address_port.write(1);
+     m_register_data_port.write((uint32_t)(&m_init_block) & 0xFFFF);
+     m_register_address_port.write(2);
+     m_register_data_port.write(((uint32_t)(&m_init_block) >> 16) & 0xFFFF);
 }
 
 amd_am79c973::~amd_am79c973(){}
 
-void amd_am79c973::Activate()
+void amd_am79c973::activate()
 {
-     registerAddressPort.Write(0);
-     registerDataPort.Write(0x41);
+     m_register_address_port.write(0);
+     m_register_data_port.write(0x41);
 
-     registerAddressPort.Write(4);
-     uint32_t temp = registerDataPort.Read();
-     registerDataPort.Write(4);
-     registerDataPort.Write(temp | 0xC00);
+     m_register_address_port.write(4);
+     uint32_t temp = m_register_data_port.read();
+     m_register_data_port.write(4);
+     m_register_data_port.write(temp | 0xC00);
 
-     registerAddressPort.Write(0);
-     registerDataPort.Write(0x42);
+     m_register_address_port.write(0);
+     m_register_data_port.write(0x42);
 }
 
-int amd_am79c973::Reset()
+int amd_am79c973::reset()
 {
-     resetPort.Read();
-     resetPort.Write(0);
+     m_reset_port.read();
+     m_reset_port.write(0);
      return 10;
 }
 
-uint32_t amd_am79c973::HandleInterrupt(uint32_t esp)
+uint32_t amd_am79c973::handle_interrupt(uint32_t m_esp)
 {
      Kernel::printf("INTERRUPT FROM AMD am79c973\n");
-     registerAddressPort.Write(0);
-     uint32_t temp = registerDataPort.Read();
+     m_register_address_port.write(0);
+     uint32_t temp = m_register_data_port.read();
      if ((temp & 0x8000) == 0x8000) Kernel::printf("AMD am79c973 ERROR\n");
      if ((temp & 0x2000) == 0x2000) Kernel::printf("AMD am79c973 COLLISION ERROR\n");
      if ((temp & 0x1000) == 0x1000) Kernel::printf("AMD am79c973 MISSED ERROR\n");
      if ((temp & 0x0800) == 0x0800) Kernel::printf("AMD am79c973 MEMORY ERROR\n");
-     if ((temp & 0x0400) == 0x0400) Receive();
+     if ((temp & 0x0400) == 0x0400) receive();
      if ((temp & 0x0200) == 0x0200) Kernel::printf("AMD am79c973 DATA SENT\n");
 
      // acknoledge
-     registerAddressPort.Write(0);
-     registerDataPort.Write(temp);
+     m_register_address_port.write(0);
+     m_register_data_port.write(temp);
 
      if ((temp & 0x0100) == 0x0100) Kernel::printf("AMD am79c973 INIT DONE\n");
 
-     return esp;
+     return m_esp;
 }
 
-void amd_am79c973::Send(uint8_t *buffer, int size)
+void amd_am79c973::send(uint8_t *buffer, int m_size)
 {
-     int sendDescriptor = currentSendBuffer;
-     currentSendBuffer = (currentSendBuffer + 1) % 8;
-     if (size > 1518) {
-          size = 1518;
+     int send_descriptor = m_current_send_buffer;
+     m_current_send_buffer = (m_current_send_buffer + 1) % 8;
+     if (m_size > 1518) {
+          m_size = 1518;
      }
-     for (uint8_t *src = buffer + size - 1, *dst =
-          (uint8_t *)(sendBufferDescr[sendDescriptor].address + size -1);
+     for (uint8_t *src = buffer + m_size - 1, *dst =
+          (uint8_t *)(send_buffer_descr[send_descriptor].m_address + m_size -1);
           src >= buffer; src--, dst--) 
      {
           *dst = *src;     
      }
      Kernel::printf("SEND: ");
-     for (int i = (14 + 20); i < size; i++) {
-          Kernel::printfHex(buffer[i]);
+     for (int i = (14 + 20); i < m_size; i++) {
+          Kernel::printf_hex(buffer[i]);
           Kernel::printf(" ");
      }
-     sendBufferDescr[sendDescriptor].avail = 0;
-     sendBufferDescr[sendDescriptor].flags2 = 0;
-     sendBufferDescr[sendDescriptor].flags = 0x8300F000 | ((uint16_t)((-size) & 0xFFF));
-     registerAddressPort.Write(0);
-     registerDataPort.Write(0x48);
+     send_buffer_descr[send_descriptor].m_avail = 0;
+     send_buffer_descr[send_descriptor].m_flags2 = 0;
+     send_buffer_descr[send_descriptor].m_flags = 0x8300F000 | ((uint16_t)((-m_size) & 0xFFF));
+     m_register_address_port.write(0);
+     m_register_data_port.write(0x48);
 }
 
-void amd_am79c973::Receive()
+void amd_am79c973::receive()
 {
      Kernel::printf("RECV\n");
-     for (; (recvBufferDescr[currentRecvBuffer].flags & 0x80000000) == 0;
-          currentRecvBuffer = (currentRecvBuffer + 1) % 8) {
-          if (!(recvBufferDescr[currentRecvBuffer].flags & 0x40000000)
-             && (recvBufferDescr[currentRecvBuffer].flags & 0x03000000) == 0x03000000) {
-               uint32_t size = recvBufferDescr[currentRecvBuffer].flags & 0xFFF;
-               if (size > 64) { //remove checksum
-                    size -=4;
+     for (; (recv_buffer_descr[m_current_recv_buffer].m_flags & 0x80000000) == 0;
+          m_current_recv_buffer = (m_current_recv_buffer + 1) % 8) {
+          if (!(recv_buffer_descr[m_current_recv_buffer].m_flags & 0x40000000)
+             && (recv_buffer_descr[m_current_recv_buffer].m_flags & 0x03000000) == 0x03000000) {
+               uint32_t m_size = recv_buffer_descr[m_current_recv_buffer].m_flags & 0xFFF;
+               if (m_size > 64) { //remove m_checksum
+                    m_size -=4;
                }
-               uint8_t *buffer = (uint8_t *)(recvBufferDescr[currentRecvBuffer].address);
-               for (int i = (14 + 20); i < size; i++) {
-                    Kernel::printfHex(buffer[i]);
+               uint8_t *buffer = (uint8_t *)(recv_buffer_descr[m_current_recv_buffer].m_address);
+               for (int i = (14 + 20); i < m_size; i++) {
+                    Kernel::printf_hex(buffer[i]);
                     Kernel::printf(" ");
                }
                if (handler) {
-                    if (handler->OnRawDataReceived(buffer, size)) {
-                         Send(buffer, size);
+                    if (handler->on_raw_data_received(buffer, m_size)) {
+                         send(buffer, m_size);
                     }
                }
-               size = 64;
+               m_size = 64;
           }
-          recvBufferDescr[currentRecvBuffer].flags2 = 0;
-          recvBufferDescr[currentRecvBuffer].flags = 0x8000F7FF;
+          recv_buffer_descr[m_current_recv_buffer].m_flags2 = 0;
+          recv_buffer_descr[m_current_recv_buffer].m_flags = 0x8000F7FF;
      }
 }
 
-void amd_am79c973::SetHandler(RawDataHandler *handler)
+void amd_am79c973::set_handler(rawdata_handler *handler)
 {
      this->handler = handler;
 }
 
-uint64_t amd_am79c973::GetMACAddress()
+uint64_t amd_am79c973::get_mac_address()
 {
-     return initBlock.physicalAddress;
+     return m_init_block.physical_address;
 }
 
-void amd_am79c973::SetIPAddress(uint32_t ip)
+void amd_am79c973::set_ip_address(uint32_t ip)
 {
-     initBlock.logicalAddress = ip;
+     m_init_block.m_logical_address = ip;
 }
 
-uint32_t amd_am79c973::GetIPAddress()
+uint32_t amd_am79c973::get_ip_address()
 {
-     return initBlock.logicalAddress;
+     return m_init_block.m_logical_address;
 }
 }
 }

@@ -5,62 +5,62 @@
 
 namespace JLOS {
 namespace Net {
-struct UserDatagramProtocolHeader {
-     uint16_t srcPort;
-     uint16_t dstPort;
-     uint16_t length;
-     uint16_t checksum;
+struct user_datagram_protocol_header {
+     uint16_t m_src_port;
+     uint16_t m_dst_port;
+     uint16_t m_length;
+     uint16_t m_checksum;
 } __attribute__((packed));
 
-class UserDatagramProtocolSocket;
-class UserDatagramProtocolProvider;
+class user_datagram_protocol_socket;
+class user_datagram_protocol_provider;
 
-class UserDatagramProtocolHandler {
+class user_datagram_protocol_handler {
 public:
-     UserDatagramProtocolHandler();
-     ~UserDatagramProtocolHandler();
+     user_datagram_protocol_handler();
+     ~user_datagram_protocol_handler();
 
-     virtual void HandleUserDatagramProtocolMessage(UserDatagramProtocolSocket *socket,
-          uint8_t *data, uint16_t size);
+     virtual void handle_user_datagram_protocol_message(user_datagram_protocol_socket *socket,
+          uint8_t *m_data, uint16_t m_size);
 };
 
-class UserDatagramProtocolSocket {
-friend class UserDatagramProtocolProvider;
+class user_datagram_protocol_socket {
+friend class user_datagram_protocol_provider;
 protected:
-     uint16_t remotePort;
-     uint32_t remoteIP;
-     uint16_t localPort;
-     uint32_t localIP;
-     UserDatagramProtocolProvider *backend;
-     UserDatagramProtocolHandler *handler;
-     bool listening;
+     uint16_t m_remote_port;
+     uint32_t m_remote_ip;
+     uint16_t m_local_port;
+     uint32_t m_local_ip;
+     user_datagram_protocol_provider *backend;
+     user_datagram_protocol_handler *handler;
+     bool m_listening;
 
 public:
-     UserDatagramProtocolSocket(UserDatagramProtocolProvider *backend);
-     ~UserDatagramProtocolSocket();
-     virtual void HandleUserDatagramProtocolMessage(uint8_t *data, uint16_t size);
-     virtual void Send(uint8_t *data, uint16_t size);
-     virtual void Disconnect();
+     user_datagram_protocol_socket(user_datagram_protocol_provider *backend);
+     ~user_datagram_protocol_socket();
+     virtual void handle_user_datagram_protocol_message(uint8_t *m_data, uint16_t m_size);
+     virtual void send(uint8_t *m_data, uint16_t m_size);
+     virtual void disconnect();
 };
 
-class UserDatagramProtocolProvider : public InternetProtocolHandler {
+class user_datagram_protocol_provider : public internet_protocol_handler {
 protected:
-     UserDatagramProtocolSocket *sockets[65535];
-     uint16_t numSockets;
-     uint16_t freePort;
+     user_datagram_protocol_socket *sockets[65535];
+     uint16_t m_num_sockets;
+     uint16_t m_free_port;
 
 public:
-     UserDatagramProtocolProvider(InternetProtocolProvider *backend);
-     ~UserDatagramProtocolProvider();
+     user_datagram_protocol_provider(internet_protocol_provider *backend);
+     ~user_datagram_protocol_provider();
 
-     virtual bool OnInternetProtocolReceived(uint32_t srcIP_BE, uint32_t dstIP_BE,
-          uint8_t *internetProtocolPayload, uint32_t size);
+     virtual bool on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
+          uint8_t *internet_protocol_payload, uint32_t m_size);
      
-     virtual UserDatagramProtocolSocket *Connect(uint32_t ip, uint16_t port);
-     virtual UserDatagramProtocolSocket *Listen(uint16_t port);
-     virtual void Disconnect(UserDatagramProtocolSocket *socket);
-     virtual void Send(UserDatagramProtocolSocket *socket, uint8_t *data, uint16_t size);
-     virtual void Bind(UserDatagramProtocolSocket *socket, UserDatagramProtocolHandler *handler);
+     virtual user_datagram_protocol_socket *connect(uint32_t ip, uint16_t port);
+     virtual user_datagram_protocol_socket *listen(uint16_t port);
+     virtual void disconnect(user_datagram_protocol_socket *socket);
+     virtual void send(user_datagram_protocol_socket *socket, uint8_t *m_data, uint16_t m_size);
+     virtual void bind(user_datagram_protocol_socket *socket, user_datagram_protocol_handler *handler);
 };
 }
 }

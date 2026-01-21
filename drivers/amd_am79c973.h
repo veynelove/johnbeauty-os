@@ -10,79 +10,79 @@ namespace JLOS {
 namespace Drivers {
 class amd_am79c973;
 
-class RawDataHandler {
+class rawdata_handler {
 protected:
      amd_am79c973 *backend;
 
 public:
-     RawDataHandler(amd_am79c973 *backend);
-     ~RawDataHandler();
+     rawdata_handler(amd_am79c973 *backend);
+     ~rawdata_handler();
 
-     virtual bool OnRawDataReceived(uint8_t *buffer, uint32_t size);
-     void Send(uint8_t *buffer, uint32_t size);
+     virtual bool on_raw_data_received(uint8_t *buffer, uint32_t m_size);
+     void send(uint8_t *buffer, uint32_t m_size);
 };
 
-class amd_am79c973 : public Driver, public Hdc::InterruptHandler {
+class amd_am79c973 : public driver, public Hdc::interrupt_handler {
 private:
-     struct InitializationBlock {
-          uint16_t mode;
+     struct initialization_block {
+          uint16_t m_mode;
           unsigned reserved1 : 4;
-          unsigned numSendBuffers : 4;
+          unsigned num_send_buffers : 4;
           unsigned reserved2 : 4;
-          unsigned numRecvBuffers : 4;
-          uint64_t physicalAddress : 48;
-          uint16_t reserved3;
-          uint64_t logicalAddress;
-          uint32_t recvBufferDescrAddress;
-          uint32_t sendBufferDescrAddress;
+          unsigned num_recv_buffers : 4;
+          uint64_t physical_address : 48;
+          uint16_t m_reserved3;
+          uint64_t m_logical_address;
+          uint32_t m_recv_buffer_descr_address;
+          uint32_t m_send_buffer_descr_address;
      } __attribute__((packed));
 
-     struct BufferDescriptor {
-          uint32_t address;
-          uint32_t flags;
-          uint32_t flags2;
-          uint32_t avail;
+     struct buffer_descriptor {
+          uint32_t m_address;
+          uint32_t m_flags;
+          uint32_t m_flags2;
+          uint32_t m_avail;
      } __attribute__((packed));
 
 private:
-     Hdc::Port16Bit MACAddress0Port;
-     Hdc::Port16Bit MACAddress2Port;
-     Hdc::Port16Bit MACAddress4Port;
-     Hdc::Port16Bit registerDataPort;
-     Hdc::Port16Bit registerAddressPort;
-     Hdc::Port16Bit resetPort;
-     Hdc::Port16Bit busControlRegisterDataPort;
+     Hdc::port16_bit m_mac_address0_port;
+     Hdc::port16_bit m_mac_address2_port;
+     Hdc::port16_bit m_mac_address4_port;
+     Hdc::port16_bit m_register_data_port;
+     Hdc::port16_bit m_register_address_port;
+     Hdc::port16_bit m_reset_port;
+     Hdc::port16_bit m_bus_control_register_data_port;
 
-     InitializationBlock initBlock;
+     initialization_block m_init_block;
 
-     BufferDescriptor *sendBufferDescr;
-     uint8_t sendBufferDescMemory[2048 + 15];
-     uint8_t sendBuffers[2 * 1024 + 15][8];
-     uint8_t currentSendBuffer;
+     buffer_descriptor *send_buffer_descr;
+     uint8_t send_buffer_desc_memory[2048 + 15];
+     uint8_t send_buffers[2 * 1024 + 15][8];
+     uint8_t m_current_send_buffer;
 
-     BufferDescriptor *recvBufferDescr;
-     uint8_t recvBufferDescMemory[2048 + 15];
-     uint8_t recvBuffers[2 * 1024 + 15][8];
-     uint8_t currentRecvBuffer;
+     buffer_descriptor *recv_buffer_descr;
+     uint8_t recv_buffer_desc_memory[2048 + 15];
+     uint8_t recv_buffers[2 * 1024 + 15][8];
+     uint8_t m_current_recv_buffer;
 
-     RawDataHandler *handler;
+     rawdata_handler *handler;
 
 public:
-     amd_am79c973(Hdc::PeripheralComponentInterconnectDeviceDesriptor *dev,
-          Hdc::InterruptManager *interrupts);
+     amd_am79c973(Hdc::peripheral_component_interconnect_device_desriptor *dev,
+          Hdc::interrupt_manager *interrupts);
      ~amd_am79c973();
 
-     void Activate() override;
-     int Reset() override;
-     uint32_t HandleInterrupt(uint32_t esp) override;
+     void activate() override;
+     int reset() override;
+     uint32_t handle_interrupt(uint32_t m_esp) override;
 
-     void Send(uint8_t *buffer, int size);
-     void Receive();
-     void SetHandler(RawDataHandler *handler);
+     void send(uint8_t *buffer, int m_size);
+     void receive();
+     void set_handler(rawdata_handler *handler);
 
-     uint64_t GetMACAddress();
-     void SetIPAddress(uint32_t);
-     uint32_t GetIPAddress();
+     uint64_t get_mac_address();
+     void set_ip_address(uint32_t);
+     uint32_t get_ip_address();
 };
 }
 }

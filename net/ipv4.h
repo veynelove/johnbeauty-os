@@ -6,53 +6,53 @@
 
 namespace JLOS {
 namespace Net {
-struct InternetProtocolV4Message {
-     uint8_t headerLength{4};
+struct internet_protocol_v4_message {
+     uint8_t header_length{4};
      uint8_t version{4};
-     uint8_t tos;
-     uint16_t totalLength;
-     uint16_t ident;
-     uint16_t flagsAndOffset{13};
-     uint8_t timeToLive;
-     uint8_t protocol;
-     uint16_t checksum;
-     uint32_t srcIP;
-     uint32_t dstIP;
+     uint8_t m_tos;
+     uint16_t m_total_length;
+     uint16_t m_ident;
+     uint16_t flags_and_offset{13};
+     uint8_t m_time_to_live;
+     uint8_t m_protocol;
+     uint16_t m_checksum;
+     uint32_t m_src_ip;
+     uint32_t m_dst_ip;
 } __attribute__((packed));
 
-class InternetProtocolProvider;
+class internet_protocol_provider;
 
-class InternetProtocolHandler {
+class internet_protocol_handler {
 protected:
-     InternetProtocolProvider *backend;
-     uint8_t ip_protocol;
+     internet_protocol_provider *backend;
+     uint8_t m_ip_protocol;
 
 public:
-     InternetProtocolHandler(InternetProtocolProvider *backend, uint8_t protocol);
-     ~InternetProtocolHandler();
+     internet_protocol_handler(internet_protocol_provider *backend, uint8_t m_protocol);
+     ~internet_protocol_handler();
 
-     virtual bool OnInternetProtocolReceived(uint32_t srcIP_BE, uint32_t dstIP_BE,
-          uint8_t *internetProtocolPayload, uint32_t size);
-     void Send(uint32_t dstIP_BE, uint8_t *internetProtocolPayload, uint32_t size);
+     virtual bool on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
+          uint8_t *internet_protocol_payload, uint32_t m_size);
+     void send(uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size);
 };
 
-class InternetProtocolProvider : public EtherFrameHandler {
-friend class InternetProtocolHandler;
+class internet_protocol_provider : public ether_frame_handler {
+friend class internet_protocol_handler;
 protected:
-     InternetProtocolHandler *handlers[255];
-     AddressResolutionProtocol *arp;
-     uint32_t gatewayIP;
-     uint32_t subnetMask;
+     internet_protocol_handler *handlers[255];
+     address_resolution_protocol *arp;
+     uint32_t m_gateway_ip;
+     uint32_t m_subnet_mask;
 
 public:
-     InternetProtocolProvider(EtherFrameProvider *backend, AddressResolutionProtocol *arp,
-          uint32_t gatewayIP, uint32_t subnetMask);
-     ~InternetProtocolProvider();
+     internet_protocol_provider(ether_frame_provider *backend, address_resolution_protocol *arp,
+          uint32_t m_gateway_ip, uint32_t m_subnet_mask);
+     ~internet_protocol_provider();
      
-     bool OnEtherFrameReceived(uint8_t *etherframePayload, uint32_t size);
-     void Send(uint32_t dstIP_BE, uint8_t protocol, uint8_t *data, uint32_t size);
+     bool on_ether_frame_received(uint8_t *etherframe_payload, uint32_t m_size);
+     void send(uint32_t dstIP_BE, uint8_t m_protocol, uint8_t *m_data, uint32_t m_size);
 
-     static uint16_t CheckSum(uint16_t *data, uint32_t lengthInBytes);
+     static uint16_t m_check_sum(uint16_t *m_data, uint32_t length_in_bytes);
 };
 }
 }

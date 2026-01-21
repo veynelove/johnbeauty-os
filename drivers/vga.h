@@ -8,37 +8,37 @@
 
 namespace JLOS {
 namespace Drivers {
-class VideoGraphicsArray {
+class video_graphics_array {
 private:
-     Hdc::Port8Bit miscPort;
-     Hdc::Port8Bit crtcIndexPort;
-     Hdc::Port8Bit crtcDataPort;
-     Hdc::Port8Bit sequencerIndexPort;
-     Hdc::Port8Bit sequencerDataPort;
-     Hdc::Port8Bit graphicsControllerIndexPort;
-     Hdc::Port8Bit graphicsControllerDataPort;
-     Hdc::Port8Bit attributeControllerIndexPort;
-     Hdc::Port8Bit attributeControllerReadPort;
-     Hdc::Port8Bit attribiteControllerWritePort;
-     Hdc::Port8Bit attribiteControllerResetPort;
+     Hdc::port8_bit m_misc_port;
+     Hdc::port8_bit m_crtc_index_port;
+     Hdc::port8_bit m_crtc_data_port;
+     Hdc::port8_bit m_sequencer_index_port;
+     Hdc::port8_bit m_sequencer_data_port;
+     Hdc::port8_bit m_graphics_controller_index_port;
+     Hdc::port8_bit m_graphics_controller_data_port;
+     Hdc::port8_bit m_attribute_controller_index_port;
+     Hdc::port8_bit m_attribute_controller_read_port;
+     Hdc::port8_bit m_attribite_controller_write_port;
+     Hdc::port8_bit m_attribite_controller_reset_port;
 
-     void WriteRegisters(uint8_t *registers);
-     uint8_t *GetFrameBufferSegment(uint8_t r, uint8_t g, uint8_t b);
-     uint8_t *GetFrameBufferSegment();
+     void write_registers(uint8_t *registers);
+     uint8_t *get_frame_buffer_segment(uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     uint8_t *get_frame_buffer_segment();
 
-     virtual uint8_t GetColorIndex(uint32_t r, uint32_t g, uint8_t b);
+     virtual uint8_t get_color_index(uint32_t m_r, uint32_t m_g, uint8_t m_b);
 
 public:
-     VideoGraphicsArray();
-     ~VideoGraphicsArray();
+     video_graphics_array();
+     ~video_graphics_array();
 
-     virtual bool SupportMode(uint32_t width, uint32_t height, uint32_t colordepth);
-     virtual bool SetMode(uint32_t width, uint32_t height, uint32_t colordepth);
-     virtual void PutPixel(int32_t x, int32_t y, uint8_t r, uint8_t g, uint8_t b);
-     virtual void PutPixel(int32_t x, int32_t y, uint8_t colorIndex);
+     virtual bool support_mode(uint32_t width, uint32_t height, uint32_t colordepth);
+     virtual bool set_mode(uint32_t width, uint32_t height, uint32_t colordepth);
+     virtual void put_pixel(int32_t m_x, int32_t m_y, uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     virtual void put_pixel(int32_t m_x, int32_t m_y, uint8_t color_index);
 
-     virtual void FillRectangle(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint8_t r,
-          uint8_t g, uint8_t b);
+     virtual void fill_rectangle(uint32_t m_x, uint32_t m_y, uint32_t m_w, uint32_t m_h, uint8_t m_r,
+          uint8_t m_g, uint8_t m_b);
 };
 }
 }

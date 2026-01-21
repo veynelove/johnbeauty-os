@@ -2,34 +2,34 @@
 
 namespace JLOS {
 namespace Drivers {
-Driver::Driver(){}
+driver::driver(){}
 
-Driver::~Driver(){}
+driver::~driver(){}
     
-void Driver::Activate(){}
+void driver::activate(){}
 
-int Driver::Reset()
+int driver::reset()
 {
     return 0;
 }
 
-void Driver::Deactivate(){}
+void driver::deactivate(){}
  
-DriverManager::DriverManager()
+driver_manager::driver_manager()
 {
-    numDrivers = 0;
+    m_num_drivers = 0;
 }
 
-void DriverManager::AddDriver(Driver * drv)
+void driver_manager::add_driver(driver * drv)
 {
-    drivers[numDrivers] = drv;
-    numDrivers++;
+    drivers[m_num_drivers] = drv;
+    m_num_drivers++;
 }
 
-void DriverManager::ActivateAll()
+void driver_manager::activate_all()
 {
-    for (int i = 0; i < numDrivers; i++) {
-        drivers[i]->Activate();
+    for (int i = 0; i < m_num_drivers; i++) {
+        drivers[i]->activate();
     }
 }
 }

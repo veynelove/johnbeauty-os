@@ -2,61 +2,61 @@
 #define __GUI_WIDGET_H
 
 #include <common/types.h>
-#include <common/graphicscontext.h>
+#include <common/graphics.h>
 #include <drivers/keyboard.h>
 
 namespace JLOS {
 namespace Gui {
-class Widget : public Drivers::KeyboardEventHandler {
+class widget : public Drivers::keyboard_event_handler {
 protected:
-     Widget *parent;
-     int32_t x;
-     int32_t y;
-     int32_t w;
-     int32_t h;
+     widget *parent;
+     int32_t m_x;
+     int32_t m_y;
+     int32_t m_w;
+     int32_t m_h;
 
-     uint8_t r;
-     uint8_t g;
-     uint8_t b;
+     uint8_t m_r;
+     uint8_t m_g;
+     uint8_t m_b;
 
-     bool Focussable;
+     bool m_focussable;
 
 public:
-     Widget(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
-          uint8_t r, uint8_t g, uint8_t b);
-     ~Widget();
+     widget(widget *parent, int32_t m_x, int32_t m_y, int32_t m_w, int32_t m_h,
+          uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     ~widget();
 
-     virtual void GetFocus(Widget *widget);
-     virtual void ModelToScreen(int32_t &x, int32_t &y);
-     virtual bool ContainsCoordinate(int32_t x, int32_t y);
+     virtual void get_focus(widget *widget);
+     virtual void model_to_screen(int32_t &m_x, int32_t &m_y);
+     virtual bool contains_coordinate(int32_t m_x, int32_t m_y);
 
-     virtual void Draw(GraphicsContext *gc);
-     virtual void OnMouseDown(int32_t x, int32_t y, uint8_t button);
-     virtual void OnMouseUp(int32_t x, int32_t y, uint8_t button);
-     virtual void OnMouseMove(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
+     virtual void draw(graphics_context *gc);
+     virtual void on_mouse_down(int32_t m_x, int32_t m_y, uint8_t button);
+     virtual void on_mouse_up(int32_t m_x, int32_t m_y, uint8_t button);
+     virtual void mouse_move(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
 };
 
-class CompositeWidget : public Widget {
+class composite_widget : public widget {
 private:
-     Widget *children[100];
-     int numChildren;
-     Widget *focussedChild;
+     widget *children[100];
+     int m_num_children;
+     widget *focussed_child;
 
 public:
-     CompositeWidget(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
-          uint8_t r, uint8_t g, uint8_t b);
-     ~CompositeWidget();
+     composite_widget(widget *parent, int32_t m_x, int32_t m_y, int32_t m_w, int32_t m_h,
+          uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     ~composite_widget();
      
-     virtual void GetFocus(Widget *widget);
-     virtual bool AddChild(Widget *child);
+     virtual void get_focus(widget *widget);
+     virtual bool add_child(widget *child);
 
-     virtual void Draw(GraphicsContext *gc);
-     virtual void OnMouseDown(int32_t x, int32_t y, uint8_t button);
-     virtual void OnMouseUp(int32_t x, int32_t y, uint8_t button);
-     virtual void OnMouseMove(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
+     virtual void draw(graphics_context *gc);
+     virtual void on_mouse_down(int32_t m_x, int32_t m_y, uint8_t button);
+     virtual void on_mouse_up(int32_t m_x, int32_t m_y, uint8_t button);
+     virtual void mouse_move(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
 
-     virtual void OnkeyDown(char);
-     virtual void OnkeyUp(char);
+     virtual void onkey_down(char);
+     virtual void onkey_up(char);
 };
 }
 }

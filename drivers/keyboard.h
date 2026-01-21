@@ -8,25 +8,25 @@
 
 namespace JLOS {
 namespace Drivers {
-class KeyboardEventHandler {
+class keyboard_event_handler {
 public:
-    KeyboardEventHandler();
+    keyboard_event_handler();
 
-    virtual void OnKeyDown(char);
-    virtual void OnKeyUp(char);
+    virtual void key_down(char);
+    virtual void on_key_up(char);
 };
 
-class KeyboardDriver : public Hdc::InterruptHandler, public Driver {
+class keyboard_driver : public Hdc::interrupt_handler, public driver {
 private:    
-    Hdc::Port8Bit dataport;
-    Hdc::Port8Bit commandport;
-    KeyboardEventHandler *handler;
+    Hdc::port8_bit m_dataport;
+    Hdc::port8_bit m_commandport;
+    keyboard_event_handler *handler;
 
 public:
-    KeyboardDriver(Hdc::InterruptManager *manager, KeyboardEventHandler *handler);
-    ~KeyboardDriver();
-    virtual uint32_t HandleInterrupt(uint32_t esp);
-    virtual void Activate();
+    keyboard_driver(Hdc::interrupt_manager *manager, keyboard_event_handler *handler);
+    ~keyboard_driver();
+    virtual uint32_t handle_interrupt(uint32_t m_esp);
+    virtual void activate();
 };
 }
 }

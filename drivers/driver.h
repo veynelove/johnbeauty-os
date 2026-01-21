@@ -3,27 +3,27 @@
 
 namespace JLOS {
 namespace Drivers {
-class Driver {
+class driver {
 public:
-    Driver();
-    ~Driver();
+    driver();
+    ~driver();
 
-    virtual void Activate();
-    virtual int Reset();
-    virtual void Deactivate();
+    virtual void activate();
+    virtual int reset();
+    virtual void deactivate();
 };
 
-class DriverManager {
+class driver_manager {
 private:   
-    int numDrivers;
+    int m_num_drivers;
 
 public:
-    Driver *drivers[255]; // set public not a good idea;
+    driver *drivers[255]; // set public not a good idea;
 
 public:
-    DriverManager();
-    void AddDriver(Driver *);
-    void ActivateAll();
+    driver_manager();
+    void add_driver(driver *);
+    void activate_all();
 };
 }
 }

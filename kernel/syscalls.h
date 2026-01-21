@@ -2,16 +2,16 @@
 #define __JLOS_KERNEL_SYSCALLS_H
 
 #include <hdc/interrupts.h>
-#include <kernel/multitasking.h>
+#include <kernel/multitask.h>
 
 namespace JLOS {
 namespace Kernel {
-class SyscallHandler : public Hdc::InterruptHandler {
+class syscall_handler : public Hdc::interrupt_handler {
 public:
-     SyscallHandler(Hdc::InterruptManager *interruptManager, uint8_t interruptNumber);
-     ~SyscallHandler();
+     syscall_handler(Hdc::interrupt_manager *interrupt_manager, uint8_t m_interrupt_number);
+     ~syscall_handler();
 
-     uint32_t HandleInterrupt(uint32_t esp) override;
+     uint32_t handle_interrupt(uint32_t m_esp) override;
 };
 }
 }
