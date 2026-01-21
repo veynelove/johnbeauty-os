@@ -5,35 +5,35 @@
 
 namespace JLOS {
 namespace Net {
-struct AddressResolutionProtocolMessage {
-     uint16_t hardwareType;
-     uint16_t protocol;
-     uint16_t hardwareAddressSize; //6
-     uint8_t protocolAddressSize; //4
-     uint16_t command;
+struct address_resolution_protocol_message {
+     uint16_t m_hardware_type;
+     uint16_t m_protocol;
+     uint16_t m_hardware_address_size; //6
+     uint8_t m_protocol_address_size; //4
+     uint16_t m_command;
 
-     uint64_t srcMAC{48};
-     uint32_t srcIP;
-     uint64_t dstMAC{48};
-     uint32_t dstIP;
+     uint64_t src_mac{48};
+     uint32_t m_src_ip;
+     uint64_t dst_mac{48};
+     uint32_t m_dst_ip;
 } __attribute__((packed));
 
-class AddressResolutionProtocol : public EtherFrameHandler {
+class address_resolution_protocol : public ether_frame_handler {
 private:
-     uint32_t IPCache[128];
-     uint64_t MACCache[128];
-     int numCacheEntries;
+     uint32_t ip_cache[128];
+     uint64_t mac_cache[128];
+     int m_num_cache_entries;
 
 public:
-     AddressResolutionProtocol(EtherFrameProvider *backend);
-     ~AddressResolutionProtocol();
+     address_resolution_protocol(ether_frame_provider *backend);
+     ~address_resolution_protocol();
 
-     bool OnEtherFrameReceived(uint8_t *etherframePayload, uint32_t size);
+     bool on_ether_frame_received(uint8_t *etherframe_payload, uint32_t m_size);
 
-     void RequestMACAddress(uint32_t IP_BE);
-     uint64_t GetMACFromCache(uint32_t IP_BE);
-     uint64_t Resolve(uint32_t IP_BE);
-     void BroadcastMACAddress(uint32_t IP_BE);
+     void request_mac_address(uint32_t IP_BE);
+     uint64_t get_mac_from_cache(uint32_t IP_BE);
+     uint64_t resolve(uint32_t IP_BE);
+     void broadcast_mac_address(uint32_t IP_BE);
 };
 }
 }

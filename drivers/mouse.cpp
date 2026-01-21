@@ -6,72 +6,72 @@ void printf(const char *);
 
 namespace JLOS {
 namespace Drivers {
-MouseEventHandler::MouseEventHandler(){}
+mouse_event_handler::mouse_event_handler(){}
 
-void MouseEventHandler::OnActivate(){}
+void mouse_event_handler::on_activate(){}
 
-void MouseEventHandler::OnMouseDown(uint8_t button){}
+void mouse_event_handler::on_mouse_down(uint8_t button){}
 
-void MouseEventHandler::OnMouseUp(uint8_t button){}
+void mouse_event_handler::on_mouse_up(uint8_t button){}
 
-void MouseEventHandler::OnMouseMove(int32_t xoffset, int32_t yoffset){}
+void mouse_event_handler::mouse_move(int32_t xoffset, int32_t yoffset){}
 
-MouseDriver::MouseDriver(JLOS::Hdc::InterruptManager *manager, MouseEventHandler *handler)
-:InterruptHandler(manager, 0x2C), dataport(0x60), commandport(0x64)
+mouse_driver::mouse_driver(JLOS::Hdc::interrupt_manager *manager, mouse_event_handler *handler)
+:interrupt_handler(manager, 0x2C), m_dataport(0x60), m_commandport(0x64)
 {
     this->handler = handler;
 }
 
-MouseDriver::~MouseDriver(){}
+mouse_driver::~mouse_driver(){}
 
-void MouseDriver::Activate()
+void mouse_driver::activate()
 {
-    offset=0;
-    buttons=0;
+    m_offset=0;
+    m_buttons=0;
     
-    commandport.Write(0xA8);
-    commandport.Write(0x20);
-    uint8_t status =dataport.Read() | 2;
-    commandport.Write(0x60);
-    dataport.Write(status);
+    m_commandport.write(0xA8);
+    m_commandport.write(0x20);
+    uint8_t status =m_dataport.read() | 2;
+    m_commandport.write(0x60);
+    m_dataport.write(status);
 
-    commandport.Write(0xD4);
-    dataport.Write(0xF4);
-    dataport.Read();
+    m_commandport.write(0xD4);
+    m_dataport.write(0xF4);
+    m_dataport.read();
 }
 
-uint32_t MouseDriver::HandleInterrupt(uint32_t esp)
+uint32_t mouse_driver::handle_interrupt(uint32_t m_esp)
 {
-    uint8_t status = commandport.Read();
+    uint8_t status = m_commandport.read();
     if (!(status & 0x20)) {
-        return esp;
+        return m_esp;
     }
-    buffer[offset] = dataport.Read();
+    buffer[m_offset] = m_dataport.read();
     if (handler == 0) {
-        return esp;
+        return m_esp;
     }
-    if (offset == 0 && !(buffer[0] & 0x08)) {
-        return esp;
+    if (m_offset == 0 && !(buffer[0] & 0x08)) {
+        return m_esp;
     } 
-    offset = (offset + 1) % 3;
+    m_offset = (m_offset + 1) % 3;
 
-    if (offset == 0) {
+    if (m_offset == 0) {
         if(buffer[1] != 0 || buffer[2] != 0) {
-            handler->OnMouseMove((int8_t)buffer[1], -((int8_t)buffer[2]));
+            handler->mouse_move((int8_t)buffer[1], -((int8_t)buffer[2]));
         }
         for (uint8_t i = 0; i < 3; i++) {
-            if((buffer[0] & (0x1 << i)) != (buttons & (0x1 << i))) {
-                if(buttons & (0x1 << i)) {
-                    handler->OnMouseUp(i+1);
+            if((buffer[0] & (0x1 << i)) != (m_buttons & (0x1 << i))) {
+                if(m_buttons & (0x1 << i)) {
+                    handler->on_mouse_up(i+1);
                 }
                 else {    
-                    handler->OnMouseDown(i+1);
+                    handler->on_mouse_down(i+1);
                 }
             }
         }
-        buttons = buffer[0];
+        m_buttons = buffer[0];
     }
-    return esp;
+    return m_esp;
 }
 }
 }

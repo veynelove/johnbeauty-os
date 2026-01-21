@@ -5,42 +5,42 @@
 
 namespace JLOS {
 namespace Hdc {
-class Port {
+class port {
 protected:
-	uint16_t portnumber;
-	Port(uint16_t portnumber);
-	~Port();
+	uint16_t m_portnumber;
+	port(uint16_t portnumber_);
+	~port();
 };
 
-class Port8Bit: public Port {
+class port8_bit: public port {
 public:
-	Port8Bit(uint16_t portnumber);
-	~Port8Bit();
-	virtual void Write(uint8_t data);
-	virtual uint8_t Read();
+	port8_bit(uint16_t portnumber_);
+	~port8_bit();
+	virtual void write(uint8_t data);
+	virtual uint8_t read();
 };
 
-class Port8BitSlow: public Port8Bit {
+class port8_bit_slow: public port8_bit {
 public:
-	Port8BitSlow(uint16_t portnumber);
-	~Port8BitSlow();
-	virtual void Write(uint8_t data);
+	port8_bit_slow(uint16_t portnumber_);
+	~port8_bit_slow();
+	virtual void write(uint8_t data);
 };
 
-class Port16Bit: public Port {
+class port16_bit: public port {
 public:
-	Port16Bit(uint16_t portnumber);
-	~Port16Bit();
-	virtual void Write(uint16_t data);
-	virtual uint16_t Read();
+	port16_bit(uint16_t portnumber_);
+	~port16_bit();
+	virtual void write(uint16_t data);
+	virtual uint16_t read();
 };
 
-class Port32Bit: public Port {
+class port32_bit: public port {
 public:
-	Port32Bit(uint16_t portnumber);
-	~Port32Bit();
-	virtual void Write(uint32_t data);
-	virtual uint32_t Read();
+	port32_bit(uint16_t portnumber_);
+	~port32_bit();
+	virtual void write(uint32_t data);
+	virtual uint32_t read();
 };
 }
 }	

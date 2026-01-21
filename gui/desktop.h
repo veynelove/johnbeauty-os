@@ -9,18 +9,18 @@
 
 namespace JLOS {
 namespace Gui {
-class Desktop : public CompositeWidget, public Drivers::MouseEventHandler {
+class desktop : public composite_widget, public Drivers::mouse_event_handler {
 private:
-     uint32_t MouseX;
-     uint32_t MouseY;
+     uint32_t m_mouse_x;
+     uint32_t m_mouse_y;
 public:
-     Desktop(int32_t w, int32_t h, uint8_t r, uint8_t g, uint8_t b);
-     ~Desktop();
+     desktop(int32_t m_w, int32_t m_h, uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     ~desktop();
 
-     void Draw(GraphicsContext *gc);
-     void OnMouseDown(uint8_t button);
-     void OnMouseUp(uint8_t button);
-     void OnMouseMove(int32_t xoffset, int32_t yoffset);
+     void draw(graphics_context *gc);
+     void on_mouse_down(uint8_t button);
+     void on_mouse_up(uint8_t button);
+     void mouse_move(int32_t xoffset, int32_t yoffset);
 };
 }
 }
