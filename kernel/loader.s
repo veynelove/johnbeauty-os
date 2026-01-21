@@ -9,8 +9,8 @@
     .long CHECKSUM
 
 .section .text
-.extern johnbeautyMain
-.extern callConstructors
+.extern john_beauty_main
+.extern call_constructors
 .global loader
 
 loader:
@@ -19,11 +19,11 @@ loader:
 
     mov $kernel_stack, %esp
 
-    call callConstructors
+    call call_constructors
 
     push %eax ; // multiboot magic
     push %ebx   ; // multiboot info
-    call johnbeautyMain
+    call john_beauty_main
 
 _stop:
     cli ; // 禁用中断
@@ -32,5 +32,5 @@ _stop:
 
 .section .bss
 .align 16
-.space 4*1024*1024  ; // 4 MiB
+.space 4*1024*1024  ; // 4 mi_b
 kernel_stack: ; //汇编器两遍扫描, 栈顶地址

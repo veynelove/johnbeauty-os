@@ -8,30 +8,30 @@
 
 namespace JLOS {
 namespace Drivers {
-class MouseEventHandler {
+class mouse_event_handler {
 public:
-    MouseEventHandler();
+    mouse_event_handler();
 
-    virtual void OnActivate();
-    virtual void OnMouseDown(uint8_t button);
-    virtual void OnMouseUp(uint8_t button);
-    virtual void OnMouseMove(int32_t xoffset, int32_t yoffset);
+    virtual void on_activate();
+    virtual void on_mouse_down(uint8_t button);
+    virtual void on_mouse_up(uint8_t button);
+    virtual void mouse_move(int32_t xoffset, int32_t yoffset);
 };
 
-class MouseDriver : public Hdc::InterruptHandler, public Driver {
+class mouse_driver : public Hdc::interrupt_handler, public driver {
 private:
-    Hdc::Port8Bit dataport;
-    Hdc::Port8Bit commandport;
+    Hdc::port8_bit m_dataport;
+    Hdc::port8_bit m_commandport;
     uint8_t buffer[3];
-    uint8_t offset;
-    uint8_t buttons;
-    MouseEventHandler *handler;
+    uint8_t m_offset;
+    uint8_t m_buttons;
+    mouse_event_handler *handler;
 
 public:
-    MouseDriver(Hdc::InterruptManager *manager, MouseEventHandler *handler);
-    ~MouseDriver();
-    virtual uint32_t HandleInterrupt(uint32_t esp);
-    virtual void Activate();
+    mouse_driver(Hdc::interrupt_manager *manager, mouse_event_handler *handler);
+    ~mouse_driver();
+    virtual uint32_t handle_interrupt(uint32_t m_esp);
+    virtual void activate();
 };
 }
 }

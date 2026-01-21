@@ -6,18 +6,18 @@
 
 namespace JLOS {
 namespace Gui {
-class Window : public CompositeWidget {
+class window : public composite_widget {
 private:
-     bool Dragging;
+     bool m_dragging;
 
 public:
-     Window(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h,
-          uint8_t r, uint8_t g, uint8_t b);
-     ~Window();
+     window(widget *parent, int32_t m_x, int32_t m_y, int32_t m_w, int32_t m_h,
+          uint8_t m_r, uint8_t m_g, uint8_t m_b);
+     ~window();
 
-     void OnMouseDown(int32_t x, int32_t y, uint8_t button);
-     void OnMouseUp(int32_t x, int32_t y, uint8_t button);
-     void OnMouseMove(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
+     void on_mouse_down(int32_t m_x, int32_t m_y, uint8_t button);
+     void on_mouse_up(int32_t m_x, int32_t m_y, uint8_t button);
+     void mouse_move(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy);
 };
 }
 }

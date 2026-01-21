@@ -2,31 +2,31 @@
 
 namespace JLOS {
 namespace Kernel {
-GlobalDescriptorTable::GlobalDescriptorTable() : nullSegmentSelector(0,0,0),
-unusedSegmentSelector(0,0,0), codeSegmentSelector(0,64*1024*1024,0x9A),
-dataSegmentSelector(0,64*1024*1024,0x92)
+global_descriptor_table::global_descriptor_table() : m_null_segment_selector(0,0,0),
+m_unused_segment_selector(0,0,0), m_code_segment_selector(0,64*1024*1024,0x9A),
+m_data_segment_selector(0,64*1024*1024,0x92)
 {
 	uint32_t i[2];
 	i[1] = (uint32_t)this;
-     i[0] = sizeof(GlobalDescriptorTable) << 16;
+     i[0] = sizeof(global_descriptor_table) << 16;
 	
 	asm volatile("lgdt (%0)": : "p" (((uint8_t *) i)+2));
 }
 
-GlobalDescriptorTable::~GlobalDescriptorTable(){}
+global_descriptor_table::~global_descriptor_table(){}
 
-uint16_t GlobalDescriptorTable::DataSegmentSelector()
+uint16_t global_descriptor_table::data_segment_selector()
 {
-	return (uint8_t*)&dataSegmentSelector - (uint8_t*)this;
+	return (uint8_t*)&m_data_segment_selector - (uint8_t*)this;
 }
 
-uint16_t GlobalDescriptorTable::CodeSegmentSelector()
+uint16_t global_descriptor_table::code_segment_selector()
 {
-	return (uint8_t*)&codeSegmentSelector - (uint8_t*)this;
+	return (uint8_t*)&m_code_segment_selector - (uint8_t*)this;
 }
 
-GlobalDescriptorTable::SegmentDescriptor::SegmentDescriptor(uint32_t base, uint32_t limit,
-	uint8_t flags)
+global_descriptor_table::segment_descriptor::segment_descriptor(uint32_t m_base, uint32_t limit,
+	uint8_t m_flags)
 {
 	uint8_t* target = (uint8_t*)this;
 	if (limit <= 65536) {
@@ -45,15 +45,15 @@ GlobalDescriptorTable::SegmentDescriptor::SegmentDescriptor(uint32_t base, uint3
 	target[1] = (limit >> 8) & 0xFF;
 	target[6] |= (limit >> 16) & 0xF;
 	
-	target[2] = base & 0xFF;
-	target[3] = (base >> 8) & 0xFF;
-	target[4] = (base >> 16) & 0xFF;
-	target[7] = (base >> 24) & 0xFF;
+	target[2] = m_base & 0xFF;
+	target[3] = (m_base >> 8) & 0xFF;
+	target[4] = (m_base >> 16) & 0xFF;
+	target[7] = (m_base >> 24) & 0xFF;
 	
-	target[5] = flags;
+	target[5] = m_flags;
 }
 
-uint32_t GlobalDescriptorTable::SegmentDescriptor::Base()
+uint32_t global_descriptor_table::segment_descriptor::m_base()
 {
 	uint8_t *target = (uint8_t*)this;
 	uint32_t result = target[7];
@@ -63,7 +63,7 @@ uint32_t GlobalDescriptorTable::SegmentDescriptor::Base()
 	return result;
 }
 
-uint32_t GlobalDescriptorTable::SegmentDescriptor::Limit()
+uint32_t global_descriptor_table::segment_descriptor::limit()
 {
 	uint8_t *target = (uint8_t*)this;
 	uint32_t result = target[6] & 0xF;

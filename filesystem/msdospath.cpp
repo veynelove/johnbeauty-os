@@ -2,39 +2,39 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(uint8_t);
+void printf_hex(uint8_t);
 }
 
 namespace JLOS {
 namespace FileSystem {
-void MSDOSPartitionTable::ReadPartitions(Drivers::AdvancedTechnologAttachment *hd)
+void msdos_partition_table::read_partitions(Drivers::advanced_technolog_attachment *hd)
 {
-     MasterBootRecord mbr;
-     hd->Read28(0, (uint8_t *)&mbr, sizeof(MasterBootRecord));
+     master_boot_record mbr;
+     hd->read28(0, (uint8_t *)&mbr, sizeof(master_boot_record));
      // Kernel::printf("MBR: ");
      // for (int i = 0x1BE; i <= 0x1FF; i++) {
-     //      Kernel::printfHex(((uint8_t *)&mbr)[i]);
+     //      Kernel::printf_hex(((uint8_t *)&mbr)[i]);
      //      Kernel::printf(" ");
      // }
      Kernel::printf("\n");
-     if (mbr.magicnumber != 0xAA55) {
+     if (mbr.m_magicnumber != 0xAA55) {
           Kernel::printf("illegal MBR");
           return;
      }
      for (int i = 0; i < 4; i++) {
-          if (mbr.primaryPartition[i].partition_id == 0) {
+          if (mbr.primary_partition[i].m_partition_id == 0) {
                continue;
           }
-          Kernel::printf(" Partition ");
-          Kernel::printfHex(i & 0xFF);
-          if (mbr.primaryPartition[i].bootable == 0x80) {
-               Kernel::printf(" booable. Type");
+          Kernel::printf(" partition ");
+          Kernel::printf_hex(i & 0xFF);
+          if (mbr.primary_partition[i].m_bootable == 0x80) {
+               Kernel::printf(" booable. m_type");
           } else {
-               Kernel::printf(" not bootable. Type ");
+               Kernel::printf(" not m_bootable. m_type ");
           }
-          Kernel::printfHex(mbr.primaryPartition[i].partition_id);
+          Kernel::printf_hex(mbr.primary_partition[i].m_partition_id);
 
-          ReadBiosBlock(hd, mbr.primaryPartition[i].start_lba);
+          read_bios_block(hd, mbr.primary_partition[i].m_start_lba);
      }
 }
 }

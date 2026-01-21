@@ -2,30 +2,30 @@
 
 namespace JLOS {
 namespace Gui {
-Window::Window(Widget *parent, int32_t x, int32_t y, int32_t w, int32_t h, uint8_t r,
-     uint8_t g, uint8_t b) : CompositeWidget(parent, x, y, w, h, r ,g ,b), Dragging(false){}
+window::window(widget *parent, int32_t m_x, int32_t m_y, int32_t m_w, int32_t m_h, uint8_t m_r,
+     uint8_t m_g, uint8_t m_b) : composite_widget(parent, m_x, m_y, m_w, m_h, m_r ,m_g ,m_b), m_dragging(false){}
 
-Window::~Window(){}
+window::~window(){}
 
-void Window::OnMouseDown(int32_t x, int32_t y, uint8_t button)
+void window::on_mouse_down(int32_t m_x, int32_t m_y, uint8_t button)
 {
-     Dragging = (button == 1);
-     CompositeWidget::OnMouseDown(x, y, button);
+     m_dragging = (button == 1);
+     composite_widget::on_mouse_down(m_x, m_y, button);
 }
 
-void Window::OnMouseUp(int32_t x, int32_t y, uint8_t button)
+void window::on_mouse_up(int32_t m_x, int32_t m_y, uint8_t button)
 {
-     Dragging = false;
-     CompositeWidget::OnMouseUp(x, y, button);
+     m_dragging = false;
+     composite_widget::on_mouse_up(m_x, m_y, button);
 }
 
-void Window::OnMouseMove(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy)
+void window::mouse_move(int32_t oldx, int32_t oldy, int32_t newx, int32_t newy)
 {
-     if (Dragging) {
-          this->x += newx - oldx;
-          this->y += newy -oldy;
+     if (m_dragging) {
+          this->m_x += newx - oldx;
+          this->m_y += newy -oldy;
      }
-     CompositeWidget::OnMouseMove(oldx, oldy, newx, newy);
+     composite_widget::mouse_move(oldx, oldy, newx, newy);
 }
 }
 }

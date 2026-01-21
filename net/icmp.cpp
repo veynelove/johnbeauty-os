@@ -2,57 +2,57 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(uint8_t);
+void printf_hex(uint8_t);
 }
 
 namespace JLOS {
 namespace Net {
-InternetControlMessageProtocol::InternetControlMessageProtocol(InternetProtocolProvider *backend)
-: InternetProtocolHandler(backend, 0x01){}
+internet_control_message_protocol::internet_control_message_protocol(internet_protocol_provider *backend)
+: internet_protocol_handler(backend, 0x01){}
 
-InternetControlMessageProtocol::~InternetControlMessageProtocol(){}
+internet_control_message_protocol::~internet_control_message_protocol(){}
 
-bool InternetControlMessageProtocol::OnInternetProtocolReceived(uint32_t srcIP_BE, uint32_t dstIP_BE,
-     uint8_t *internetProtocolPayload, uint32_t size)
+bool internet_control_message_protocol::on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
+     uint8_t *internet_protocol_payload, uint32_t m_size)
 {
-     if (size < sizeof(InternetControlMessageProtocolMessage)) {
+     if (m_size < sizeof(internet_control_message_protocol_message)) {
           return false;
      }
-     InternetControlMessageProtocolMessage *msg =
-          (InternetControlMessageProtocolMessage *)internetProtocolPayload;
-     switch (msg->type) {
+     internet_control_message_protocol_message *msg =
+          (internet_control_message_protocol_message *)internet_protocol_payload;
+     switch (msg->m_type) {
           case 0 :
                Kernel::printf("ping response from ");
-               Kernel::printfHex(srcIP_BE & 0xFF);
+               Kernel::printf_hex(srcIP_BE & 0xFF);
                Kernel::printf(".");
-               Kernel::printfHex((srcIP_BE >> 8) & 0xFF);
+               Kernel::printf_hex((srcIP_BE >> 8) & 0xFF);
                Kernel::printf(".");
-               Kernel::printfHex((srcIP_BE >> 16) & 0xFF);
+               Kernel::printf_hex((srcIP_BE >> 16) & 0xFF);
                Kernel::printf(".");
-               Kernel::printfHex((srcIP_BE >> 24) & 0xFF);
+               Kernel::printf_hex((srcIP_BE >> 24) & 0xFF);
                Kernel::printf("\n");
                break;
           case 8 :
-               msg->type = 0;
-               msg->checkSum = 0;
-               msg->checkSum = InternetProtocolProvider::CheckSum((uint16_t *)&msg,
-                    sizeof(InternetControlMessageProtocolMessage));
+               msg->m_type = 0;
+               msg->m_check_sum = 0;
+               msg->m_check_sum = internet_protocol_provider::m_check_sum((uint16_t *)&msg,
+                    sizeof(internet_control_message_protocol_message));
                return true;
      }
      return false;
 }
 
-void InternetControlMessageProtocol::RequestEchoReply(uint32_t ip_be)
+void internet_control_message_protocol::request_echo_reply(uint32_t ip_be)
 {
-     InternetControlMessageProtocolMessage icmp;
-     icmp.type = 8; // ping
-     icmp.code = 0;
-     icmp.data = 0x3713; // 1337
-     icmp.checkSum = 0;
-     icmp.checkSum = InternetProtocolProvider::CheckSum((uint16_t *)&icmp,
-          sizeof(InternetControlMessageProtocolMessage));
-     InternetProtocolHandler::Send(ip_be, (uint8_t *)&icmp,
-          sizeof(InternetControlMessageProtocolMessage));
+     internet_control_message_protocol_message icmp;
+     icmp.m_type = 8; // ping
+     icmp.m_code = 0;
+     icmp.m_data = 0x3713; // 1337
+     icmp.m_check_sum = 0;
+     icmp.m_check_sum = internet_protocol_provider::m_check_sum((uint16_t *)&icmp,
+          sizeof(internet_control_message_protocol_message));
+     internet_protocol_handler::send(ip_be, (uint8_t *)&icmp,
+          sizeof(internet_control_message_protocol_message));
      
 }
 }

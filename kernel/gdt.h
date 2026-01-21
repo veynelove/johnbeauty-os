@@ -5,32 +5,32 @@
 
 namespace JLOS {
 namespace Kernel {
-class GlobalDescriptorTable {
+class global_descriptor_table {
 public:
-	class SegmentDescriptor {
+	class segment_descriptor {
 	private:
-		uint16_t limit_lo;
-		uint16_t base_lo;
-		uint8_t base_hi;
-		uint8_t type;
-		uint8_t flags_limit_hi;
-		uint8_t base_vhi;
+		uint16_t m_limit_lo;
+		uint16_t m_base_lo;
+		uint8_t m_base_hi;
+		uint8_t m_type;
+		uint8_t m_flags_limit_hi;
+		uint8_t m_base_vhi;
 	public:
-		SegmentDescriptor(uint32_t base, uint32_t limit, uint8_t type);
-		uint32_t Base();
-		uint32_t Limit();
+		segment_descriptor(uint32_t m_base, uint32_t limit, uint8_t m_type);
+		uint32_t m_base();
+		uint32_t limit();
 	} __attribute__((packed));
 public:
-	SegmentDescriptor nullSegmentSelector;
-	SegmentDescriptor unusedSegmentSelector;
-	SegmentDescriptor codeSegmentSelector;
-	SegmentDescriptor dataSegmentSelector;
+	segment_descriptor m_null_segment_selector;
+	segment_descriptor m_unused_segment_selector;
+	segment_descriptor m_code_segment_selector;
+	segment_descriptor m_data_segment_selector;
 public:
-	GlobalDescriptorTable();
-	~GlobalDescriptorTable();
+	global_descriptor_table();
+	~global_descriptor_table();
 	
-	uint16_t CodeSegmentSelector();
-	uint16_t DataSegmentSelector();
+	uint16_t code_segment_selector();
+	uint16_t data_segment_selector();
 };
 }
 }

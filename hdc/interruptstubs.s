@@ -1,65 +1,65 @@
 .set IRQ_BASE, 0X20
 .section .text
 
-.extern _ZN4JLOS3Hdc16InterruptManager15handleInterruptEhj
+.extern _ZN4JLOS3Hdc17interrupt_manager16handle_interruptEhj
 
-.global _ZN4JLOS3Hdc16InterruptManager22IgnoreInterruptRequestEv
+.global _ZN4JLOS3Hdc17interrupt_manager24ignore_interrupt_requestEv
 
-.macro HandleException num
-.global _ZN4JLOS3Hdc16InterruptManager19HandleException\num\()Ev
-_ZN4JLOS3Hdc16InterruptManager19HandleException\num\()Ev:
+.macro handle_exception num
+.global _ZN4JLOS3Hdc17interrupt_manager20handle_exception\num\()Ev
+_ZN4JLOS3Hdc17interrupt_manager20handle_exception\num\()Ev:
 	movb $\num, (interruptnumber)
 	jmp int_bottom
 .endm
 
-.macro HandleInterruptRequest num
-.global _ZN4JLOS3Hdc16InterruptManager26HandleInterruptRequest\num\()Ev
-_ZN4JLOS3Hdc16InterruptManager26HandleInterruptRequest\num\()Ev:
+.macro handle_interrupt_request num
+.global _ZN4JLOS3Hdc17interrupt_manager28handle_interrupt_request\num\()Ev
+_ZN4JLOS3Hdc17interrupt_manager28handle_interrupt_request\num\()Ev:
 	movb $\num + IRQ_BASE, (interruptnumber)
 	pushl $0
 	jmp int_bottom
 .endm
 
-HandleException 0x00
-HandleException 0x01
-HandleException 0x02
-HandleException 0x03
-HandleException 0x04
-HandleException 0x05
-HandleException 0x06
-HandleException 0x07
-HandleException 0x08
-HandleException 0x09
-HandleException 0x0A
-HandleException 0x0B
-HandleException 0x0C
-HandleException 0x0D
-HandleException 0x0E
-HandleException 0x0F
-HandleException 0x10
-HandleException 0x11
-HandleException 0x12
-HandleException 0x13
+handle_exception 0x00
+handle_exception 0x01
+handle_exception 0x02
+handle_exception 0x03
+handle_exception 0x04
+handle_exception 0x05
+handle_exception 0x06
+handle_exception 0x07
+handle_exception 0x08
+handle_exception 0x09
+handle_exception 0x0a
+handle_exception 0x0b
+handle_exception 0x0c
+handle_exception 0x0d
+handle_exception 0x0e
+handle_exception 0x0f
+handle_exception 0x10
+handle_exception 0x11
+handle_exception 0x12
+handle_exception 0x13
 
-HandleInterruptRequest 0x00
-HandleInterruptRequest 0x01
-HandleInterruptRequest 0x02
-HandleInterruptRequest 0x03
-HandleInterruptRequest 0x04
-HandleInterruptRequest 0x05
-HandleInterruptRequest 0x06
-HandleInterruptRequest 0x07
-HandleInterruptRequest 0x08
-HandleInterruptRequest 0x09
-HandleInterruptRequest 0x0A
-HandleInterruptRequest 0x0B
-HandleInterruptRequest 0x0C
-HandleInterruptRequest 0x0D
-HandleInterruptRequest 0x0E
-HandleInterruptRequest 0x0F
-HandleInterruptRequest 0x31
+handle_interrupt_request 0x00
+handle_interrupt_request 0x01
+handle_interrupt_request 0x02
+handle_interrupt_request 0x03
+handle_interrupt_request 0x04
+handle_interrupt_request 0x05
+handle_interrupt_request 0x06
+handle_interrupt_request 0x07
+handle_interrupt_request 0x08
+handle_interrupt_request 0x09
+handle_interrupt_request 0x0a
+handle_interrupt_request 0x0b
+handle_interrupt_request 0x0c
+handle_interrupt_request 0x0d
+handle_interrupt_request 0x0e
+handle_interrupt_request 0x0f
+handle_interrupt_request 0x31
 
-HandleInterruptRequest 0x80
+handle_interrupt_request 0x80
 
 int_bottom:
 	# save registers
@@ -72,7 +72,7 @@ int_bottom:
 	pushl %ebp
 	pushl %edi
 	pushl %esi
-	
+    
 	pushl %edx
 	pushl %ecx
 	pushl %ebx
@@ -87,31 +87,31 @@ int_bottom:
 	# call c++ handler
 	pushl %esp
 	push (interruptnumber)
-	call _ZN4JLOS3Hdc16InterruptManager15handleInterruptEhj
+	call _ZN4JLOS3Hdc17interrupt_manager16handle_interruptEhj
 	#add %esp, 6
 	mov %eax, %esp # switch the stack
-	
+    
 	# restore registers
 	popl %eax
 	popl %ebx
 	popl %ecx
 	popl %edx
-	
-	popl %esi
-	popl %edi
-	popl %ebp
+    
+		popl %esi
+		popl %edi
+		popl %ebp
 
-	#pop %gs
-	#pop %fs
-	#pop %es
-	#pop %ds
-	#popa
+		#pop %gs
+		#pop %fs
+		#pop %es
+		#pop %ds
+		#popa
 
-	add $4, %esp
+		add $4, %esp
 
-.global _ZN4JLOS3Hdc16InterruptManager15InterruptIgnoreEv;
-_ZN4JLOS3Hdc16InterruptManager22IgnoreInterruptRequestEv:
-	iret
+	.global _ZN4JLOS3Hdc17interrupt_manager16interrupt_ignoreEv;
+	_ZN4JLOS3Hdc17interrupt_manager24ignore_interrupt_requestEv:
+		iret
 
-.data
-	interruptnumber: .byte 0
+	.data
+		interruptnumber: .byte 0

@@ -6,30 +6,30 @@
 
 namespace JLOS {
 namespace FileSystem {
-struct PartitionTableEntry {
-     uint8_t bootable;
-     uint8_t start_head;
+struct partition_table_entry {
+     uint8_t m_bootable;
+     uint8_t m_start_head;
      uint8_t start_sector{6};
      uint16_t start_cylinder{10};
-     uint8_t partition_id;
-     uint8_t end_head;
+     uint8_t m_partition_id;
+     uint8_t m_end_head;
      uint8_t end_sector{6};
      uint16_t end_cylinder{10};
-     uint32_t start_lba;
-     uint32_t length;
+     uint32_t m_start_lba;
+     uint32_t m_length;
 } __attribute__((packed));
 
-struct MasterBootRecord {
+struct master_boot_record {
      uint8_t bootloader[440];
-     uint32_t signature;
-     uint16_t unused;
-     PartitionTableEntry primaryPartition[4];
-     uint16_t magicnumber;
+     uint32_t m_signature;
+     uint16_t m_unused;
+     partition_table_entry primary_partition[4];
+     uint16_t m_magicnumber;
 } __attribute__((packed));
 
-class MSDOSPartitionTable {
+class msdos_partition_table {
 public:
-     static void ReadPartitions(Drivers::AdvancedTechnologAttachment *hd);
+     static void read_partitions(Drivers::advanced_technolog_attachment *hd);
 };
 }
 }

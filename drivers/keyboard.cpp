@@ -2,113 +2,113 @@
 
 namespace JLOS::Kernel {
 void printf(const char *str);
-void printfHex(uint8_t);
+void printf_hex(uint8_t);
 }
 
 namespace JLOS {
 namespace Drivers {
-KeyboardEventHandler::KeyboardEventHandler(){}
+keyboard_event_handler::keyboard_event_handler(){}
 
-void KeyboardEventHandler::OnKeyDown(char){}
+void keyboard_event_handler::key_down(char){}
 
-void KeyboardEventHandler::OnKeyUp(char){}
+void keyboard_event_handler::on_key_up(char){}
 
-KeyboardDriver::KeyboardDriver(JLOS::Hdc::InterruptManager *manager,
-    KeyboardEventHandler *handler)
-:InterruptHandler(manager, 0x21), dataport(0x60), commandport(0x64)
+keyboard_driver::keyboard_driver(JLOS::Hdc::interrupt_manager *manager,
+    keyboard_event_handler *handler)
+:interrupt_handler(manager, 0x21), m_dataport(0x60), m_commandport(0x64)
 {
     this->handler = handler;
 }
 
-KeyboardDriver::~KeyboardDriver(){}
+keyboard_driver::~keyboard_driver(){}
 
-void KeyboardDriver::Activate()
+void keyboard_driver::activate()
 {
-    while (commandport.Read() & 0x1) {
-        dataport.Read();
+    while (m_commandport.read() & 0x1) {
+        m_dataport.read();
     }
-    commandport.Write(0xAE); //activate interrupts
-    commandport.Write(0x20); //get current state
-    uint8_t status = (dataport.Read() | 1) & ~0x10;
-    commandport.Write(0x60); //set state
-    dataport.Write(status);
+    m_commandport.write(0xAE); //activate interrupts
+    m_commandport.write(0x20); //get current m_state
+    uint8_t status = (m_dataport.read() | 1) & ~0x10;
+    m_commandport.write(0x60); //set m_state
+    m_dataport.write(status);
 
-    dataport.Write(0xF4);
+    m_dataport.write(0xF4);
 }
 
-uint32_t KeyboardDriver::HandleInterrupt(uint32_t esp)
+uint32_t keyboard_driver::handle_interrupt(uint32_t m_esp)
 {
-    uint8_t key = dataport.Read();
-    if (handler == 0) return esp;
-    static bool Shift=false;
+    uint8_t key = m_dataport.read();
+    if (handler == 0) return m_esp;
+    static bool shift=false;
     switch(key) {
-        case 0x29:if(Shift) handler->OnKeyDown('~');else handler->OnKeyDown('`');break;
-        case 0x02:if(Shift) handler->OnKeyDown('!');else handler->OnKeyDown('1');break;
-        case 0x03:if(Shift) handler->OnKeyDown('@');else handler->OnKeyDown('2');break;
-        case 0x04:if(Shift) handler->OnKeyDown('#');else handler->OnKeyDown('3');break;
-        case 0x05:if(Shift) handler->OnKeyDown('$');else handler->OnKeyDown('4');break;
-        case 0x06:if(Shift) handler->OnKeyDown('%');else handler->OnKeyDown('5');break;
-        case 0x07:if(Shift) handler->OnKeyDown('^');else handler->OnKeyDown('6');break;
-        case 0x08:if(Shift) handler->OnKeyDown('&');else handler->OnKeyDown('7');break;
-        case 0x09:if(Shift) handler->OnKeyDown('*');else handler->OnKeyDown('8');break;
-        case 0x0A:if(Shift) handler->OnKeyDown('(');else handler->OnKeyDown('9');break;
-        case 0x0B:if(Shift) handler->OnKeyDown(')');else handler->OnKeyDown('0');break;
-        case 0x0C:if(Shift) handler->OnKeyDown('_');else handler->OnKeyDown('-');break;
-        case 0x0D:if(Shift) handler->OnKeyDown('+');else handler->OnKeyDown('=');break;
+        case 0x29:if(shift) handler->key_down('~');else handler->key_down('`');break;
+        case 0x02:if(shift) handler->key_down('!');else handler->key_down('1');break;
+        case 0x03:if(shift) handler->key_down('@');else handler->key_down('2');break;
+        case 0x04:if(shift) handler->key_down('#');else handler->key_down('3');break;
+        case 0x05:if(shift) handler->key_down('$');else handler->key_down('4');break;
+        case 0x06:if(shift) handler->key_down('%');else handler->key_down('5');break;
+        case 0x07:if(shift) handler->key_down('^');else handler->key_down('6');break;
+        case 0x08:if(shift) handler->key_down('&');else handler->key_down('7');break;
+        case 0x09:if(shift) handler->key_down('*');else handler->key_down('8');break;
+        case 0x0A:if(shift) handler->key_down('(');else handler->key_down('9');break;
+        case 0x0B:if(shift) handler->key_down(')');else handler->key_down('0');break;
+        case 0x0C:if(shift) handler->key_down('_');else handler->key_down('-');break;
+        case 0x0D:if(shift) handler->key_down('+');else handler->key_down('=');break;
 
-        case 0x1A:if(Shift) handler->OnKeyDown('{');else handler->OnKeyDown('[');break;
-        case 0x1B:if(Shift) handler->OnKeyDown('}');else handler->OnKeyDown(']');break;
-        case 0x2B:if(Shift) handler->OnKeyDown('|');else handler->OnKeyDown('\\');break;
-        case 0x27:if(Shift) handler->OnKeyDown(':');else handler->OnKeyDown(';');break;
-        case 0x28:if(Shift) handler->OnKeyDown('"');else handler->OnKeyDown('\'');break;
-        case 0x33:if(Shift) handler->OnKeyDown('<');else handler->OnKeyDown(',');break;
-        case 0x34:if(Shift) handler->OnKeyDown('>');else handler->OnKeyDown('.');break;
-        case 0x35:if(Shift) handler->OnKeyDown('?');else handler->OnKeyDown('/');break;
+        case 0x1A:if(shift) handler->key_down('{');else handler->key_down('[');break;
+        case 0x1B:if(shift) handler->key_down('}');else handler->key_down(']');break;
+        case 0x2B:if(shift) handler->key_down('|');else handler->key_down('\\');break;
+        case 0x27:if(shift) handler->key_down(':');else handler->key_down(';');break;
+        case 0x28:if(shift) handler->key_down('"');else handler->key_down('\'');break;
+        case 0x33:if(shift) handler->key_down('<');else handler->key_down(',');break;
+        case 0x34:if(shift) handler->key_down('>');else handler->key_down('.');break;
+        case 0x35:if(shift) handler->key_down('?');else handler->key_down('/');break;
 
-        case 0x10:if(Shift) handler->OnKeyDown('Q');else handler->OnKeyDown('q');break;
-        case 0x11:if(Shift) handler->OnKeyDown('W');else handler->OnKeyDown('w');break;
-        case 0x12:if(Shift) handler->OnKeyDown('E');else handler->OnKeyDown('e');break;
-        case 0x13:if(Shift) handler->OnKeyDown('R');else handler->OnKeyDown('r');break;
-        case 0x14:if(Shift) handler->OnKeyDown('T');else handler->OnKeyDown('t');break;
-        case 0x15:if(Shift) handler->OnKeyDown('Y');else handler->OnKeyDown('y');break;
-        case 0x16:if(Shift) handler->OnKeyDown('U');else handler->OnKeyDown('u');break;
-        case 0x17:if(Shift) handler->OnKeyDown('I');else handler->OnKeyDown('i');break;
-        case 0x18:if(Shift) handler->OnKeyDown('O');else handler->OnKeyDown('o');break;
-        case 0x19:if(Shift) handler->OnKeyDown('P');else handler->OnKeyDown('p');break;
-        case 0x1E:if(Shift) handler->OnKeyDown('A');else handler->OnKeyDown('a');break;
-        case 0x1F:if(Shift) handler->OnKeyDown('S');else handler->OnKeyDown('s');break;
-        case 0x20:if(Shift) handler->OnKeyDown('D');else handler->OnKeyDown('d');break;
-        case 0x21:if(Shift) handler->OnKeyDown('F');else handler->OnKeyDown('f');break;
-        case 0x22:if(Shift) handler->OnKeyDown('G');else handler->OnKeyDown('g');break;
-        case 0x23:if(Shift) handler->OnKeyDown('H');else handler->OnKeyDown('h');break;
-        case 0x24:if(Shift) handler->OnKeyDown('J');else handler->OnKeyDown('j');break;
-        case 0x25:if(Shift) handler->OnKeyDown('K');else handler->OnKeyDown('k');break;
-        case 0x26:if(Shift) handler->OnKeyDown('L');else handler->OnKeyDown('l');break;
-        case 0x2C:if(Shift) handler->OnKeyDown('Z');else handler->OnKeyDown('z');break;
-        case 0x2D:if(Shift) handler->OnKeyDown('X');else handler->OnKeyDown('x');break;
-        case 0x2E:if(Shift) handler->OnKeyDown('C');else handler->OnKeyDown('c');break;
-        case 0x2F:if(Shift) handler->OnKeyDown('V');else handler->OnKeyDown('v');break;
-        case 0x30:if(Shift) handler->OnKeyDown('B');else handler->OnKeyDown('b');break;
-        case 0x31:if(Shift) handler->OnKeyDown('N');else handler->OnKeyDown('n');break;
-        case 0x32:if(Shift) handler->OnKeyDown('M');else handler->OnKeyDown('m');break;
+        case 0x10:if(shift) handler->key_down('Q');else handler->key_down('q');break;
+        case 0x11:if(shift) handler->key_down('W');else handler->key_down('m_w');break;
+        case 0x12:if(shift) handler->key_down('E');else handler->key_down('e');break;
+        case 0x13:if(shift) handler->key_down('R');else handler->key_down('m_r');break;
+        case 0x14:if(shift) handler->key_down('T');else handler->key_down('t');break;
+        case 0x15:if(shift) handler->key_down('Y');else handler->key_down('m_y');break;
+        case 0x16:if(shift) handler->key_down('U');else handler->key_down('u');break;
+        case 0x17:if(shift) handler->key_down('I');else handler->key_down('i');break;
+        case 0x18:if(shift) handler->key_down('O');else handler->key_down('o');break;
+        case 0x19:if(shift) handler->key_down('P');else handler->key_down('p');break;
+        case 0x1E:if(shift) handler->key_down('A');else handler->key_down('a');break;
+        case 0x1F:if(shift) handler->key_down('S');else handler->key_down('s');break;
+        case 0x20:if(shift) handler->key_down('D');else handler->key_down('d');break;
+        case 0x21:if(shift) handler->key_down('F');else handler->key_down('f');break;
+        case 0x22:if(shift) handler->key_down('G');else handler->key_down('m_g');break;
+        case 0x23:if(shift) handler->key_down('H');else handler->key_down('m_h');break;
+        case 0x24:if(shift) handler->key_down('J');else handler->key_down('j');break;
+        case 0x25:if(shift) handler->key_down('K');else handler->key_down('k');break;
+        case 0x26:if(shift) handler->key_down('L');else handler->key_down('l');break;
+        case 0x2C:if(shift) handler->key_down('Z');else handler->key_down('z');break;
+        case 0x2D:if(shift) handler->key_down('X');else handler->key_down('m_x');break;
+        case 0x2E:if(shift) handler->key_down('C');else handler->key_down('c');break;
+        case 0x2F:if(shift) handler->key_down('V');else handler->key_down('v');break;
+        case 0x30:if(shift) handler->key_down('B');else handler->key_down('m_b');break;
+        case 0x31:if(shift) handler->key_down('N');else handler->key_down('n');break;
+        case 0x32:if(shift) handler->key_down('M');else handler->key_down('m');break;
 
-        case 0x1C:handler->OnKeyDown('\n');break;
-        case 0x39:handler->OnKeyDown(' ');break;
+        case 0x1C:handler->key_down('\n');break;
+        case 0x39:handler->key_down(' ');break;
         
-        case 0x2A:case 0x36:Shift=true;break;
-        case 0xAA:case 0xB6:Shift=false;break;
+        case 0x2A:case 0x36:shift=true;break;
+        case 0xAA:case 0xB6:shift=false;break;
         case 0x3A: //capslock
             break;
         
         default:
             if(key < 0x80) {
                 Kernel::printf("KEYBOARD 0x");
-                Kernel::printfHex(key);
+                Kernel::printf_hex(key);
             }
             break;
         
     }
-    return esp;
+    return m_esp;
 }
 }
 }
