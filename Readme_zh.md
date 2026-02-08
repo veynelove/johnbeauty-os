@@ -5,6 +5,7 @@
 3. 学习搬运地址:<https://www.bilibili.com/video/BV1Ng411x7As?spm_id_from=333.788.videopod.episodes&vd_source=89f02ddd7438a1e3a8d5c5fa0a9ba297&p=8>
 4. 源项目anthor: Viktor Engelmann (from Germany)
 5. 源项目anthor个人主页：<http://www.algorithman.de/Autor/index.php>
+6. 建议不要开启VGA，因为可能对屏幕产生损害
 
 ---
 
