@@ -3,110 +3,99 @@
 
 #include <net/ipv4.h>
 
-namespace JLOS {
-namespace Net {
-enum transmission_control_protocol_socket_state {
-     CLOSED = 0,
-     LISTEN,
-     SYN_SENT,
-     SYN_RECEIVED,
-     ESTABLISHED,
-     FIN_WAIT1,
-     FIN_WAIT2,
-     CLOSING,
-     TIME_WAIT,
-     CLOSE_WAIT,
+typedef enum {
+    JLOS_TCP_CLOSED = 0,
+    JLOS_TCP_LISTEN,
+    JLOS_TCP_SYN_SENT,
+    JLOS_TCP_SYN_RECEIVED,
+    JLOS_TCP_ESTABLISHED,
+    JLOS_TCP_FIN_WAIT1,
+    JLOS_TCP_FIN_WAIT2,
+    JLOS_TCP_CLOSING,
+    JLOS_TCP_TIME_WAIT,
+    JLOS_TCP_CLOSE_WAIT,
+} jlos_tcp_socket_state_t;
+
+typedef enum {
+    JLOS_TCP_FIN = 1,
+    JLOS_TCP_SYN = 2,
+    JLOS_TCP_RST = 4,
+    JLOS_TCP_PSH = 8,
+    JLOS_TCP_ACK = 16,
+    JLOS_TCP_URG = 32,
+    JLOS_TCP_ECE = 64,
+    JLOS_TCP_CWR = 128,
+    JLOS_TCP_NS = 258,
+} jlos_tcp_flag_t;
+
+typedef struct {
+    uint16_t m_src_port;
+    uint16_t m_dst_port;
+    uint32_t m_sequence_number;
+    uint32_t m_acknowledgement_number;
+    uint8_t m_reserved;
+    uint8_t header_size32;
+    uint8_t m_flags;
+    uint16_t m_window_size;
+    uint16_t m_checksum;
+    uint16_t m_urgent_ptr;
+    uint32_t m_options;
+} __attribute__((packed)) jlos_tcp_header_t;
+
+typedef struct {
+    uint32_t m_src_ip;
+    uint32_t m_dst_ip;
+    uint16_t m_protocol;
+    uint16_t m_total_length;
+} __attribute__((packed)) jlos_tcp_pseudo_header_t;
+
+typedef struct jlos_tcp_provider jlos_tcp_provider_t;
+typedef struct jlos_tcp_socket jlos_tcp_socket_t;
+typedef struct jlos_tcp_handler jlos_tcp_handler_t;
+
+struct jlos_tcp_handler {
+    bool (*handle_tcp_message)(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *m_data, uint16_t m_size);
 };
 
-enum transmission_control_protocol_flag {
-     FIN = 1,
-     SYN = 2,
-     RST = 4,
-     PSH = 8,
-     ACK = 16,
-     URG = 32,
-     ECE = 64,
-     CWR = 128,
-     NS = 258,
+struct jlos_tcp_socket {
+    uint16_t m_remote_port;
+    uint32_t m_remote_ip;
+    uint16_t m_local_port;
+    uint32_t m_local_ip;
+    uint32_t m_sequence_number;
+    uint32_t m_acknowledgement_number;
+    jlos_tcp_provider_t *backend;
+    jlos_tcp_handler_t *handler;
+    jlos_tcp_socket_state_t m_state;
+    bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *m_data, uint16_t m_size);
+    void (*send)(struct jlos_tcp_socket* self, uint8_t *m_data, uint16_t m_size);
+    void (*disconnect)(struct jlos_tcp_socket* self);
 };
 
-struct transmission_control_protocol_header {
-     uint16_t m_src_port;
-     uint16_t m_dst_port;
-     uint32_t m_sequence_number;
-     uint32_t m_acknowledgement_number;
-     uint8_t m_reserved{4};
-     uint8_t header_size32{4};
-     uint8_t m_flags;
-     uint16_t m_window_size;
-     uint16_t m_checksum;
-     uint16_t m_urgent_ptr;
-     uint32_t m_options;
-} __attribute__((packed));
-
-struct transmission_control_protocol_pseudo_header {
-     uint32_t m_src_ip;
-     uint32_t m_dst_ip;
-     uint16_t m_protocol;
-     uint16_t m_total_length;
-} __attribute__((packed));
-
-class transmission_control_protocol_socket;
-class transmission_control_protocol_provider;
-
-class transmission_control_protocol_handler {
-public:
-     transmission_control_protocol_handler();
-     ~transmission_control_protocol_handler();
-
-     virtual bool handle_transmission_control_protocol_message(transmission_control_protocol_socket *socket,
-          uint8_t *m_data, uint16_t m_size);
+struct jlos_tcp_provider {
+    jlos_internet_protocol_handler_t base_handler;
+    jlos_tcp_socket_t *sockets[65535];
+    uint16_t m_num_sockets;
+    uint16_t m_free_port;
 };
 
-class transmission_control_protocol_socket {
-friend class transmission_control_protocol_provider;
-protected:
-     uint16_t m_remote_port;
-     uint32_t m_remote_ip;
-     uint16_t m_local_port;
-     uint32_t m_local_ip;
-     uint32_t m_sequence_number;
-     uint32_t m_acknowledgement_number;
-     transmission_control_protocol_provider *backend;
-     transmission_control_protocol_handler *handler;
-     transmission_control_protocol_socket_state m_state;
+void jlos_tcp_handler_init(jlos_tcp_handler_t* self);
+void jlos_tcp_handler_destroy(jlos_tcp_handler_t* self);
+bool jlos_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *m_data, uint16_t m_size);
 
-public:
-     transmission_control_protocol_socket(transmission_control_protocol_provider *backend);
-     ~transmission_control_protocol_socket();
-     virtual bool handle_transmission_control_protocol_message(uint8_t *m_data, uint16_t m_size);
-     virtual void send(uint8_t *m_data, uint16_t m_size);
-     virtual void disconnect();
-};
+void jlos_tcp_socket_init(jlos_tcp_socket_t* self, jlos_tcp_provider_t *backend);
+void jlos_tcp_socket_destroy(jlos_tcp_socket_t* self);
+bool jlos_tcp_socket_handle_tcp_message(jlos_tcp_socket_t* self, uint8_t *m_data, uint16_t m_size);
+void jlos_tcp_socket_send(jlos_tcp_socket_t* self, uint8_t *m_data, uint16_t m_size);
+void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self);
 
-class transmission_control_protocol_provider : public internet_protocol_handler {
-protected:
-     transmission_control_protocol_socket *sockets[65535];
-     uint16_t m_num_sockets;
-     uint16_t m_free_port;
+void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_provider_t *backend);
+void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self);
+bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size);
+jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t ip, uint16_t port);
+jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t port);
+void jlos_tcp_provider_disconnect(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket);
+void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, uint8_t *m_data, uint16_t m_size, uint16_t m_flags);
+void jlos_tcp_provider_bind(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, jlos_tcp_handler_t *handler);
 
-public:
-     transmission_control_protocol_provider(internet_protocol_provider *backend);
-     ~transmission_control_protocol_provider();
-
-     virtual bool on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
-          uint8_t *internet_protocol_payload, uint32_t m_size);
-     
-     virtual transmission_control_protocol_socket *connect(uint32_t ip, uint16_t port);
-     virtual transmission_control_protocol_socket *listen(uint16_t port);
-     virtual void disconnect(transmission_control_protocol_socket *socket);
-     virtual void send(transmission_control_protocol_socket *socket, uint8_t *m_data, uint16_t m_size,
-          uint16_t m_flags = 0);
-     virtual void bind(transmission_control_protocol_socket *socket, transmission_control_protocol_handler *handler);
-};
-class transmission_control_protocol {
-
-};
-}
-}
 #endif

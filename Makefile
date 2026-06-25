@@ -1,22 +1,24 @@
 # ==================john_kernel=================
 JLOS := johnkernel
 
-GPPPARAMS = -m32 -I. -fno-use-cxa-atexit -nostdlib -fno-builtin -fno-rtti -fno-exceptions -fno-leading-underscore
+all: $(JLOS).iso
+
+GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions -fno-leading-underscore -std=c99 -Wno-address-of-packed-member
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 
-SRC_DIRS := kernel hdc drivers gui net filesystem
+SRC_DIRS := kernel hdc drivers gui net filesystem tools
 OBJ_DIR := obj
 
-CPP_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
+C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
 AS_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.s))
-CPP_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CPP_SRCS))
+C_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS))
 AS_OBJS := $(patsubst %.s,$(OBJ_DIR)/%.o,$(AS_SRCS))
-OBJS := $(CPP_OBJS) $(AS_OBJS)
+OBJS := $(C_OBJS) $(AS_OBJS)
 
-$(OBJ_DIR)/%.o: %.cpp
+$(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-	@g++ $(GPPPARAMS) -o $@ -c $<
+	@gcc $(GCPPARAMS) -o $@ -c $<
 
 $(OBJ_DIR)/%.o: %.s
 	@mkdir -p $(@D)
@@ -26,7 +28,7 @@ $(JLOS).bin: linker.ld  $(OBJS)
 	@ld $(LDPARAMS) -T $< -o $@  $(OBJS)
 
 install: $(JLOS).bin
-	@sudo cp $< /boot/$(JLOS)/.bin
+	@sudo cp $< /boot/$(JLOS).bin
 
 $(JLOS).iso: $(JLOS).bin
 	@mkdir -p iso/boot/grub

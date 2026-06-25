@@ -4,54 +4,42 @@
 #include <common/types.h>
 #include <kernel/gdt.h>
 
-namespace JLOS {
-namespace Kernel {
-struct cpu_state {
-     uint32_t m_eax;
-     uint32_t m_ebx;
-     uint32_t m_ecx;
-     uint32_t m_edx;
+typedef struct {
+    uint32_t m_eax;
+    uint32_t m_ebx;
+    uint32_t m_ecx;
+    uint32_t m_edx;
 
-     uint32_t m_esi;
-     uint32_t m_edi;
-     uint32_t m_ebp;
+    uint32_t m_esi;
+    uint32_t m_edi;
+    uint32_t m_ebp;
 
-     // uint32_t gs;
-     // uint32_t fs;
-     // uint32_t es;
-     // uint32_t ds;
+    uint32_t m_error;
 
-     uint32_t m_error;
+    uint32_t m_eip;
+    uint32_t m_cs;
+    uint32_t m_eflags;
+    uint32_t m_esp;
+    uint32_t m_ss;
+} __attribute__((packed)) jlos_cpu_state_t;
 
-     uint32_t m_eip;
-     uint32_t m_cs;
-     uint32_t m_eflags;
-     uint32_t m_esp;
-     uint32_t m_ss;
-} __attribute__((packed));
+typedef struct {
+    uint8_t stack[4096];
+    jlos_cpu_state_t *cpustate;
+} jlos_task_t;
 
-class task {
-friend class task_manager;
-private:
-     uint8_t stack[4096]; //4KiB
-     cpu_state *cpustate;
+typedef struct {
+    jlos_task_t *tasks[256];
+    int m_num_tasks;
+    int m_current_task;
+} jlos_task_manager_t;
 
-public:
-     task(Kernel::global_descriptor_table *gdt, void entrypoint());
-     ~task();
-};
-class task_manager {
-private:
-     task *tasks[256];
-     int m_num_tasks;
-     int m_current_task;
+void jlos_task_init(jlos_task_t* self, jlos_gdt_t *gdt, void (*entrypoint)(void));
+void jlos_task_destroy(jlos_task_t* self);
 
-public:
-     task_manager();
-     ~task_manager();
-     bool add_task(task *task);
-     cpu_state *schedule(cpu_state *cpustate);
-};
-}
-}
+void jlos_task_manager_init(jlos_task_manager_t* self);
+void jlos_task_manager_destroy(jlos_task_manager_t* self);
+bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
+jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu_state_t *cpustate);
+
 #endif

@@ -3,45 +3,36 @@
 
 #include <common/types.h>
 
-namespace JLOS {
-namespace Hdc {
-class port {
-protected:
-	uint16_t m_portnumber;
-	port(uint16_t portnumber_);
-	~port();
-};
+typedef struct {
+    uint16_t m_portnumber;
+} jlos_port8_bit_t;
 
-class port8_bit: public port {
-public:
-	port8_bit(uint16_t portnumber_);
-	~port8_bit();
-	virtual void write(uint8_t data);
-	virtual uint8_t read();
-};
+typedef struct {
+    uint16_t m_portnumber;
+} jlos_port8_bit_slow_t;
 
-class port8_bit_slow: public port8_bit {
-public:
-	port8_bit_slow(uint16_t portnumber_);
-	~port8_bit_slow();
-	virtual void write(uint8_t data);
-};
+typedef struct {
+    uint16_t m_portnumber;
+} jlos_port16_bit_t;
 
-class port16_bit: public port {
-public:
-	port16_bit(uint16_t portnumber_);
-	~port16_bit();
-	virtual void write(uint16_t data);
-	virtual uint16_t read();
-};
+typedef struct {
+    uint16_t m_portnumber;
+} jlos_port32_bit_t;
 
-class port32_bit: public port {
-public:
-	port32_bit(uint16_t portnumber_);
-	~port32_bit();
-	virtual void write(uint32_t data);
-	virtual uint32_t read();
-};
-}
-}	
+void jlos_port8_bit_init(jlos_port8_bit_t* self, uint16_t portnumber);
+void jlos_port8_bit_write(jlos_port8_bit_t* self, uint8_t data);
+uint8_t jlos_port8_bit_read(jlos_port8_bit_t* self);
+
+void jlos_port8_bit_slow_init(jlos_port8_bit_slow_t* self, uint16_t portnumber);
+void jlos_port8_bit_slow_write(jlos_port8_bit_slow_t* self, uint8_t data);
+uint8_t jlos_port8_bit_slow_read(jlos_port8_bit_slow_t* self);
+
+void jlos_port16_bit_init(jlos_port16_bit_t* self, uint16_t portnumber);
+void jlos_port16_bit_write(jlos_port16_bit_t* self, uint16_t data);
+uint16_t jlos_port16_bit_read(jlos_port16_bit_t* self);
+
+void jlos_port32_bit_init(jlos_port32_bit_t* self, uint16_t portnumber);
+void jlos_port32_bit_write(jlos_port32_bit_t* self, uint32_t data);
+uint32_t jlos_port32_bit_read(jlos_port32_bit_t* self);
+
 #endif

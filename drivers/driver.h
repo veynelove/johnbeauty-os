@@ -1,30 +1,30 @@
 #ifndef __DRIVER_H
 #define __DRIVER_H
 
-namespace JLOS {
-namespace Drivers {
-class driver {
-public:
-    driver();
-    ~driver();
+#include <common/types.h>
 
-    virtual void activate();
-    virtual int reset();
-    virtual void deactivate();
+typedef struct jlos_driver jlos_driver_t;
+typedef struct jlos_driver_manager jlos_driver_manager_t;
+
+struct jlos_driver {
+    void (*activate)(jlos_driver_t* self);
+    int (*reset)(jlos_driver_t* self);
+    void (*deactivate)(jlos_driver_t* self);
 };
 
-class driver_manager {
-private:   
+struct jlos_driver_manager {
     int m_num_drivers;
-
-public:
-    driver *drivers[255]; // set public not a good idea;
-
-public:
-    driver_manager();
-    void add_driver(driver *);
-    void activate_all();
+    jlos_driver_t *drivers[255];
 };
-}
-}
+
+void jlos_driver_init(jlos_driver_t* self);
+void jlos_driver_destroy(jlos_driver_t* self);
+void jlos_driver_activate(jlos_driver_t* self);
+int jlos_driver_reset(jlos_driver_t* self);
+void jlos_driver_deactivate(jlos_driver_t* self);
+
+void jlos_driver_manager_init(jlos_driver_manager_t* self);
+void jlos_driver_manager_add_driver(jlos_driver_manager_t* self, jlos_driver_t *drv);
+void jlos_driver_manager_activate_all(jlos_driver_manager_t* self);
+
 #endif

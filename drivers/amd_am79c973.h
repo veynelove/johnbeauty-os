@@ -6,85 +6,79 @@
 #include <hdc/pci.h>
 #include <hdc/port.h>
 
-namespace JLOS {
-namespace Drivers {
-class amd_am79c973;
+typedef struct jlos_amd_am79c973 jlos_amd_am79c973_t;
+typedef struct jlos_rawdata_handler jlos_rawdata_handler_t;
 
-class rawdata_handler {
-protected:
-     amd_am79c973 *backend;
-
-public:
-     rawdata_handler(amd_am79c973 *backend);
-     ~rawdata_handler();
-
-     virtual bool on_raw_data_received(uint8_t *buffer, uint32_t m_size);
-     void send(uint8_t *buffer, uint32_t m_size);
+struct jlos_rawdata_handler {
+    jlos_amd_am79c973_t *backend;
+    bool (*on_raw_data_received)(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
+    void (*send)(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
 };
 
-class amd_am79c973 : public driver, public Hdc::interrupt_handler {
-private:
-     struct initialization_block {
-          uint16_t m_mode;
-          unsigned reserved1 : 4;
-          unsigned num_send_buffers : 4;
-          unsigned reserved2 : 4;
-          unsigned num_recv_buffers : 4;
-          uint64_t physical_address : 48;
-          uint16_t m_reserved3;
-          uint64_t m_logical_address;
-          uint32_t m_recv_buffer_descr_address;
-          uint32_t m_send_buffer_descr_address;
-     } __attribute__((packed));
+typedef struct {
+    uint16_t m_mode;
+    uint8_t m_recv_len;
+    uint8_t m_send_len;
+    uint8_t physical_address[6];
+    uint16_t m_reserved;
+    uint8_t m_logical_address[8];
+    uint32_t m_recv_buffer_descr_address;
+    uint32_t m_send_buffer_descr_address;
+} __attribute__((packed)) jlos_amd_init_block_t;
 
-     struct buffer_descriptor {
-          uint32_t m_address;
-          uint32_t m_flags;
-          uint32_t m_flags2;
-          uint32_t m_avail;
-     } __attribute__((packed));
+typedef struct {
+    uint32_t m_address;
+    uint32_t m_flags;
+    uint16_t m_flags2;
+    uint16_t m_avail;
+} __attribute__((packed)) jlos_amd_buffer_descriptor_t;
 
-private:
-     Hdc::port16_bit m_mac_address0_port;
-     Hdc::port16_bit m_mac_address2_port;
-     Hdc::port16_bit m_mac_address4_port;
-     Hdc::port16_bit m_register_data_port;
-     Hdc::port16_bit m_register_address_port;
-     Hdc::port16_bit m_reset_port;
-     Hdc::port16_bit m_bus_control_register_data_port;
+struct jlos_amd_am79c973 {
+    jlos_driver_t base_driver;
+    jlos_interrupt_handler_t base_handler;
 
-     initialization_block m_init_block;
+    jlos_port16_bit_t m_mac_address0_port;
+    jlos_port16_bit_t m_mac_address2_port;
+    jlos_port16_bit_t m_mac_address4_port;
+    jlos_port16_bit_t m_register_data_port;
+    jlos_port16_bit_t m_register_address_port;
+    jlos_port16_bit_t m_reset_port;
+    jlos_port16_bit_t m_bus_control_register_data_port;
 
-     buffer_descriptor *send_buffer_descr;
-     uint8_t send_buffer_desc_memory[2048 + 15];
-     uint8_t send_buffers[2 * 1024 + 15][8];
-     uint8_t m_current_send_buffer;
+    jlos_amd_init_block_t *m_init_block;
+    uint8_t init_block_memory[64];
 
-     buffer_descriptor *recv_buffer_descr;
-     uint8_t recv_buffer_desc_memory[2048 + 15];
-     uint8_t recv_buffers[2 * 1024 + 15][8];
-     uint8_t m_current_recv_buffer;
+    jlos_amd_buffer_descriptor_t *send_buffer_descr;
+    uint8_t send_buffer_desc_memory[2048 + 15];
+    uint8_t send_buffers[8][2048] __attribute__((aligned(2048)));
+    uint8_t m_current_send_buffer;
 
-     rawdata_handler *handler;
+    jlos_amd_buffer_descriptor_t *recv_buffer_descr;
+    uint8_t recv_buffer_desc_memory[2048 + 15];
+    uint8_t recv_buffers[8][2048] __attribute__((aligned(2048)));
+    uint8_t m_current_recv_buffer;
 
-public:
-     amd_am79c973(Hdc::peripheral_component_interconnect_device_desriptor *dev,
-          Hdc::interrupt_manager *interrupts);
-     ~amd_am79c973();
-
-     void activate() override;
-     int reset() override;
-     uint32_t handle_interrupt(uint32_t m_esp) override;
-
-     void send(uint8_t *buffer, int m_size);
-     void receive();
-     void set_handler(rawdata_handler *handler);
-
-     uint64_t get_mac_address();
-     void set_ip_address(uint32_t);
-     uint32_t get_ip_address();
+    jlos_rawdata_handler_t *handler;
 };
-}
-}
+
+void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend);
+void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self);
+bool jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
+void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
+
+void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descriptor_t *dev, jlos_interrupt_manager_t *interrupts);
+void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self);
+
+void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self);
+int jlos_amd_am79c973_reset(jlos_amd_am79c973_t* self);
+uint32_t jlos_amd_am79c973_handle_interrupt(jlos_interrupt_handler_t* handler, uint32_t m_esp);
+
+void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int m_size);
+void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self);
+void jlos_amd_am79c973_set_handler(jlos_amd_am79c973_t* self, jlos_rawdata_handler_t *handler);
+
+uint64_t jlos_amd_am79c973_get_mac_address(jlos_amd_am79c973_t* self);
+void jlos_amd_am79c973_set_ip_address(jlos_amd_am79c973_t* self, uint32_t ip);
+uint32_t jlos_amd_am79c973_get_ip_address(jlos_amd_am79c973_t* self);
 
 #endif

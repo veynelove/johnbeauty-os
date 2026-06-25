@@ -3,28 +3,25 @@
 
 #include <hdc/port.h>
 #include <common/types.h>
-#include <hdc/interrupts.h>
-#include <drivers/driver.h>
-#include <kernel/memory_manager.h>
 
-namespace JLOS {
-namespace Hdc {
+typedef struct jlos_interrupt_manager jlos_interrupt_manager_t;
+typedef struct jlos_driver_manager jlos_driver_manager_t;
+typedef struct jlos_driver jlos_driver_t;
+typedef struct jlos_amd_am79c973 jlos_amd_am79c973_t;
 
-enum base_address_register_type {
-    memory_mapping = 0,
-    input_output = 1
-};
+typedef enum {
+    JLOS_PCI_MEMORY_MAPPING = 0,
+    JLOS_PCI_INPUT_OUTPUT = 1
+} jlos_pci_bar_type_t;
 
-class base_address_register {
-public:
+typedef struct {
     bool m_prefetchable;
     uint8_t *m_address;
     uint32_t m_size;
-    base_address_register_type m_type;
-};
+    jlos_pci_bar_type_t m_type;
+} jlos_pci_bar_t;
 
-class peripheral_component_interconnect_device_desriptor {
-public:
+typedef struct {
     uint32_t m_port_base;
     uint32_t m_interrupt;
     
@@ -40,33 +37,24 @@ public:
     uint8_t m_interface_id;
 
     uint8_t m_revision;
+} jlos_pci_device_descriptor_t;
 
-    peripheral_component_interconnect_device_desriptor();
-    ~peripheral_component_interconnect_device_desriptor();
-};
+typedef struct {
+    jlos_port32_bit_t m_data_port;
+    jlos_port32_bit_t m_command_port;
+} jlos_pci_controller_t;
 
-class peripheral_component_interconnect_controller {
-private:
-    port32_bit m_data_port;
-    port32_bit m_command_port;
+void jlos_pci_controller_init(jlos_pci_controller_t* self);
+void jlos_pci_controller_destroy(jlos_pci_controller_t* self);
 
-public:
-    peripheral_component_interconnect_controller();
-    ~peripheral_component_interconnect_controller();
+uint32_t jlos_pci_controller_read(jlos_pci_controller_t* self, uint16_t m_bus, uint16_t m_device, uint16_t m_function, uint32_t registeroffset);
+void jlos_pci_controller_write(jlos_pci_controller_t* self, uint16_t m_bus, uint16_t m_device, uint16_t m_function, uint32_t registeroffset, uint32_t value);
+bool jlos_pci_controller_device_has_functions(jlos_pci_controller_t* self, uint16_t m_bus, uint16_t m_device);
 
-    uint32_t read(uint16_t m_bus, uint16_t m_device, uint16_t m_function, uint32_t registeroffset);
-    void write(uint16_t m_bus, uint16_t m_device, uint16_t m_function, uint32_t registeroffset,
-        uint32_t value);
-    bool device_has_functions(uint16_t m_bus, uint16_t m_device);
+void jlos_pci_controller_select_drivers(jlos_pci_controller_t* self, jlos_driver_manager_t *driver_manager, jlos_interrupt_manager_t *interrupts);
+jlos_driver_t *jlos_pci_controller_get_driver(jlos_pci_controller_t* self, jlos_pci_device_descriptor_t dev, jlos_interrupt_manager_t *interrupts);
+jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, jlos_pci_device_descriptor_t dev, jlos_interrupt_manager_t *interrupts);
 
-    void select_drivers(Drivers::driver_manager *driver_manager, interrupt_manager *interrupts);
-    Drivers::driver *get_driver(peripheral_component_interconnect_device_desriptor dev,
-        interrupt_manager *interrupts);
-    peripheral_component_interconnect_device_desriptor get_device_descriptor(uint16_t m_bus,
-        uint16_t m_device, uint16_t m_function);
-    base_address_register get_base_address_register(uint16_t m_bus, uint16_t m_device,
-        uint16_t m_function, uint16_t bar);
-};
-}
-}
+jlos_pci_device_descriptor_t jlos_pci_controller_get_device_descriptor(jlos_pci_controller_t* self, uint16_t m_bus, uint16_t m_device, uint16_t m_function);
+jlos_pci_bar_t jlos_pci_controller_get_base_address_register(jlos_pci_controller_t* self, uint16_t m_bus, uint16_t m_device, uint16_t m_function, uint16_t bar);
 #endif

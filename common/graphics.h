@@ -3,7 +3,9 @@
 
 #include <drivers/vga.h>
 
-namespace JLOS {
-typedef Drivers::video_graphics_array graphics_context;
-}
+typedef jlos_vga_t jlos_graphics_context_t;
+
+#define jlos_graphics_context_put_pixel(gc, x, y, r, g, b) jlos_vga_put_pixel(gc, x, y, r, g, b)
+#define jlos_graphics_context_fill_rectangle(gc, x, y, w, h, r, g, b) jlos_vga_fill_rectangle(gc, x, y, w, h, r, g, b)
+
 #endif

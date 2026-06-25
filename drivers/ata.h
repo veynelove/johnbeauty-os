@@ -4,32 +4,29 @@
 #include <common/types.h>
 #include <hdc/port.h>
 
-namespace JLOS {
-namespace Drivers {
-class advanced_technolog_attachment {
-private:
-     Hdc::port16_bit m_data_port;
-     Hdc::port8_bit m_error_port;
-     Hdc::port8_bit m_sector_count_port;
-     Hdc::port8_bit m_lba_low_port;
-     Hdc::port8_bit m_lba_mid_port;
-     Hdc::port8_bit m_lba_hi_port;
-     Hdc::port8_bit m_device_port;
-     Hdc::port8_bit m_command_port;
-     Hdc::port8_bit m_control_port;
+typedef struct jlos_ata jlos_ata_t;
 
-     bool m_master;
-     uint16_t m_bytes_per_sector;
+struct jlos_ata {
+    jlos_port16_bit_t m_data_port;
+    jlos_port8_bit_t m_error_port;
+    jlos_port8_bit_t m_sector_count_port;
+    jlos_port8_bit_t m_lba_low_port;
+    jlos_port8_bit_t m_lba_mid_port;
+    jlos_port8_bit_t m_lba_hi_port;
+    jlos_port8_bit_t m_device_port;
+    jlos_port8_bit_t m_command_port;
+    jlos_port8_bit_t m_control_port;
 
-public:
-     advanced_technolog_attachment(uint16_t m_port_base, bool m_master);
-     ~advanced_technolog_attachment();
-
-     void identify();
-     void read28(uint32_t sector, uint8_t *m_data, int m_size);
-     void write28(uint32_t sector, uint8_t *m_data, int m_size);
-     void flush();
+    bool m_master;
+    uint16_t m_bytes_per_sector;
 };
-}
-}
+
+void jlos_ata_init(jlos_ata_t* self, uint16_t m_port_base, bool m_master);
+void jlos_ata_destroy(jlos_ata_t* self);
+
+void jlos_ata_identify(jlos_ata_t* self);
+void jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *m_data, int m_size);
+void jlos_ata_write28(jlos_ata_t* self, uint32_t sector, uint8_t *m_data, int m_size);
+void jlos_ata_flush(jlos_ata_t* self);
+
 #endif

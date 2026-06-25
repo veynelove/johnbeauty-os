@@ -6,33 +6,37 @@
 #include <hdc/port.h>
 #include <drivers/driver.h>
 
-namespace JLOS {
-namespace Drivers {
-class mouse_event_handler {
-public:
-    mouse_event_handler();
+typedef struct jlos_mouse_event_handler jlos_mouse_event_handler_t;
 
-    virtual void on_activate();
-    virtual void on_mouse_down(uint8_t button);
-    virtual void on_mouse_up(uint8_t button);
-    virtual void mouse_move(int32_t xoffset, int32_t yoffset);
+struct jlos_mouse_event_handler {
+    void (*on_activate)(jlos_mouse_event_handler_t* self);
+    void (*on_mouse_down)(jlos_mouse_event_handler_t* self, uint8_t button);
+    void (*on_mouse_up)(jlos_mouse_event_handler_t* self, uint8_t button);
+    void (*mouse_move)(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset);
 };
 
-class mouse_driver : public Hdc::interrupt_handler, public driver {
-private:
-    Hdc::port8_bit m_dataport;
-    Hdc::port8_bit m_commandport;
+typedef struct jlos_mouse_driver jlos_mouse_driver_t;
+
+struct jlos_mouse_driver {
+    jlos_driver_t base_driver;
+    jlos_interrupt_handler_t base_handler;
+    jlos_port8_bit_t m_dataport;
+    jlos_port8_bit_t m_commandport;
     uint8_t buffer[3];
     uint8_t m_offset;
     uint8_t m_buttons;
-    mouse_event_handler *handler;
-
-public:
-    mouse_driver(Hdc::interrupt_manager *manager, mouse_event_handler *handler);
-    ~mouse_driver();
-    virtual uint32_t handle_interrupt(uint32_t m_esp);
-    virtual void activate();
+    jlos_mouse_event_handler_t *handler;
 };
-}
-}
+
+void jlos_mouse_event_handler_init(jlos_mouse_event_handler_t* self);
+void jlos_mouse_event_handler_on_activate(jlos_mouse_event_handler_t* self);
+void jlos_mouse_event_handler_on_mouse_down(jlos_mouse_event_handler_t* self, uint8_t button);
+void jlos_mouse_event_handler_on_mouse_up(jlos_mouse_event_handler_t* self, uint8_t button);
+void jlos_mouse_event_handler_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset);
+
+void jlos_mouse_driver_init(jlos_mouse_driver_t* self, jlos_interrupt_manager_t *manager, jlos_mouse_event_handler_t *handler);
+void jlos_mouse_driver_destroy(jlos_mouse_driver_t* self);
+uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t m_esp);
+void jlos_mouse_driver_activate(jlos_mouse_driver_t* self);
+
 #endif

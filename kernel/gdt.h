@@ -3,35 +3,29 @@
 
 #include <common/types.h>
 
-namespace JLOS {
-namespace Kernel {
-class global_descriptor_table {
-public:
-	class segment_descriptor {
-	private:
-		uint16_t m_limit_lo;
-		uint16_t m_base_lo;
-		uint8_t m_base_hi;
-		uint8_t m_type;
-		uint8_t m_flags_limit_hi;
-		uint8_t m_base_vhi;
-	public:
-		segment_descriptor(uint32_t m_base, uint32_t limit, uint8_t m_type);
-		uint32_t m_base();
-		uint32_t limit();
-	} __attribute__((packed));
-public:
-	segment_descriptor m_null_segment_selector;
-	segment_descriptor m_unused_segment_selector;
-	segment_descriptor m_code_segment_selector;
-	segment_descriptor m_data_segment_selector;
-public:
-	global_descriptor_table();
-	~global_descriptor_table();
-	
-	uint16_t code_segment_selector();
-	uint16_t data_segment_selector();
-};
-}
-}
+typedef struct {
+    uint16_t m_limit_lo;
+    uint16_t m_base_lo;
+    uint8_t m_base_hi;
+    uint8_t m_type;
+    uint8_t m_flags_limit_hi;
+    uint8_t m_base_vhi;
+} __attribute__((packed)) jlos_gdt_segment_descriptor_t;
+
+typedef struct {
+    jlos_gdt_segment_descriptor_t m_null_segment_selector;
+    jlos_gdt_segment_descriptor_t m_unused_segment_selector;
+    jlos_gdt_segment_descriptor_t m_code_segment_selector;
+    jlos_gdt_segment_descriptor_t m_data_segment_selector;
+} __attribute__((packed)) jlos_gdt_t;
+
+void jlos_gdt_init(jlos_gdt_t* self);
+void jlos_gdt_destroy(jlos_gdt_t* self);
+uint16_t jlos_gdt_code_segment_selector(jlos_gdt_t* self);
+uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self);
+
+void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t m_base, uint32_t limit, uint8_t m_flags);
+uint32_t jlos_gdt_segment_descriptor_base(jlos_gdt_segment_descriptor_t* self);
+uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self);
+
 #endif
