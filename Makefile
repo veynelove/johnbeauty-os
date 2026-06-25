@@ -10,8 +10,8 @@ LDPARAMS = -melf_i386
 SRC_DIRS := kernel hdc drivers gui net filesystem tools
 OBJ_DIR := obj
 
-C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
-AS_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.s))
+C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")
+AS_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.s")
 C_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS))
 AS_OBJS := $(patsubst %.s,$(OBJ_DIR)/%.o,$(AS_SRCS))
 OBJS := $(C_OBJS) $(AS_OBJS)

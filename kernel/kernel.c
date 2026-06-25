@@ -5,12 +5,7 @@
 #include <drivers/vga.h>
 #include <drivers/ata.h>
 #include <drivers/amd_am79c973.h>
-#include <net/etherframe.h>
-#include <net/arp.h>
-#include <net/ipv4.h>
-#include <net/icmp.h>
-#include <net/udp.h>
-#include <net/tcp.h>
+#include <net/network.h>
 #include <filesystem/msdospath.h>
 #include <filesystem/fat.h>
 #include <common/multiboot.h>
@@ -20,13 +15,14 @@
 #include <kernel/syscalls.h>
 #include <tools/config.h>
 
-#if CONFIG_ENABLE_TESTS
+#if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
 #include <tools/tests/multitask_te.h>
 #include <tools/tests/hard_driver_te.h>
+#include <tools/tests/http_server_te.h>
 #endif
 
-#if CONFIG_DEBUG_CONSOLE
+#if KERNEL_CONFIG_DEBUG_CONSOLE
 #include <tools/samples/debug_console.h>
 #endif
 
@@ -150,29 +146,6 @@ static void printf_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos
     }
 }
 
-typedef struct {
-    jlos_tcp_handler_t base;
-} printf_tcp_handler_t;
-
-static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *m_data, uint16_t m_size)
-{
-    char foo[2] = " ";
-    for (int i = 0; i < m_size; i++) {
-        foo[0] = m_data[i];
-        printf(foo);
-    }
-    if (m_size > 9
-        && m_data[0] == 'G' && m_data[1] == 'E'
-        && m_data[2] == 'T' && m_data[3] == ' '
-        && m_data[4] == '/' && m_data[5] == ' '
-        && m_data[6] == 'H' && m_data[7] == 'T'
-        && m_data[8] == 'T' && m_data[9] == 'P') {
-        socket->send(socket, (uint8_t *)"HTTP/1.1 200 OK\r\n_server: JLOS\r\n_content-m_type: text/html\r\n\r\n<html><head><title>john beauty</title></head><body><m_b>johnbeauty</m_b>john_love operating system</body></html>\r\n", 177);
-        socket->disconnect(socket);
-    }
-    return true;
-}
-
 void sysprintf(char *str)
 {
     __asm__ __volatile__("int $0x80" : : "a" (4), "b" (str));
@@ -218,7 +191,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_driver_manager_t driver_manager_;
     jlos_driver_manager_init(&driver_manager_);
 
-#if CONFIG_DEBUG_CONSOLE
+#if KERNEL_CONFIG_DEBUG_CONSOLE
     debug_console_init(&interrupts, &driver_manager_);
 #endif
 
@@ -238,46 +211,22 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     printf("initializing hardware, stage 3.\n");
     jlos_amd_am79c973_t *eth0 = (jlos_amd_am79c973_t *)(driver_manager_.drivers[2]);
 
-    uint32_t ip_be = BYTES_TO_BE32(103, 0, 168, 192);
-    jlos_amd_am79c973_set_ip_address(eth0, ip_be);
-
-    jlos_ether_frame_provider_t etherframe;
-    jlos_ether_frame_provider_init(&etherframe, eth0);
-
-    jlos_arp_t arp;
-    jlos_arp_init(&arp, &etherframe);
-
-    uint32_t gip_be = BYTES_TO_BE32(1, 0, 168, 192);
-    uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
-
-    jlos_internet_protocol_provider_t ipv4;
-    jlos_internet_protocol_provider_init(&ipv4, &etherframe, &arp, gip_be, subnet_be);
-
-    jlos_icmp_t icmp;
-    jlos_icmp_init(&icmp, &ipv4);
-
-    jlos_udp_provider_t udp;
-    jlos_udp_provider_init(&udp, &ipv4);
-
-    jlos_tcp_provider_t tcp;
-    jlos_tcp_provider_init(&tcp, &ipv4);
-
     jlos_interrupt_manager_activate(&interrupts);
     printf("\n");
-#if CONFIG_ENABLE_TESTS
+
+    uint32_t ip_be = BYTES_TO_BE32(103, 0, 159, 192);
+    uint32_t gateway_ip_be = BYTES_TO_BE32(2, 0, 159, 192);
+    uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
+
+    network_stack_t network_stack;
+    network_init(&network_stack, eth0, ip_be, gateway_ip_be, subnet_be);
+#if KERNEL_CONFIG_ENABLE_TESTS
     memory_manager_test(multiboot_structure);
     multitask_test(&gdt, &task_manager_);
     hard_driver_test();
+    http_server_test(&network_stack.tcp);
 #endif
-    jlos_arp_broadcast_mac_address(&arp, gip_be);
-
-    printf_tcp_handler_t tcphandler;
-    jlos_tcp_handler_init(&tcphandler.base);
-    tcphandler.base.handle_tcp_message = printf_tcp_handler_handle_tcp_message;
-
-    jlos_tcp_socket_t *tcpsocket = jlos_tcp_provider_listen(&tcp, 1234);
-    jlos_tcp_provider_bind(&tcp, tcpsocket, &tcphandler.base);
-
+    
     while (1) {
     }
 }
