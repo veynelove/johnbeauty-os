@@ -1,20 +1,20 @@
 .set IRQ_BASE, 0X20
 .section .text
 
-.extern _ZN4JLOS3Hdc17interrupt_manager16handle_interruptEhj
+.extern jlos_interrupt_manager_handle_interrupt
 
-.global _ZN4JLOS3Hdc17interrupt_manager24ignore_interrupt_requestEv
+.global jlos_ignore_interrupt_request
 
 .macro handle_exception num
-.global _ZN4JLOS3Hdc17interrupt_manager20handle_exception\num\()Ev
-_ZN4JLOS3Hdc17interrupt_manager20handle_exception\num\()Ev:
+.global jlos_handle_exception\num\()
+jlos_handle_exception\num\():
 	movb $\num, (interruptnumber)
 	jmp int_bottom
 .endm
 
 .macro handle_interrupt_request num
-.global _ZN4JLOS3Hdc17interrupt_manager28handle_interrupt_request\num\()Ev
-_ZN4JLOS3Hdc17interrupt_manager28handle_interrupt_request\num\()Ev:
+.global jlos_handle_interrupt_request\num\()
+jlos_handle_interrupt_request\num\():
 	movb $\num + IRQ_BASE, (interruptnumber)
 	pushl $0
 	jmp int_bottom
@@ -63,11 +63,6 @@ handle_interrupt_request 0x80
 
 int_bottom:
 	# save registers
-	#pusha
-	#pushl %ds
-	#pushl %es
-	#pushl %fs
-	#pushl %gs
 
 	pushl %ebp
 	pushl %edi
@@ -78,40 +73,25 @@ int_bottom:
 	pushl %ebx
 	pushl %eax
 
-	# load ring 0 segent register
-	#cld
-	#mov $0x10, %eax
-	#mov %eax, %eds
-	#mov %eax, %ees
-
-	# call c++ handler
 	pushl %esp
 	push (interruptnumber)
-	call _ZN4JLOS3Hdc17interrupt_manager16handle_interruptEhj
-	#add %esp, 6
-	mov %eax, %esp # switch the stack
-    
+	call jlos_interrupt_manager_handle_interrupt
+	mov %eax, %esp
+
 	# restore registers
 	popl %eax
 	popl %ebx
 	popl %ecx
 	popl %edx
     
-		popl %esi
-		popl %edi
-		popl %ebp
+	popl %esi
+	popl %edi
+	popl %ebp
 
-		#pop %gs
-		#pop %fs
-		#pop %es
-		#pop %ds
-		#popa
-
-		add $4, %esp
-
-	.global _ZN4JLOS3Hdc17interrupt_manager16interrupt_ignoreEv;
-	_ZN4JLOS3Hdc17interrupt_manager24ignore_interrupt_requestEv:
+	add $4, %esp
+ 
+	jlos_ignore_interrupt_request:
 		iret
 
 	.data
-		interruptnumber: .byte 0
+		interruptnumber: .long 0

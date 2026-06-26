@@ -1,11 +1,12 @@
 # johnbeauty-os
 
-1. this is an operating system by c++.
+1. this is an operating system by c.
 2. 源项目地址:<https://www.youtube.com/playlist?list=PLHh55M_Kq4OApWScZyPl5HhgsTJS9MZ6M>
 3. 学习搬运地址:<https://www.bilibili.com/video/BV1Ng411x7As?spm_id_from=333.788.videopod.episodes&vd_source=89f02ddd7438a1e3a8d5c5fa0a9ba297&p=8>
 4. 源项目anthor: Viktor Engelmann (from Germany)
 5. 源项目anthor个人主页：<http://www.algorithman.de/Autor/index.php>
 6. 建议不要开启GUI，因为可能对屏幕产生损害
+7. 源项目是C++项目，虽然视频开始作者已经介绍了为什么使用C++编写内核，但考虑到历史原因和个人思考，这里使用C编写内核。只是很遗憾命名空间很优雅漂亮。
 
 ---
 

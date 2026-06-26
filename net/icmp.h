@@ -3,24 +3,22 @@
 
 #include <net/ipv4.h>
 
-namespace JLOS {
-namespace Net {
-struct internet_control_message_protocol_message {
-     uint8_t m_type;
-     uint8_t m_code;
-     uint16_t m_check_sum;
-     uint32_t m_data;
-} __attribute__((packed));
+typedef struct {
+    uint8_t m_type;
+    uint8_t m_code;
+    uint16_t m_check_sum;
+    uint32_t m_data;
+} __attribute__((packed)) jlos_icmp_message_t;
 
-class internet_control_message_protocol : public internet_protocol_handler {
-public:
-     internet_control_message_protocol(internet_protocol_provider *backend);
-     ~internet_control_message_protocol();
+typedef struct jlos_icmp jlos_icmp_t;
 
-     bool on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
-          uint8_t *internet_protocol_payload, uint32_t m_size);
-     void request_echo_reply(uint32_t ip_be);
+struct jlos_icmp {
+    jlos_internet_protocol_handler_t base_handler;
 };
-}
-}
+
+void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend);
+void jlos_icmp_destroy(jlos_icmp_t* self);
+bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size);
+void jlos_icmp_request_echo_reply(jlos_icmp_t* self, uint32_t ip_be);
+
 #endif

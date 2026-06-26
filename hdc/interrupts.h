@@ -6,110 +6,84 @@
 #include <kernel/gdt.h>
 #include <kernel/multitask.h>
 
-namespace JLOS {
-namespace Hdc {
-class interrupt_manager;
+typedef struct jlos_interrupt_manager jlos_interrupt_manager_t;
+typedef struct jlos_interrupt_handler jlos_interrupt_handler_t;
 
-class interrupt_handler {
-public:
-	virtual uint32_t handle_interrupt(uint32_t m_esp);
-protected:
-	uint8_t m_interrupt_number;
-	interrupt_manager *m_interrupt_manager;
+typedef uint32_t (*jlos_interrupt_handler_func_t)(jlos_interrupt_handler_t*, uint32_t);
 
-	interrupt_handler(interrupt_manager *interrupt_manager_, uint8_t interrupt_number_);
-	~interrupt_handler();
+struct jlos_interrupt_handler {
+    uint8_t m_interrupt_number;
+    jlos_interrupt_manager_t *m_interrupt_manager;
+    jlos_interrupt_handler_func_t handle_interrupt;
 };
 
-class interrupt_manager {
-friend class interrupt_handler;
-protected:
-	static interrupt_manager *activate_interrupt_manager;
-	uint16_t m_hardware_interrupt_offset;
-	interrupt_handler *handles[256];
-	Kernel::task_manager *task_manager;
+struct jlos_interrupt_manager {
+    uint16_t m_hardware_interrupt_offset;
+    void *handles[256];
+    jlos_task_manager_t *task_manager;
 
-	struct gate_descriptor {
-		uint16_t m_handle_address_low_bits;
-		uint16_t m_gdt_codeSegmentSelector;
-		uint8_t m_reserved;
-		uint8_t m_access;
-		uint16_t m_handle_address_high_bits;
-	} __attribute__((packed));
-	
-	static gate_descriptor interrupt_descriptor_table[256];
-	struct interrupt_descriptor_table_pointer {
-		uint16_t m_size;
-		uint32_t m_base;
-	} __attribute__((packed));
-	
-	void set_interrupt_descriptor_table_entry(
-		uint8_t interrupt_number_,
-		uint16_t code_segment_selector_offset,
-		void (*handler)(),
-		uint8_t descriptor_privilege_level,
-		uint8_t descriptor_type
-	);
-
-	port8_bit_slow m_pic_master_command;
-	port8_bit_slow m_pic_master_data;
-	port8_bit_slow m_pic_slave_command;
-	port8_bit_slow m_pic_slave_data;
-
-public:
-	interrupt_manager(uint16_t hardware_interruptoffset, Kernel::global_descriptor_table* gdt,
-		Kernel::task_manager *task_manager);
-	~interrupt_manager();
-
-	void activate();
-	void deactivate();
-	static uint32_t handle_interrupt(uint8_t m_interrupt, uint32_t m_esp);
-	uint16_t hardware_interrupt_offset();
-	uint32_t do_handle_interrupt(uint8_t m_interrupt, uint32_t m_esp);
-
-	static void ignore_interrupt_request();
-	
-	static void handle_exception0x00();
-     static void handle_exception0x01();
-	static void handle_exception0x02();
-	static void handle_exception0x03();
-	static void handle_exception0x04();
-	static void handle_exception0x05();
-	static void handle_exception0x06();
-	static void handle_exception0x07();
-	static void handle_exception0x08();
-	static void handle_exception0x09();
-	static void handle_exception0x0a();
-	static void handle_exception0x0b();
-	static void handle_exception0x0c();
-	static void handle_exception0x0d();
-	static void handle_exception0x0e();
-	static void handle_exception0x0f();
-	static void handle_exception0x10();
-	static void handle_exception0x11();
-	static void handle_exception0x12();
-	static void handle_exception0x13();
-
-	static void handle_interrupt_request0x00();
-	static void handle_interrupt_request0x01();
-	static void handle_interrupt_request0x02();
-	static void handle_interrupt_request0x03();
-	static void handle_interrupt_request0x04();
-	static void handle_interrupt_request0x05();
-	static void handle_interrupt_request0x06();
-	static void handle_interrupt_request0x07();
-	static void handle_interrupt_request0x08();
-	static void handle_interrupt_request0x09();
-	static void handle_interrupt_request0x0a();
-	static void handle_interrupt_request0x0b();
-	static void handle_interrupt_request0x0c();
-	static void handle_interrupt_request0x0d();
-	static void handle_interrupt_request0x0e();
-	static void handle_interrupt_request0x0f();
-	static void handle_interrupt_request0x31();
-
-	static void handle_interrupt_request0x80();
+    jlos_port8_bit_slow_t m_pic_master_command;
+    jlos_port8_bit_slow_t m_pic_master_data;
+    jlos_port8_bit_slow_t m_pic_slave_command;
+    jlos_port8_bit_slow_t m_pic_slave_data;
 };
-}
-}
+
+extern jlos_interrupt_manager_t *jlos_active_interrupt_manager;
+
+void jlos_interrupt_handler_init(jlos_interrupt_handler_t* self, jlos_interrupt_manager_t *interrupt_manager, uint8_t interrupt_number);
+void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self);
+uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t m_esp);
+
+void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset, jlos_gdt_t* gdt, jlos_task_manager_t *task_manager);
+void jlos_interrupt_manager_destroy(jlos_interrupt_manager_t* self);
+
+void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self);
+void jlos_interrupt_manager_deactivate(jlos_interrupt_manager_t* self);
+uint32_t jlos_interrupt_manager_handle_interrupt(uint8_t m_interrupt, uint32_t m_esp);
+uint16_t jlos_interrupt_manager_hardware_interrupt_offset(jlos_interrupt_manager_t* self);
+uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* self, uint8_t m_interrupt, uint32_t m_esp);
+void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uint8_t m_interrupt, jlos_interrupt_handler_t* handler);
+
+void jlos_ignore_interrupt_request();
+
+void jlos_handle_exception0x00();
+void jlos_handle_exception0x01();
+void jlos_handle_exception0x02();
+void jlos_handle_exception0x03();
+void jlos_handle_exception0x04();
+void jlos_handle_exception0x05();
+void jlos_handle_exception0x06();
+void jlos_handle_exception0x07();
+void jlos_handle_exception0x08();
+void jlos_handle_exception0x09();
+void jlos_handle_exception0x0a();
+void jlos_handle_exception0x0b();
+void jlos_handle_exception0x0c();
+void jlos_handle_exception0x0d();
+void jlos_handle_exception0x0e();
+void jlos_handle_exception0x0f();
+void jlos_handle_exception0x10();
+void jlos_handle_exception0x11();
+void jlos_handle_exception0x12();
+void jlos_handle_exception0x13();
+
+void jlos_handle_interrupt_request0x00();
+void jlos_handle_interrupt_request0x01();
+void jlos_handle_interrupt_request0x02();
+void jlos_handle_interrupt_request0x03();
+void jlos_handle_interrupt_request0x04();
+void jlos_handle_interrupt_request0x05();
+void jlos_handle_interrupt_request0x06();
+void jlos_handle_interrupt_request0x07();
+void jlos_handle_interrupt_request0x08();
+void jlos_handle_interrupt_request0x09();
+void jlos_handle_interrupt_request0x0a();
+void jlos_handle_interrupt_request0x0b();
+void jlos_handle_interrupt_request0x0c();
+void jlos_handle_interrupt_request0x0d();
+void jlos_handle_interrupt_request0x0e();
+void jlos_handle_interrupt_request0x0f();
+void jlos_handle_interrupt_request0x31();
+void jlos_handle_interrupt_request0x80();
+
 #endif

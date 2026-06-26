@@ -3,54 +3,43 @@
 
 #include <common/types.h>
 #include <drivers/amd_am79c973.h>
-#include <kernel/memory_manager.h>
 
-namespace JLOS {
-namespace Net {
-#define SWAP_ENDIAN_16(m_x) ((((m_x) & 0x00FF) << 8) \
-     | (((m_x) & 0xFF00) >> 8))
+#define JLOS_SWAP_ENDIAN_16(m_x) ((((m_x) & 0x00FF) << 8) | (((m_x) & 0xFF00) >> 8))
+#define JLOS_SWAP_ENDIAN_32(m_x) ((((m_x) & 0xFF000000) >> 24) | (((m_x) & 0x00FF0000) >> 8) | (((m_x) & 0x0000FF00) << 8) | (((m_x) & 0x000000FF) << 24))
 
-#define SWAP_ENDIAN_32(m_x) (((m_x) & 0xFF000000 >> 24) \
-     | ((m_x) & 0x00FF0000 >> 8) | ((m_x) & 0x0000FF00 << 8) \
-     | ((m_x) & 0x000000FF << 24))
+typedef struct {
+    uint8_t dstMAC[6];
+    uint8_t srcMAC[6];
+    uint16_t m_etherType_BE;
+} __attribute__((packed)) jlos_ether_frame_header_t;
 
-struct ether_frame_header {
-     uint64_t dstMAC_BE{48};
-     uint64_t srcMAC_BE{48};
-     uint64_t m_etherType_BE;
-} __attribute__((packed));
+typedef uint32_t jlos_ether_frame_footer_t;
 
-typedef uint32_t ether_frame_footer;
-class ether_frame_provider;
+typedef struct jlos_ether_frame_provider jlos_ether_frame_provider_t;
+typedef struct jlos_ether_frame_handler jlos_ether_frame_handler_t;
 
-class ether_frame_handler {
-protected:
-     ether_frame_provider *backend;
-     uint16_t m_etherType_BE;
-
-public:
-     ether_frame_handler(ether_frame_provider *backend, uint16_t m_etherType_BE);
-     ~ether_frame_handler();
-
-     virtual bool on_ether_frame_received(uint8_t *etherframe_payload, uint32_t m_size);
-     void send(uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size);
-     uint32_t get_ip_address();
+struct jlos_ether_frame_handler {
+    jlos_ether_frame_provider_t *backend;
+    uint16_t m_etherType_BE;
+    bool (*on_ether_frame_received)(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t m_size);
 };
 
-class ether_frame_provider : public Drivers::rawdata_handler {
-friend class ether_frame_handler;
-protected:
-     ether_frame_handler *handlers[65535];
-public:
-     ether_frame_provider(Drivers::amd_am79c973 *backend);
-     ~ether_frame_provider();
-     
-     bool on_raw_data_received(uint8_t *buffer, uint32_t m_size);
-     void send(uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size);
-
-     uint64_t get_mac_address();
-     uint32_t get_ip_address();
+struct jlos_ether_frame_provider {
+    jlos_rawdata_handler_t base_handler;
+    jlos_ether_frame_handler_t *handlers[65535];
 };
-}
-}
+
+void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE);
+void jlos_ether_frame_handler_destroy(jlos_ether_frame_handler_t* self);
+bool jlos_ether_frame_handler_on_ether_frame_received(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t m_size);
+void jlos_ether_frame_handler_send(jlos_ether_frame_handler_t* self, uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size);
+uint32_t jlos_ether_frame_handler_get_ip_address(jlos_ether_frame_handler_t* self);
+
+void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_amd_am79c973_t *backend);
+void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self);
+bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, uint8_t *buffer, uint32_t m_size);
+void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size);
+uint64_t jlos_ether_frame_provider_get_mac_address(jlos_ether_frame_provider_t* self);
+uint32_t jlos_ether_frame_provider_get_ip_address(jlos_ether_frame_provider_t* self);
+
 #endif
