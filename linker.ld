@@ -35,10 +35,7 @@ SECTIONS
 
     /DISCARD/ : /* 丢弃不用节 */
     {
-        *(.fini_array*) /* c++析构函数 */
         *(.comment)
-        *(.eh_frame) /* c++异常处理框架(无运行时不需要) */
-        *(.eh_frame_hdr)
     }
 }
 

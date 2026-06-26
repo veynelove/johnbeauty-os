@@ -3,37 +3,29 @@
 
 #include <common/types.h>
 
-namespace JLOS {
-namespace Kernel {
-struct memory_chunk {
-     memory_chunk *next;
-     memory_chunk *prev;
-     bool m_allocated;
-     size_t m_size;
+typedef struct jlos_memory_chunk jlos_memory_chunk_t;
+
+struct jlos_memory_chunk {
+    jlos_memory_chunk_t *next;
+    jlos_memory_chunk_t *prev;
+    bool m_allocated;
+    size_t m_size;
 };
 
-class memory_manager {
-private:
-     memory_chunk *first;
-public:
-     static memory_manager *active_memory_manager;
-     
-     memory_manager(uint8_t *start, size_t m_size);
-     ~memory_manager();
+typedef struct {
+    jlos_memory_chunk_t *first;
+} jlos_memory_manager_t;
 
-     void *malloc(size_t m_size);
-     void free(void *ptr);
-};
-}
-}
+extern jlos_memory_manager_t *jlos_active_memory_manager;
 
-void *operator new(unsigned m_size);
-void *operator new[](unsigned m_size);
+void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t m_size);
+void jlos_memory_manager_destroy(jlos_memory_manager_t* self);
 
-// placement new
-void *operator new(unsigned m_size, void *ptr);
-void *operator new[](unsigned m_size, void *ptr);
+void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t m_size);
+void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr);
 
-void operator delete(void *ptr);
-void operator delete[](void *ptr);
+void *jlos_malloc(size_t m_size);
+void jlos_free(void *ptr);
+void jlos_memset(void *ptr, uint8_t value, size_t size);
+
 #endif

@@ -6,28 +6,30 @@
 #include <hdc/port.h>
 #include <drivers/driver.h>
 
-namespace JLOS {
-namespace Drivers {
-class keyboard_event_handler {
-public:
-    keyboard_event_handler();
+typedef struct jlos_keyboard_event_handler jlos_keyboard_event_handler_t;
 
-    virtual void key_down(char);
-    virtual void on_key_up(char);
+struct jlos_keyboard_event_handler {
+    void (*key_down)(jlos_keyboard_event_handler_t* self, char key);
+    void (*on_key_up)(jlos_keyboard_event_handler_t* self, char key);
 };
 
-class keyboard_driver : public Hdc::interrupt_handler, public driver {
-private:    
-    Hdc::port8_bit m_dataport;
-    Hdc::port8_bit m_commandport;
-    keyboard_event_handler *handler;
+typedef struct jlos_keyboard_driver jlos_keyboard_driver_t;
 
-public:
-    keyboard_driver(Hdc::interrupt_manager *manager, keyboard_event_handler *handler);
-    ~keyboard_driver();
-    virtual uint32_t handle_interrupt(uint32_t m_esp);
-    virtual void activate();
+struct jlos_keyboard_driver {
+    jlos_driver_t base_driver;
+    jlos_interrupt_handler_t base_handler;
+    jlos_port8_bit_t m_dataport;
+    jlos_port8_bit_t m_commandport;
+    jlos_keyboard_event_handler_t *handler;
 };
-}
-}
+
+void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self);
+void jlos_keyboard_event_handler_key_down(jlos_keyboard_event_handler_t* self, char key);
+void jlos_keyboard_event_handler_on_key_up(jlos_keyboard_event_handler_t* self, char key);
+
+void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_interrupt_manager_t *manager, jlos_keyboard_event_handler_t *handler);
+void jlos_keyboard_driver_destroy(jlos_keyboard_driver_t* self);
+uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t m_esp);
+void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self);
+
 #endif

@@ -3,65 +3,59 @@
 
 #include <net/ipv4.h>
 
-namespace JLOS {
-namespace Net {
-struct user_datagram_protocol_header {
-     uint16_t m_src_port;
-     uint16_t m_dst_port;
-     uint16_t m_length;
-     uint16_t m_checksum;
-} __attribute__((packed));
+typedef struct jlos_udp_socket jlos_udp_socket_t;
+typedef struct jlos_udp_provider jlos_udp_provider_t;
 
-class user_datagram_protocol_socket;
-class user_datagram_protocol_provider;
+typedef struct {
+    uint16_t m_src_port;
+    uint16_t m_dst_port;
+    uint16_t m_length;
+    uint16_t m_checksum;
+} __attribute__((packed)) jlos_udp_header_t;
 
-class user_datagram_protocol_handler {
-public:
-     user_datagram_protocol_handler();
-     ~user_datagram_protocol_handler();
+typedef struct jlos_udp_handler jlos_udp_handler_t;
 
-     virtual void handle_user_datagram_protocol_message(user_datagram_protocol_socket *socket,
-          uint8_t *m_data, uint16_t m_size);
+struct jlos_udp_handler {
+    void (*handle_udp_message)(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *m_data, uint16_t m_size);
 };
 
-class user_datagram_protocol_socket {
-friend class user_datagram_protocol_provider;
-protected:
-     uint16_t m_remote_port;
-     uint32_t m_remote_ip;
-     uint16_t m_local_port;
-     uint32_t m_local_ip;
-     user_datagram_protocol_provider *backend;
-     user_datagram_protocol_handler *handler;
-     bool m_listening;
-
-public:
-     user_datagram_protocol_socket(user_datagram_protocol_provider *backend);
-     ~user_datagram_protocol_socket();
-     virtual void handle_user_datagram_protocol_message(uint8_t *m_data, uint16_t m_size);
-     virtual void send(uint8_t *m_data, uint16_t m_size);
-     virtual void disconnect();
+struct jlos_udp_socket {
+    uint16_t m_remote_port;
+    uint32_t m_remote_ip;
+    uint16_t m_local_port;
+    uint32_t m_local_ip;
+    jlos_udp_provider_t *backend;
+    jlos_udp_handler_t *handler;
+    bool m_listening;
+    void (*handle_udp_message)(struct jlos_udp_socket* self, uint8_t *m_data, uint16_t m_size);
+    void (*send)(struct jlos_udp_socket* self, uint8_t *m_data, uint16_t m_size);
+    void (*disconnect)(struct jlos_udp_socket* self);
 };
 
-class user_datagram_protocol_provider : public internet_protocol_handler {
-protected:
-     user_datagram_protocol_socket *sockets[65535];
-     uint16_t m_num_sockets;
-     uint16_t m_free_port;
-
-public:
-     user_datagram_protocol_provider(internet_protocol_provider *backend);
-     ~user_datagram_protocol_provider();
-
-     virtual bool on_internet_protocol_received(uint32_t srcIP_BE, uint32_t dstIP_BE,
-          uint8_t *internet_protocol_payload, uint32_t m_size);
-     
-     virtual user_datagram_protocol_socket *connect(uint32_t ip, uint16_t port);
-     virtual user_datagram_protocol_socket *listen(uint16_t port);
-     virtual void disconnect(user_datagram_protocol_socket *socket);
-     virtual void send(user_datagram_protocol_socket *socket, uint8_t *m_data, uint16_t m_size);
-     virtual void bind(user_datagram_protocol_socket *socket, user_datagram_protocol_handler *handler);
+struct jlos_udp_provider {
+    jlos_internet_protocol_handler_t base_handler;
+    jlos_udp_socket_t *sockets[65535];
+    uint16_t m_num_sockets;
+    uint16_t m_free_port;
 };
-}
-}
+
+void jlos_udp_handler_init(jlos_udp_handler_t* self);
+void jlos_udp_handler_destroy(jlos_udp_handler_t* self);
+void jlos_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *m_data, uint16_t m_size);
+
+void jlos_udp_socket_init(jlos_udp_socket_t* self, jlos_udp_provider_t *backend);
+void jlos_udp_socket_destroy(jlos_udp_socket_t* self);
+void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *m_data, uint16_t m_size);
+void jlos_udp_socket_send(jlos_udp_socket_t* self, uint8_t *m_data, uint16_t m_size);
+void jlos_udp_socket_disconnect(jlos_udp_socket_t* self);
+
+void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_provider_t *backend);
+void jlos_udp_provider_destroy(jlos_udp_provider_t* self);
+bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size);
+jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t ip, uint16_t port);
+jlos_udp_socket_t *jlos_udp_provider_listen(jlos_udp_provider_t* self, uint16_t port);
+void jlos_udp_provider_disconnect(jlos_udp_provider_t* self, jlos_udp_socket_t *socket);
+void jlos_udp_provider_send(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, uint8_t *m_data, uint16_t m_size);
+void jlos_udp_provider_bind(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, jlos_udp_handler_t *handler);
+
 #endif
