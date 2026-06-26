@@ -13,6 +13,9 @@ void jlos_ata_init(jlos_ata_t* self, uint16_t m_port_base, bool m_master)
     jlos_port8_bit_init(&self->m_device_port, m_port_base + 6);
     jlos_port8_bit_init(&self->m_command_port, m_port_base + 7);
     jlos_port8_bit_init(&self->m_control_port, m_port_base + 0x206);
+    
+    // Disable interrupts (nIEN bit in control register)
+    jlos_port8_bit_write(&self->m_control_port, 0x02);
 
     self->m_bytes_per_sector = 512;
     self->m_master = m_master;
@@ -24,8 +27,10 @@ void jlos_ata_destroy(jlos_ata_t* self)
 
 void jlos_ata_identify(jlos_ata_t* self)
 {
+    // Disable interrupts
+    jlos_port8_bit_write(&self->m_control_port, 0x02);
+    
     jlos_port8_bit_write(&self->m_device_port, self->m_master ? 0xA0 : 0xB0);
-    jlos_port8_bit_write(&self->m_control_port, 0);
 
     jlos_port8_bit_write(&self->m_device_port, 0xA0);
     uint8_t status = jlos_port8_bit_read(&self->m_command_port);

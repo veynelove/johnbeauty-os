@@ -46,6 +46,29 @@ void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self)
     jlos_rawdata_handler_destroy(&self->base_handler);
 }
 
+static bool mac_address_eq(uint8_t *a, uint8_t *b)
+{
+    for (int i = 0; i < 6; i++) {
+        if (a[i] != b[i]) return false;
+    }
+    return true;
+}
+
+static bool mac_address_is_broadcast(uint8_t *mac)
+{
+    for (int i = 0; i < 6; i++) {
+        if (mac[i] != 0xFF) return false;
+    }
+    return true;
+}
+
+static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
+{
+    for (int i = 0; i < 6; i++) {
+        dest[i] = (mac_be >> (8 * i)) & 0xFF;
+    }
+}
+
 bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, uint8_t *buffer, uint32_t m_size)
 {
     if (m_size < sizeof(jlos_ether_frame_header_t)) {
@@ -53,15 +76,23 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
     }
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)buffer;
     bool send_back = false;
-    if (frame->dstMAC_BE == 0xFFFFFFFFFFFF || frame->dstMAC_BE == jlos_amd_am79c973_get_mac_address(self->base_handler.backend)) {
+    
+    uint8_t my_mac[6];
+    uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), my_mac);
+    
+    if (mac_address_is_broadcast(frame->dstMAC) || mac_address_eq(frame->dstMAC, my_mac)) {
         if (self->handlers[frame->m_etherType_BE]) {
             send_back = self->handlers[frame->m_etherType_BE]->on_ether_frame_received(
                 self->handlers[frame->m_etherType_BE], buffer + sizeof(jlos_ether_frame_header_t), m_size - sizeof(jlos_ether_frame_header_t));
         }
     }
     if (send_back) {
-        frame->dstMAC_BE = frame->srcMAC_BE;
-        frame->srcMAC_BE = jlos_amd_am79c973_get_mac_address(self->base_handler.backend);
+        uint8_t temp[6];
+        for (int i = 0; i < 6; i++) {
+            temp[i] = frame->dstMAC[i];
+            frame->dstMAC[i] = frame->srcMAC[i];
+        }
+        uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), frame->srcMAC);
     }
     return send_back;
 }
@@ -70,8 +101,9 @@ void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t 
 {
     uint8_t *buffer2 = (uint8_t *)jlos_malloc(sizeof(jlos_ether_frame_header_t) + m_size);
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)buffer2;
-    frame->dstMAC_BE = dstMAC_BE;
-    frame->srcMAC_BE = jlos_amd_am79c973_get_mac_address(self->base_handler.backend);
+    
+    uint64_to_mac(dstMAC_BE, frame->dstMAC);
+    uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), frame->srcMAC);
     frame->m_etherType_BE = m_etherType_BE;
 
     uint8_t *src = buffer;

@@ -2,10 +2,16 @@
 
 extern void printf(const char *str);
 
-void network_init(network_stack_t *stack, jlos_amd_am79c973_t *eth0, uint32_t ip_be, uint32_t gateway_ip_be, uint32_t subnet_be)
+void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_)
 {
-    jlos_amd_am79c973_set_ip_address(eth0, ip_be);
+    jlos_amd_am79c973_t *eth0 = (jlos_amd_am79c973_t *)(driver_manager_->drivers[2]);
+    
+    uint32_t ip_be = BYTES_TO_BE32(2, 0x9F, 168, 192);
+    uint32_t gateway_ip_be = BYTES_TO_BE32(1, 0x9F, 168, 192);
+    uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
 
+    jlos_amd_am79c973_set_ip_address(eth0, ip_be);
+    
     jlos_ether_frame_provider_init(&stack->etherframe, eth0);
 
     jlos_arp_init(&stack->arp, &stack->etherframe);

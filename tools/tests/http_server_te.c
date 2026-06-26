@@ -33,4 +33,5 @@ void http_server_test(jlos_tcp_provider_t *tcp)
 
     jlos_tcp_socket_t *tcpsocket = jlos_tcp_provider_listen(tcp, 1234);
     jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler.base);
+    printf("TCP server listening on port 1234\n");
 }

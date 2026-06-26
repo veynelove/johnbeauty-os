@@ -8,9 +8,9 @@
 #define JLOS_SWAP_ENDIAN_32(m_x) ((((m_x) & 0xFF000000) >> 24) | (((m_x) & 0x00FF0000) >> 8) | (((m_x) & 0x0000FF00) << 8) | (((m_x) & 0x000000FF) << 24))
 
 typedef struct {
-    uint64_t dstMAC_BE;
-    uint64_t srcMAC_BE;
-    uint64_t m_etherType_BE;
+    uint8_t dstMAC[6];
+    uint8_t srcMAC[6];
+    uint16_t m_etherType_BE;
 } __attribute__((packed)) jlos_ether_frame_header_t;
 
 typedef uint32_t jlos_ether_frame_footer_t;

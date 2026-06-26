@@ -9,9 +9,9 @@ typedef struct {
     uint8_t m_hardware_address_size;
     uint8_t m_protocol_address_size;
     uint16_t m_command;
-    uint64_t src_mac;
+    uint8_t src_mac[6];
     uint32_t m_src_ip;
-    uint64_t dst_mac;
+    uint8_t dst_mac[6];
     uint32_t m_dst_ip;
 } __attribute__((packed)) jlos_arp_message_t;
 

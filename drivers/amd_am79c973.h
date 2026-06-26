@@ -1,6 +1,9 @@
 #ifndef __JLOS_DRIVERS_AMD_AM79C973_H
 #define __JLOS_DRIVERS_AMD_AM79C973_H
 
+#define NUM_RECV_BUFFERS 32
+#define NUM_SEND_BUFFERS 8
+
 #include <drivers/driver.h>
 #include <hdc/interrupts.h>
 #include <hdc/pci.h>
@@ -49,13 +52,13 @@ struct jlos_amd_am79c973 {
     uint8_t init_block_memory[64];
 
     jlos_amd_buffer_descriptor_t *send_buffer_descr;
-    uint8_t send_buffer_desc_memory[2048 + 15];
-    uint8_t send_buffers[8][2048] __attribute__((aligned(2048)));
+    uint8_t send_buffer_desc_memory[NUM_SEND_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t) + 15];
+    uint8_t send_buffers[NUM_SEND_BUFFERS][2048] __attribute__((aligned(2048)));
     uint8_t m_current_send_buffer;
 
     jlos_amd_buffer_descriptor_t *recv_buffer_descr;
-    uint8_t recv_buffer_desc_memory[2048 + 15];
-    uint8_t recv_buffers[8][2048] __attribute__((aligned(2048)));
+    uint8_t recv_buffer_desc_memory[NUM_RECV_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t) + 15];
+    uint8_t recv_buffers[NUM_RECV_BUFFERS][2048] __attribute__((aligned(2048)));
     uint8_t m_current_recv_buffer;
 
     jlos_rawdata_handler_t *handler;

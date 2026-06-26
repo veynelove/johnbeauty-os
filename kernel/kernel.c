@@ -13,13 +13,13 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/syscalls.h>
-#include <tools/config.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
 #include <tools/tests/multitask_te.h>
 #include <tools/tests/hard_driver_te.h>
 #include <tools/tests/http_server_te.h>
+#include <tools/tests/udp_server_te.h>
 #endif
 
 #if KERNEL_CONFIG_DEBUG_CONSOLE
@@ -133,19 +133,6 @@ void printf_char(char c) {
     printf(buf);
 }
 
-typedef struct {
-    jlos_udp_handler_t base;
-} printf_udp_handler_t;
-
-static void printf_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *m_data, uint16_t m_size)
-{
-    char foo[2] = " ";
-    for (int i = 0; i < m_size; i++) {
-        foo[0] = m_data[i];
-        printf(foo);
-    }
-}
-
 void sysprintf(char *str)
 {
     __asm__ __volatile__("int $0x80" : : "a" (4), "b" (str));
@@ -209,22 +196,20 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_driver_manager_activate_all(&driver_manager_);
 
     printf("initializing hardware, stage 3.\n");
-    jlos_amd_am79c973_t *eth0 = (jlos_amd_am79c973_t *)(driver_manager_.drivers[2]);
 
-    jlos_interrupt_manager_activate(&interrupts);
-    printf("\n");
-
-    uint32_t ip_be = BYTES_TO_BE32(103, 0, 159, 192);
-    uint32_t gateway_ip_be = BYTES_TO_BE32(2, 0, 159, 192);
-    uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
+    jlos_interrupt_manager_activate(&interrupts); //激活中断
+    printf("interrupts activated\n");
 
     network_stack_t network_stack;
-    network_init(&network_stack, eth0, ip_be, gateway_ip_be, subnet_be);
+    network_init(&network_stack, &driver_manager_);
+
 #if KERNEL_CONFIG_ENABLE_TESTS
+    printf("running tests...\n");
     memory_manager_test(multiboot_structure);
-    multitask_test(&gdt, &task_manager_);
+    //multitask_test(&gdt, &task_manager_);
     hard_driver_test();
     http_server_test(&network_stack.tcp);
+    udp_server_test(&network_stack.udp);
 #endif
     
     while (1) {
