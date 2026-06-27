@@ -38,4 +38,5 @@ void memory_manager_test(const void *multiboot_structure)
     printf_hex((size_t)m_allocated & 0xFF);
     printf("\n");
     jlos_free(m_allocated);
+    jlos_memory_manager_destroy(&memory_manager_);
 }

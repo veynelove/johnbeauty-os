@@ -1,8 +1,15 @@
 #include <net/udp.h>
 #include <kernel/memory_manager.h>
+#include <tools/config.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Handler initialized\n");
+    #endif
     self->handle_udp_message = jlos_udp_handler_handle_udp_message;
 }
 
@@ -12,10 +19,19 @@ void jlos_udp_handler_destroy(jlos_udp_handler_t* self)
 
 void jlos_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *m_data, uint16_t m_size)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Handler received data, size=");
+    printf_hex(m_size & 0xFF);
+    printf_hex((m_size >> 8) & 0xFF);
+    printf("\n");
+    #endif
 }
 
 void jlos_udp_socket_init(jlos_udp_socket_t* self, jlos_udp_provider_t *backend)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Socket initialized\n");
+    #endif
     self->backend = backend;
     self->handler = NULL;
     self->m_listening = false;
@@ -30,6 +46,9 @@ void jlos_udp_socket_destroy(jlos_udp_socket_t* self)
 
 void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *m_data, uint16_t m_size)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Socket received data\n");
+    #endif
     if (self->handler) {
         self->handler->handle_udp_message(self->handler, self, m_data, m_size);
     }
@@ -37,6 +56,9 @@ void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *m_data
 
 void jlos_udp_socket_send(jlos_udp_socket_t* self, uint8_t *m_data, uint16_t m_size)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Socket sending data\n");
+    #endif
     jlos_udp_provider_send(self->backend, self, m_data, m_size);
 }
 
@@ -47,6 +69,9 @@ void jlos_udp_socket_disconnect(jlos_udp_socket_t* self)
 
 void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_provider_t *backend)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Provider initializing...\n");
+    #endif
     jlos_internet_protocol_handler_init(&self->base_handler, backend, 0x11);
     self->base_handler.on_internet_protocol_received = (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_udp_provider_on_internet_protocol_received;
     self->m_num_sockets = 0;
@@ -55,6 +80,9 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
     for (int i = 0; i < 65535; i++) {
         self->sockets[i] = NULL;
     }
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Provider initialized\n");
+    #endif
 }
 
 void jlos_udp_provider_destroy(jlos_udp_provider_t* self)
@@ -64,10 +92,24 @@ void jlos_udp_provider_destroy(jlos_udp_provider_t* self)
 
 bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size)
 {
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Received UDP packet\n");
+    #endif
+    
     if (m_size < sizeof(jlos_udp_header_t)) {
+        #if KERNEL_CONFIG_DEBUG_NETWORK
+        printf("UDP: Packet too small\n");
+        #endif
         return false;
     }
     jlos_udp_header_t *msg = (jlos_udp_header_t *)internet_protocol_payload;
+
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("UDP: Destination port=");
+    printf_hex(msg->m_dst_port & 0xFF);
+    printf_hex((msg->m_dst_port >> 8) & 0xFF);
+    printf("\n");
+    #endif
 
     jlos_udp_socket_t *socket = NULL;
     for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
@@ -77,6 +119,9 @@ bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, 
             socket->m_listening = false;
             socket->m_remote_port = msg->m_src_port;
             socket->m_remote_ip = srcIP_BE;
+            #if KERNEL_CONFIG_DEBUG_NETWORK
+            printf("UDP: Socket matched\n");
+            #endif
         }
         else if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
             && self->sockets[i]->m_remote_port == msg->m_src_port && self->sockets[i]->m_remote_ip == srcIP_BE) {

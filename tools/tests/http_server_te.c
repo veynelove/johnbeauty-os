@@ -1,4 +1,5 @@
 #include <tools/tests/http_server_te.h>
+#include <kernel/memory_manager.h>
 
 extern void printf(const char *str);
 
@@ -27,11 +28,11 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
 
 void http_server_test(jlos_tcp_provider_t *tcp)
 {
-    printf_tcp_handler_t tcphandler;
-    jlos_tcp_handler_init(&tcphandler.base);
-    tcphandler.base.handle_tcp_message = printf_tcp_handler_handle_tcp_message;
+    printf_tcp_handler_t *tcphandler = jlos_malloc(sizeof(printf_tcp_handler_t));
+    jlos_tcp_handler_init(&tcphandler->base);
+    tcphandler->base.handle_tcp_message = printf_tcp_handler_handle_tcp_message;
 
     jlos_tcp_socket_t *tcpsocket = jlos_tcp_provider_listen(tcp, 1234);
-    jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler.base);
+    jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler->base);
     printf("TCP server listening on port 1234\n");
 }

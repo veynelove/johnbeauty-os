@@ -200,6 +200,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_interrupt_manager_activate(&interrupts); //激活中断
     printf("interrupts activated\n");
 
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("Initializing network stack...\n");
+    #endif
     network_stack_t network_stack;
     network_init(&network_stack, &driver_manager_);
 
