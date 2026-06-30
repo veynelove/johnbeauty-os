@@ -26,7 +26,7 @@ struct jlos_ether_frame_handler {
 
 struct jlos_ether_frame_provider {
     jlos_rawdata_handler_t base_handler;
-    jlos_ether_frame_handler_t *handlers[65535];
+    jlos_ether_frame_handler_t **handlers;
 };
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE);
