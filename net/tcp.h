@@ -17,15 +17,15 @@ typedef enum {
 } jlos_tcp_socket_state_t;
 
 typedef enum {
-    JLOS_TCP_FIN = 1,
-    JLOS_TCP_SYN = 2,
-    JLOS_TCP_RST = 4,
-    JLOS_TCP_PSH = 8,
-    JLOS_TCP_ACK = 16,
-    JLOS_TCP_URG = 32,
-    JLOS_TCP_ECE = 64,
-    JLOS_TCP_CWR = 128,
-    JLOS_TCP_NS = 258,
+    JLOS_TCP_FIN = 0x0001,
+    JLOS_TCP_SYN = 0x0002,
+    JLOS_TCP_RST = 0x0004,
+    JLOS_TCP_PSH = 0x0008,
+    JLOS_TCP_ACK = 0x0010,
+    JLOS_TCP_URG = 0x0020,
+    JLOS_TCP_ECE = 0x0040,
+    JLOS_TCP_CWR = 0x0080,
+    JLOS_TCP_NS  = 0x0100,
 } jlos_tcp_flag_t;
 
 typedef struct {
@@ -33,14 +33,21 @@ typedef struct {
     uint16_t m_dst_port;
     uint32_t m_sequence_number;
     uint32_t m_acknowledgement_number;
-    uint8_t m_reserved;
-    uint8_t header_size32;
-    uint8_t m_flags;
+    uint16_t m_data_offset_flags;
     uint16_t m_window_size;
     uint16_t m_checksum;
     uint16_t m_urgent_ptr;
     uint32_t m_options;
 } __attribute__((packed)) jlos_tcp_header_t;
+
+#define JLOS_TCP_GET_DATA_OFFSET(msg) (((((uint8_t*)&(msg)->m_data_offset_flags)[0]) >> 4) & 0x0F)
+#define JLOS_TCP_GET_FLAGS(msg)       ((((uint8_t*)&(msg)->m_data_offset_flags)[1]) | ((((uint8_t*)&(msg)->m_data_offset_flags)[0] & 0x01) << 8))
+#define JLOS_TCP_SET_DATA_OFFSET_FLAGS(msg, doff, flags) \
+    do { \
+        uint8_t *__p = (uint8_t*)&(msg)->m_data_offset_flags; \
+        __p[0] = (((doff) & 0x0F) << 4) | (((flags) >> 8) & 0x01); \
+        __p[1] = (flags) & 0xFF; \
+    } while(0)
 
 typedef struct {
     uint32_t m_src_ip;
@@ -74,7 +81,7 @@ struct jlos_tcp_socket {
 
 struct jlos_tcp_provider {
     jlos_internet_protocol_handler_t base_handler;
-    jlos_tcp_socket_t *sockets[65535];
+    jlos_tcp_socket_t **sockets;
     uint16_t m_num_sockets;
     uint16_t m_free_port;
 };

@@ -1,4 +1,5 @@
 #include <tools/tests/udp_server_te.h>
+#include <kernel/memory_manager.h>
 
 extern void printf(const char *str);
 
@@ -22,10 +23,10 @@ static void printf_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos
 
 void udp_server_test(jlos_udp_provider_t *udp)
 {
-    printf_udp_handler_t udphandler;
-    jlos_udp_handler_init(&udphandler.base);
-    udphandler.base.handle_udp_message = printf_udp_handler_handle_udp_message;
+    printf_udp_handler_t *udphandler = jlos_malloc(sizeof(printf_udp_handler_t));
+    jlos_udp_handler_init(&udphandler->base);
+    udphandler->base.handle_udp_message = printf_udp_handler_handle_udp_message;
     jlos_udp_socket_t *udpsocket = jlos_udp_provider_listen(udp, 5678);
-    jlos_udp_provider_bind(udp, udpsocket, &udphandler.base);
+    jlos_udp_provider_bind(udp, udpsocket, &udphandler->base);
     printf("UDP server listening on port 5678\n");
 }

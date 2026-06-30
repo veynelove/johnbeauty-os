@@ -7,15 +7,15 @@ jlos_task_t task2;
 
 void task_a()
 {
-    while(1) {
-        sysprintf("A");
+    for (int i = 0; i < 10; i++) {
+        sysprintf("task: A");
     }
 }
 
 void task_b()
 {
-    while(1) {
-        sysprintf("B");
+    for (int i = 0; i < 10; i++) {
+        sysprintf("task: B");
     }
 }
 

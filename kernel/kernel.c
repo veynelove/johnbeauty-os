@@ -113,6 +113,17 @@ void printf_hex(uint8_t key)
     printf(foo);
 }
 
+void printf_hex16(uint16_t value)
+{
+    char foo[5] = "0000";
+    char *hex = "0123456789ABCDEF";
+    foo[0] = hex[(value >> 12) & 0x0F];
+    foo[1] = hex[(value >> 8) & 0x0F];
+    foo[2] = hex[(value >> 4) & 0x0F];
+    foo[3] = hex[value & 0x0F];
+    printf(foo);
+}
+
 void printf_hex32(uint32_t value)
 {
     char foo[9] = "00000000";
@@ -200,6 +211,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_interrupt_manager_activate(&interrupts); //激活中断
     printf("interrupts activated\n");
 
+    #if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("Initializing network stack...\n");
+    #endif
     network_stack_t network_stack;
     network_init(&network_stack, &driver_manager_);
 
