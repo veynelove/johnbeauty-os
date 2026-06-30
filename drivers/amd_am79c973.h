@@ -34,6 +34,7 @@ typedef struct {
     uint32_t m_flags;
     uint16_t m_flags2;
     uint16_t m_avail;
+    uint32_t m_reserved;
 } __attribute__((packed)) jlos_amd_buffer_descriptor_t;
 
 struct jlos_amd_am79c973 {

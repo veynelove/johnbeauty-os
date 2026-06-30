@@ -83,8 +83,26 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descripto
     self->m_init_block = (jlos_amd_init_block_t*)init_block_raw;
     
     self->m_init_block->m_mode = 0x0430;
-    self->m_init_block->m_recv_len = NUM_RECV_BUFFERS;
-    self->m_init_block->m_send_len = NUM_SEND_BUFFERS;
+    {
+        uint8_t recv_code = 0, send_code = 0;
+        uint32_t tmp = NUM_RECV_BUFFERS;
+        while (tmp > 1) { tmp >>= 1; recv_code++; }
+        tmp = NUM_SEND_BUFFERS;
+        while (tmp > 1) { tmp >>= 1; send_code++; }
+        self->m_init_block->m_recv_len = (recv_code << 4);
+        self->m_init_block->m_send_len = (send_code << 4);
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("INIT RLEN=0x");
+        printf_hex(self->m_init_block->m_recv_len);
+        printf(" (");
+        printf_hex(NUM_RECV_BUFFERS);
+        printf(" recv) SLEN=0x");
+        printf_hex(self->m_init_block->m_send_len);
+        printf(" (");
+        printf_hex(NUM_SEND_BUFFERS);
+        printf(" send)\n");
+#endif
+    }
     self->m_init_block->m_reserved = 0x0000;
     self->m_init_block->physical_address[0] = MAC0;
     self->m_init_block->physical_address[1] = MAC1;
@@ -112,14 +130,16 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descripto
     for (uint8_t i = 0; i < NUM_SEND_BUFFERS; i++) {
         self->send_buffer_descr[i].m_address = (uint32_t)&self->send_buffers[i][0];
         self->send_buffer_descr[i].m_flags = buffer_size_bs;
-        self->send_buffer_descr[i].m_flags2 = ((i == 0) ? 0x1000 : 0) | ((i == NUM_SEND_BUFFERS - 1) ? 0x2000 : 0);
-        self->send_buffer_descr[i].m_avail = 0;
+        self->send_buffer_descr[i].m_flags2 = 0;
+        self->send_buffer_descr[i].m_avail = 0x8000;
+        self->send_buffer_descr[i].m_reserved = 0;
     }
     for (uint8_t i = 0; i < NUM_RECV_BUFFERS; i++) {
         self->recv_buffer_descr[i].m_address = (uint32_t)&self->recv_buffers[i][0];
-        self->recv_buffer_descr[i].m_flags = (0x80000000 | buffer_size_bs);
-        self->recv_buffer_descr[i].m_flags2 = ((i == 0) ? 0x1000 : 0) | ((i == NUM_RECV_BUFFERS - 1) ? 0x2000 : 0);
-        self->recv_buffer_descr[i].m_avail = 0;
+        self->recv_buffer_descr[i].m_flags = (0x80000000 | buffer_size_bs | 0xF800);
+        self->recv_buffer_descr[i].m_flags2 = 0;
+        self->recv_buffer_descr[i].m_avail = 0x8000;
+        self->recv_buffer_descr[i].m_reserved = 0;
     }
     
     jlos_interrupt_manager_register_handler(interrupts, dev->m_interrupt + jlos_interrupt_manager_hardware_interrupt_offset(interrupts), &self->base_handler);
@@ -150,6 +170,9 @@ void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self)
             break;
         }
     }
+#if KERNEL_CONFIG_DEBUG_LOG
+    printf("STOP acknowledged\n");
+#endif
 
     jlos_port16_bit_write(&self->m_register_address_port, 4);
     temp = jlos_port16_bit_read(&self->m_register_data_port);
@@ -176,6 +199,33 @@ void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self)
     jlos_port16_bit_write(&self->m_register_data_port, 0x42);
 
 #if KERNEL_CONFIG_DEBUG_LOG
+    {
+        jlos_port16_bit_write(&self->m_register_address_port, 0);
+        uint16_t csr0_after = jlos_port16_bit_read(&self->m_register_data_port);
+        printf("POST-START CSR0=0x");
+        printf_hex((csr0_after >> 8) & 0xFF);
+        printf_hex(csr0_after & 0xFF);
+        printf(" STRT=");
+        printf_hex((csr0_after & 0x0002) ? 1 : 0);
+        printf(" INEA=");
+        printf_hex((csr0_after & 0x0040) ? 1 : 0);
+        printf(" INTR=");
+        printf_hex((csr0_after & 0x0080) ? 1 : 0);
+        printf(" RXON=");
+        printf_hex((csr0_after & 0x0020) ? 1 : 0);
+        printf(" TXON=");
+        printf_hex((csr0_after & 0x0010) ? 1 : 0);
+        printf(" RINT=");
+        printf_hex((csr0_after & 0x0400) ? 1 : 0);
+        printf(" TINT=");
+        printf_hex((csr0_after & 0x0200) ? 1 : 0);
+        printf(" IDON=");
+        printf_hex((csr0_after & 0x0100) ? 1 : 0);
+        printf("\n");
+    }
+#endif
+
+#if KERNEL_CONFIG_DEBUG_LOG
     printf("AMD am79c973 activation complete\n");
 #endif
 }
@@ -196,8 +246,36 @@ uint32_t jlos_amd_am79c973_handle_interrupt(jlos_interrupt_handler_t* handler, u
     uint32_t temp = jlos_port16_bit_read(&eth->m_register_data_port);
     uint16_t command = temp & 0x00C6;
 
+#if KERNEL_CONFIG_DEBUG_LOG
+    printf("AMDIRQ CSR0=0x");
+    printf_hex(((uint16_t)temp >> 8) & 0xFF);
+    printf_hex((uint16_t)temp & 0xFF);
+    printf("\n");
+#endif
+
+#if KERNEL_CONFIG_DEBUG_NETWORK
+    printf("NET: [IRQ] CSR0=");
+    printf_hex(((uint16_t)temp >> 8) & 0xFF);
+    printf_hex((uint16_t)temp & 0xFF);
+    printf(" RINT=");
+    printf_hex((temp & 0x0400) ? 1 : 0);
+    printf(" TINT=");
+    printf_hex((temp & 0x0200) ? 1 : 0);
+    printf(" IDON=");
+    printf_hex((temp & 0x0100) ? 1 : 0);
+    printf(" ERR=");
+    printf_hex((temp & 0x8000) ? 1 : 0);
+    printf("\n");
+#endif
+
     if ((temp & 0x8000) == 0x8000) {
         command |= 0x8000;
+    }
+    if ((temp & 0x4000) == 0x4000) {
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("AMD am79c973 BABBLE ERROR\n");
+#endif
+        command |= 0x4000;
     }
     if ((temp & 0x2000) == 0x2000) {
 #if KERNEL_CONFIG_DEBUG_LOG
@@ -206,6 +284,9 @@ uint32_t jlos_amd_am79c973_handle_interrupt(jlos_interrupt_handler_t* handler, u
         command |= 0x2000;
     }
     if ((temp & 0x1000) == 0x1000) {
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("AMD am79c973 MISS ERROR\n");
+#endif
         command |= 0x1000;
     }
     if ((temp & 0x0800) == 0x0800) {
@@ -222,6 +303,9 @@ uint32_t jlos_amd_am79c973_handle_interrupt(jlos_interrupt_handler_t* handler, u
         command |= 0x0200;
     }
     if ((temp & 0x0100) == 0x0100) {
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("AMD am79c973 INIT DONE\n");
+#endif
         command |= 0x0100;
     }
 
@@ -252,27 +336,80 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int m_si
     }
     printf("\n");
 #endif
-    self->send_buffer_descr[send_descriptor].m_avail = 0;
+    self->send_buffer_descr[send_descriptor].m_avail = 0x8000;
     self->send_buffer_descr[send_descriptor].m_flags2 = 0;
-    self->send_buffer_descr[send_descriptor].m_flags = 0x8300F000 | ((uint16_t)((-m_size) & 0xFFF));
+    self->send_buffer_descr[send_descriptor].m_reserved = 0;
+    uint32_t send_bs = (2048 / 256) << 16;
+    self->send_buffer_descr[send_descriptor].m_flags = 0x80000000 | 0x03000000 | send_bs | ((uint16_t)((-m_size) & 0xFFF));
     jlos_port16_bit_write(&self->m_register_address_port, 0);
     jlos_port16_bit_write(&self->m_register_data_port, 0x48);
+
+    {
+        uint32_t sflags = 0;
+        int sent = 0;
+        for (volatile int delay = 0; delay < 500000; delay++) {
+            __asm__("nop");
+            sflags = self->send_buffer_descr[send_descriptor].m_flags;
+            if ((sflags & 0x80000000) == 0) { sent = 1; break; }
+        }
+#if KERNEL_CONFIG_DEBUG_LOG
+        jlos_port16_bit_write(&self->m_register_address_port, 0);
+        uint16_t csr0_send = jlos_port16_bit_read(&self->m_register_data_port);
+        printf("POST-SEND CSR0=0x");
+        printf_hex((csr0_send >> 8) & 0xFF);
+        printf_hex(csr0_send & 0xFF);
+        printf(" RINT=");
+        printf_hex((csr0_send & 0x0400) ? 1 : 0);
+        printf(" TINT=");
+        printf_hex((csr0_send & 0x0200) ? 1 : 0);
+        printf(" INTR=");
+        printf_hex((csr0_send & 0x0080) ? 1 : 0);
+        printf(" INEA=");
+        printf_hex((csr0_send & 0x0040) ? 1 : 0);
+        printf(" RXON=");
+        printf_hex((csr0_send & 0x0020) ? 1 : 0);
+        printf(" TXON=");
+        printf_hex((csr0_send & 0x0010) ? 1 : 0);
+        printf(" SENT=");
+        printf_hex(sent);
+        printf(" SFLAGS=0x");
+        printf_hex((sflags >> 24) & 0xFF);
+        printf_hex((sflags >> 16) & 0xFF);
+        printf_hex((sflags >> 8) & 0xFF);
+        printf_hex(sflags & 0xFF);
+        printf("\n");
+#endif
+    }
 }
 
 void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
 {
+#if KERNEL_CONFIG_DEBUG_LOG
+    printf("AMDRCV enter\n");
+#endif
     uint32_t bs = (2048 / 256) << 16;
+    uint8_t start_idx = self->m_current_recv_buffer;
+    int8_t last_processed_iter = -1;
+
     for (int i = 0; i < NUM_RECV_BUFFERS; i++) {
-        int idx = (self->m_current_recv_buffer + i) % NUM_RECV_BUFFERS;
+        int idx = (start_idx + i) % NUM_RECV_BUFFERS;
         uint32_t flags = self->recv_buffer_descr[idx].m_flags;
+        uint32_t flags2 = self->recv_buffer_descr[idx].m_flags2;
+        uint16_t avail = self->recv_buffer_descr[idx].m_avail;
 
         if ((flags & 0x80000000) != 0) {
-            break;
+            continue;
         }
 
-        uint32_t flags2 = self->recv_buffer_descr[idx].m_flags2;
+        uint32_t stp_enp_ok = 0;
+        if ((flags & 0x00C00000) == 0x00C00000) {
+            stp_enp_ok = 1;
+        }
+        if ((flags & 0x03000000) == 0x03000000) {
+            stp_enp_ok = 2;
+        }
 
-        if ((flags & 0x00C00000) == 0x00C00000 || (flags & 0x03000000) == 0x03000000) {
+        if (stp_enp_ok) {
             uint32_t m_size = flags2 & 0xFFF;
             if (m_size > 64) {
                 m_size -= 4;
@@ -280,7 +417,7 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
             uint8_t *buffer = (uint8_t *)(self->recv_buffer_descr[idx].m_address);
 #if KERNEL_CONFIG_DEBUG_LOG
             printf("RECV: ");
-            for (int j = 0; j < m_size; j++) {
+            for (int j = 0; j < (int)m_size && j < 128; j++) {
                 printf_hex(buffer[j]);
                 printf(" ");
             }
@@ -292,9 +429,14 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
                 }
             }
         }
-        self->recv_buffer_descr[idx].m_flags = (0x80000000 | bs);
-        self->recv_buffer_descr[idx].m_flags2 = ((idx == 0) ? 0x1000 : 0) | ((idx == NUM_RECV_BUFFERS - 1) ? 0x2000 : 0);
-        self->m_current_recv_buffer = (self->m_current_recv_buffer + 1) % NUM_RECV_BUFFERS;
+        self->recv_buffer_descr[idx].m_flags = (0x80000000 | bs | 0xF800);
+        self->recv_buffer_descr[idx].m_flags2 = 0;
+        self->recv_buffer_descr[idx].m_reserved = 0;
+        last_processed_iter = i;
+    }
+
+    if (last_processed_iter >= 0) {
+        self->m_current_recv_buffer = (start_idx + last_processed_iter + 1) % NUM_RECV_BUFFERS;
     }
 }
 

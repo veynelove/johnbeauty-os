@@ -39,14 +39,17 @@ void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_amd_
 {
     jlos_rawdata_handler_init(&self->base_handler, backend);
     self->base_handler.on_raw_data_received = (bool (*)(jlos_rawdata_handler_t*, uint8_t*, uint32_t))jlos_ether_frame_provider_on_raw_data_received;
-    
-    for (uint32_t i = 0; i < 65535; i++) {
+
+    self->handlers = (jlos_ether_frame_handler_t **)jlos_malloc(sizeof(jlos_ether_frame_handler_t*) * JLOS_NET_MAX_SLOTS);
+    for (uint32_t i = 0; i < JLOS_NET_MAX_SLOTS; i++) {
         self->handlers[i] = NULL;
     }
 }
 
 void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self)
 {
+    jlos_free(self->handlers);
+    self->handlers = NULL;
     jlos_rawdata_handler_destroy(&self->base_handler);
 }
 

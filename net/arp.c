@@ -150,6 +150,21 @@ uint64_t jlos_arp_get_mac_from_cache(jlos_arp_t* self, uint32_t IP_BE)
     return 0xFFFFFFFFFFFF;
 }
 
+uint64_t jlos_arp_lookup_or_request(jlos_arp_t* self, uint32_t IP_BE)
+{
+    uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
+    
+    if (result == 0xFFFFFFFFFFFF) {
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("ARP: lookup miss, sending request for ");
+        printf_hex32(IP_BE);
+        printf("\n");
+#endif
+        jlos_arp_request_mac_address(self, IP_BE);
+    }
+    return result;
+}
+
 uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
 {
     uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
@@ -163,8 +178,10 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
         jlos_arp_request_mac_address(self, IP_BE);
     }
     
-    while (result == 0xFFFFFFFFFFFF) {
+    volatile uint32_t timeout = 0;
+    while (result == 0xFFFFFFFFFFFF && timeout < 5000000) {
         __asm__ __volatile__("hlt");
+        timeout++;
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }
 #if KERNEL_CONFIG_DEBUG_LOG
@@ -172,6 +189,10 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
         printf("ARP: resolved MAC=0x");
         printf_hex32(result >> 32);
         printf_hex32(result & 0xFFFFFFFF);
+        printf("\n");
+    } else {
+        printf("ARP: resolve TIMEOUT for ");
+        printf_hex32(IP_BE);
         printf("\n");
     }
 #endif

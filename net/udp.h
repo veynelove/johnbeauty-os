@@ -34,7 +34,7 @@ struct jlos_udp_socket {
 
 struct jlos_udp_provider {
     jlos_internet_protocol_handler_t base_handler;
-    jlos_udp_socket_t *sockets[65535];
+    jlos_udp_socket_t **sockets;
     uint16_t m_num_sockets;
     uint16_t m_free_port;
 };

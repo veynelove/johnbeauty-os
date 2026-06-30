@@ -47,7 +47,7 @@ bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_B
             #endif
             msg->m_type = 0;
             msg->m_check_sum = 0;
-            msg->m_check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)msg, sizeof(jlos_icmp_message_t));
+            msg->m_check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)msg, m_size);
             #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ICMP: Reply prepared, returning true to send\n");
             #endif

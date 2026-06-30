@@ -113,6 +113,17 @@ void printf_hex(uint8_t key)
     printf(foo);
 }
 
+void printf_hex16(uint16_t value)
+{
+    char foo[5] = "0000";
+    char *hex = "0123456789ABCDEF";
+    foo[0] = hex[(value >> 12) & 0x0F];
+    foo[1] = hex[(value >> 8) & 0x0F];
+    foo[2] = hex[(value >> 4) & 0x0F];
+    foo[3] = hex[value & 0x0F];
+    printf(foo);
+}
+
 void printf_hex32(uint32_t value)
 {
     char foo[9] = "00000000";

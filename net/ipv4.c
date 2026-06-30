@@ -4,6 +4,7 @@
 
 extern void printf(const char *str);
 extern void printf_hex(uint8_t);
+extern void printf_hex32(uint32_t);
 
 void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self, jlos_internet_protocol_provider_t *backend, uint8_t m_protocol)
 {
@@ -66,6 +67,8 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
     jlos_ipv4_message_t *ip_message = (jlos_ipv4_message_t *)etherframe_payload;
     bool send_back = false;
     
+    uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
+    
     #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("IP: Protocol=");
     printf_hex(ip_message->m_protocol);
@@ -86,7 +89,7 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
             #endif
             send_back = self->handlers[ip_message->m_protocol]->on_internet_protocol_received(
                 self->handlers[ip_message->m_protocol], ip_message->m_src_ip, ip_message->m_dst_ip,
-                etherframe_payload + 4 * ip_message->header_length, m_length - 4 * ip_message->header_length);
+                etherframe_payload + 4 * header_length, m_length - 4 * header_length);
         }
         #if KERNEL_CONFIG_DEBUG_NETWORK
         else {
@@ -107,7 +110,7 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
 
         ip_message->m_time_to_live = 0x40;
         ip_message->m_checksum = 0;
-        ip_message->m_checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)ip_message, 4 * ip_message->header_length);
+        ip_message->m_checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)ip_message, 4 * header_length);
     }
     return send_back;
 }
@@ -116,8 +119,8 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
 {
     uint8_t *buffer = (uint8_t *)jlos_malloc(sizeof(jlos_ipv4_message_t) + m_size);
     jlos_ipv4_message_t *message = (jlos_ipv4_message_t *)buffer;
-    message->version = 4;
-    message->header_length = sizeof(jlos_ipv4_message_t) / 4;
+    uint8_t ihl = sizeof(jlos_ipv4_message_t) / 4;
+    JLOS_IPV4_SET_VERSION_IHL(message, 4, ihl);
     message->m_tos = 0;
     message->m_total_length = JLOS_SWAP_ENDIAN_16(m_size + sizeof(jlos_ipv4_message_t));
     message->m_ident = 0x0100;
@@ -139,7 +142,17 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     if ((dstIP_BE & self->m_subnet_mask) != (message->m_src_ip & self->m_subnet_mask)) {
         route = self->m_gateway_ip;
     }
-    jlos_ether_frame_handler_send(&self->base_handler, jlos_arp_resolve(self->arp, route), self->base_handler.m_etherType_BE, buffer, sizeof(jlos_ipv4_message_t) + m_size);
+    uint64_t dst_mac = jlos_arp_lookup_or_request(self->arp, route);
+    if (dst_mac == 0xFFFFFFFFFFFF) {
+#if KERNEL_CONFIG_DEBUG_LOG
+        printf("IP4: ARP pending for route=");
+        printf_hex32(route);
+        printf(", packet dropped\n");
+#endif
+        jlos_free(buffer);
+        return;
+    }
+    jlos_ether_frame_handler_send(&self->base_handler, dst_mac, self->base_handler.m_etherType_BE, buffer, sizeof(jlos_ipv4_message_t) + m_size);
     jlos_free(buffer);
 }
 

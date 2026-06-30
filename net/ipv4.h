@@ -5,8 +5,7 @@
 #include <net/arp.h>
 
 typedef struct {
-    uint8_t header_length;
-    uint8_t version;
+    uint8_t version_ihl;
     uint8_t m_tos;
     uint16_t m_total_length;
     uint16_t m_ident;
@@ -17,6 +16,10 @@ typedef struct {
     uint32_t m_src_ip;
     uint32_t m_dst_ip;
 } __attribute__((packed)) jlos_ipv4_message_t;
+
+#define JLOS_IPV4_GET_VERSION(msg) (((msg)->version_ihl >> 4) & 0x0F)
+#define JLOS_IPV4_GET_IHL(msg)     ((msg)->version_ihl & 0x0F)
+#define JLOS_IPV4_SET_VERSION_IHL(msg, ver, ihl) ((msg)->version_ihl = (((ver) & 0x0F) << 4) | ((ihl) & 0x0F))
 
 typedef struct jlos_internet_protocol_provider jlos_internet_protocol_provider_t;
 

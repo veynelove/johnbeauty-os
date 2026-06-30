@@ -23,6 +23,7 @@ typedef uint32_t                   size_t;
 
 #define JLOS_HEAP_START ((uint8_t)(10 * 1024 * 1024))
 #define JLOS_HEAP_RESERVED_SIZE ((size_t)(10 * 1024))
+#define JLOS_NET_MAX_SLOTS          65535
 
 #define BYTES_TO_BE32(x4, x3, x2, x1) \
     ((((uint32_t)(x4) & 0xFF) << 24) | \

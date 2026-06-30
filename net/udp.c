@@ -76,8 +76,9 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
     self->base_handler.on_internet_protocol_received = (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_udp_provider_on_internet_protocol_received;
     self->m_num_sockets = 0;
     self->m_free_port = 1024;
-    
-    for (int i = 0; i < 65535; i++) {
+
+    self->sockets = (jlos_udp_socket_t **)jlos_malloc(sizeof(jlos_udp_socket_t*) * JLOS_NET_MAX_SLOTS);
+    for (int i = 0; i < JLOS_NET_MAX_SLOTS; i++) {
         self->sockets[i] = NULL;
     }
     #if KERNEL_CONFIG_DEBUG_NETWORK
@@ -87,6 +88,8 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
 
 void jlos_udp_provider_destroy(jlos_udp_provider_t* self)
 {
+    jlos_free(self->sockets);
+    self->sockets = NULL;
     jlos_internet_protocol_handler_destroy(&self->base_handler);
 }
 
@@ -114,18 +117,19 @@ bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, 
     jlos_udp_socket_t *socket = NULL;
     for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
         if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
+            && self->sockets[i]->m_remote_port == msg->m_src_port && self->sockets[i]->m_remote_ip == srcIP_BE) {
+            socket = self->sockets[i];
+        }
+    }
+    for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
+        if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
             && self->sockets[i]->m_listening) {
             socket = self->sockets[i];
-            socket->m_listening = false;
             socket->m_remote_port = msg->m_src_port;
             socket->m_remote_ip = srcIP_BE;
             #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("UDP: Socket matched\n");
             #endif
-        }
-        else if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
-            && self->sockets[i]->m_remote_port == msg->m_src_port && self->sockets[i]->m_remote_ip == srcIP_BE) {
-            socket = self->sockets[i];
         }
     }
     if (socket) {
