@@ -155,7 +155,7 @@ uint64_t jlos_arp_lookup_or_request(jlos_arp_t* self, uint32_t IP_BE)
     uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
     
     if (result == 0xFFFFFFFFFFFF) {
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ARP: lookup miss, sending request for ");
         printf_hex32(IP_BE);
         printf("\n");
@@ -170,21 +170,26 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
     uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
     
     if (result == 0xFFFFFFFFFFFF) {
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ARP: sending request for ");
         printf_hex32(IP_BE);
         printf("\n");
 #endif
         jlos_arp_request_mac_address(self, IP_BE);
+        result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }
     
     volatile uint32_t timeout = 0;
     while (result == 0xFFFFFFFFFFFF && timeout < 5000000) {
-        __asm__ __volatile__("hlt");
+        /* 不再 hlt 停机等中断，改成忙等 + CPU relax。
+         * hlt 需要 IF=1 + 有中断定时唤醒，组合条件太脆弱容易卡死。
+         * 忙等 5M 次大概几毫秒，超时就返回 FFFF 标记未解析。
+         */
+        __asm__ __volatile__("pause" ::: "memory");
         timeout++;
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
     if (result != 0xFFFFFFFFFFFF) {
         printf("ARP: resolved MAC=0x");
         printf_hex32(result >> 32);

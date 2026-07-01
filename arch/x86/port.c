@@ -1,4 +1,4 @@
-#include <hdc/port.h>
+#include <arch/x86/port.h>
 
 void jlos_port8_bit_init(jlos_port8_bit_t* self, uint16_t portnumber)
 {

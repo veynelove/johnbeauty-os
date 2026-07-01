@@ -1,8 +1,8 @@
-#include <hdc/pci.h>
+#include <arch/x86/pci.h>
 #include <drivers/driver.h>
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <hdc/pci.h>
+#include <arch/x86/pci.h>
 
 extern void printf(const char *str);
 extern void printf_hex(uint8_t);
@@ -144,15 +144,15 @@ jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, j
             jlos_pci_controller_write16(self, dev.m_bus, dev.m_device, dev.m_function, 0x04, command);
             switch (dev.m_device_id) {
                 case 0x2000: {
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
                     printf("AMD am79c973 PCI command: 0x");
                     printf_hex32(command);
                     printf("\n");
-#endif
                     printf("Allocating AMD am79c973 driver structure...\n");
+#endif
                     driver = (jlos_driver_t *)jlos_malloc(sizeof(jlos_amd_am79c973_t));
                     if (driver) {
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
                         printf("AMD am79c973 driver allocated at: 0x");
                         printf_hex32((uint32_t)driver);
                         printf("\n");

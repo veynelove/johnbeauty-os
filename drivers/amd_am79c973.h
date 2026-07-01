@@ -5,9 +5,9 @@
 #define NUM_SEND_BUFFERS 8
 
 #include <drivers/driver.h>
-#include <hdc/interrupts.h>
-#include <hdc/pci.h>
-#include <hdc/port.h>
+#include <hal/irq.h>
+#include <hal/pci.h>
+#include <hal/io.h>
 
 typedef struct jlos_amd_am79c973 jlos_amd_am79c973_t;
 typedef struct jlos_rawdata_handler jlos_rawdata_handler_t;
@@ -39,15 +39,15 @@ typedef struct {
 
 struct jlos_amd_am79c973 {
     jlos_driver_t base_driver;
-    jlos_interrupt_handler_t base_handler;
+    jlos_irq_handler_t base_handler;
 
-    jlos_port16_bit_t m_mac_address0_port;
-    jlos_port16_bit_t m_mac_address2_port;
-    jlos_port16_bit_t m_mac_address4_port;
-    jlos_port16_bit_t m_register_data_port;
-    jlos_port16_bit_t m_register_address_port;
-    jlos_port16_bit_t m_reset_port;
-    jlos_port16_bit_t m_bus_control_register_data_port;
+    jlos_io16_t m_mac_address0_port;
+    jlos_io16_t m_mac_address2_port;
+    jlos_io16_t m_mac_address4_port;
+    jlos_io16_t m_register_data_port;
+    jlos_io16_t m_register_address_port;
+    jlos_io16_t m_reset_port;
+    jlos_io16_t m_bus_control_register_data_port;
 
     jlos_amd_init_block_t *m_init_block;
     uint8_t init_block_memory[64];
@@ -70,12 +70,12 @@ void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self);
 bool jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
 void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t m_size);
 
-void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descriptor_t *dev, jlos_interrupt_manager_t *interrupts);
+void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descriptor_t *dev, jlos_irq_manager_t *interrupts);
 void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self);
 
 void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self);
 int jlos_amd_am79c973_reset(jlos_amd_am79c973_t* self);
-uint32_t jlos_amd_am79c973_handle_interrupt(jlos_interrupt_handler_t* handler, uint32_t m_esp);
+uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_t m_esp);
 
 void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int m_size);
 void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self);

@@ -1,5 +1,5 @@
-#include <kernel/syscalls.h>
-#include <hdc/interrupts.h>
+#include <arch/x86/syscalls.h>
+#include <arch/x86/interrupts.h>
 
 extern void printf(const char *str);
 
@@ -8,6 +8,7 @@ void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_interrupt_mana
     self->m_interrupt_manager = interrupt_manager;
     self->m_interrupt_number = m_interrupt_number;
     jlos_interrupt_handler_init((jlos_interrupt_handler_t*)self, interrupt_manager, m_interrupt_number + jlos_interrupt_manager_hardware_interrupt_offset(interrupt_manager));
+    self->handle_interrupt = jlos_syscall_handler_handle_interrupt;
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
