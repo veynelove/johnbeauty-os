@@ -17,20 +17,20 @@ void jlos_keyboard_event_handler_on_key_up(jlos_keyboard_event_handler_t* self, 
 {
 }
 
-void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_interrupt_manager_t *manager, jlos_keyboard_event_handler_t *handler)
+void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_irq_manager_t *manager, jlos_keyboard_event_handler_t *handler)
 {
-    jlos_port8_bit_init(&self->m_dataport, 0x60);
-    jlos_port8_bit_init(&self->m_commandport, 0x64);
+    jlos_io8_init(&self->m_dataport, 0x60);
+    jlos_io8_init(&self->m_commandport, 0x64);
     
     self->handler = handler;
     
-    jlos_interrupt_handler_init(&self->base_handler, manager, 0x21);
-    self->base_handler.handle_interrupt = (jlos_interrupt_handler_func_t)jlos_keyboard_driver_handle_interrupt;
+    jlos_irq_handler_init(&self->base_handler, manager, 0x21);
+    self->base_handler.handle_interrupt = (jlos_irq_handler_func_t)jlos_keyboard_driver_handle_interrupt;
     
     jlos_driver_init(&self->base_driver);
     self->base_driver.activate = (void (*)(jlos_driver_t*))jlos_keyboard_driver_activate;
     
-    jlos_interrupt_manager_register_handler(manager, 0x21, &self->base_handler);
+    jlos_irq_manager_register(manager, 0x21, &self->base_handler);
 }
 
 void jlos_keyboard_driver_destroy(jlos_keyboard_driver_t* self)
@@ -39,16 +39,16 @@ void jlos_keyboard_driver_destroy(jlos_keyboard_driver_t* self)
 
 void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self)
 {
-    while (jlos_port8_bit_read(&self->m_commandport) & 0x1) {
-        jlos_port8_bit_read(&self->m_dataport);
+    while (jlos_io8_read(&self->m_commandport) & 0x1) {
+        jlos_io8_read(&self->m_dataport);
     }
-    jlos_port8_bit_write(&self->m_commandport, 0xAE);
-    jlos_port8_bit_write(&self->m_commandport, 0x20);
-    uint8_t status = (jlos_port8_bit_read(&self->m_dataport) | 1) & ~0x10;
-    jlos_port8_bit_write(&self->m_commandport, 0x60);
-    jlos_port8_bit_write(&self->m_dataport, status);
+    jlos_io8_write(&self->m_commandport, 0xAE);
+    jlos_io8_write(&self->m_commandport, 0x20);
+    uint8_t status = (jlos_io8_read(&self->m_dataport) | 1) & ~0x10;
+    jlos_io8_write(&self->m_commandport, 0x60);
+    jlos_io8_write(&self->m_dataport, status);
 
-    jlos_port8_bit_write(&self->m_dataport, 0xF4);
+    jlos_io8_write(&self->m_dataport, 0xF4);
 }
 
 uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t m_esp)
@@ -56,11 +56,11 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
     #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
     jlos_keyboard_driver_t* keyboard = (jlos_keyboard_driver_t*)((char*)self - offsetof(jlos_keyboard_driver_t, base_handler));
 
-    uint8_t status = jlos_port8_bit_read(&keyboard->m_commandport);
+    uint8_t status = jlos_io8_read(&keyboard->m_commandport);
     if (!(status & 0x01)) {
         return m_esp;
     }
-    uint8_t key = jlos_port8_bit_read(&keyboard->m_dataport);
+    uint8_t key = jlos_io8_read(&keyboard->m_dataport);
     if (keyboard->handler == NULL) return m_esp;
     static bool shift = false;
     switch (key) {

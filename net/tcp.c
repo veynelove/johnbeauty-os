@@ -162,7 +162,6 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                     printf("TCP: LISTEN -> SYN_RCVD, sending SYN-ACK\n");
 #endif
                     jlos_tcp_provider_send(self, socket, 0, 0, (JLOS_TCP_SYN | JLOS_TCP_ACK));
-                    socket->m_sequence_number++;
                 } else if (socket->m_state == JLOS_TCP_SYN_RECEIVED) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
                     printf("TCP: SYN_RCVD retransmitting SYN-ACK (lost?)\n");
@@ -176,7 +175,7 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                 if (socket->m_state == JLOS_TCP_SYN_SENT) {
                     socket->m_state = JLOS_TCP_ESTABLISHED;
                     socket->m_acknowledgement_number = JLOS_SWAP_ENDIAN_32(msg->m_sequence_number) + 1;
-                    socket->m_sequence_number++;
+                    socket->m_sequence_number = JLOS_SWAP_ENDIAN_32(msg->m_acknowledgement_number);
                     jlos_tcp_provider_send(self, socket, 0, 0, JLOS_TCP_ACK);
                 } else {
                     reset = true;
@@ -212,6 +211,7 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                 switch (socket->m_state) {
                     case JLOS_TCP_SYN_RECEIVED:
                         socket->m_state = JLOS_TCP_ESTABLISHED;
+                        socket->m_sequence_number = JLOS_SWAP_ENDIAN_32(msg->m_acknowledgement_number);
 #if KERNEL_CONFIG_DEBUG_NETWORK
                         printf("TCP: 3-way handshake complete, state=ESTABLISHED\n");
 #endif
@@ -355,34 +355,6 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
     phdr->m_total_length = JLOS_SWAP_ENDIAN_16(m_total_length);
     msg->m_checksum = 0;
     msg->m_checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)buffer, length_incl_p_hdr);
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    if (m_size > 0) {
-        uint8_t *__p = (uint8_t *)&msg->m_data_offset_flags;
-        printf("TCP_HDR: doff=");
-        printf_hex(doff);
-        printf(" tcp_hdr_len=");
-        printf_hex((tcp_hdr_len>>8)&0xFF);
-        printf_hex(tcp_hdr_len&0xFF);
-        printf(" doff_flags=");
-        printf_hex(__p[0]);
-        printf(" ");
-        printf_hex(__p[1]);
-        printf(" -> ");
-        printf_hex(((__p[0]>>4)&0xF));
-        printf("\n");
-        printf("TCP_PAY: [BUF2] ");
-        uint16_t dmp = m_size > 8 ? 8 : m_size;
-        for (uint16_t ii = 0; ii < dmp; ii++) { printf_hex(buffer2[ii]); printf(" "); }
-        printf("\n");
-        printf("FINAL_SEND: [MSG+0..29] ");
-        uint8_t *__pp = (uint8_t *)msg;
-        for (uint8_t jj = 0; jj < 30; jj++) { printf_hex(__pp[jj]); printf(" "); }
-        printf("\n");
-        printf("FINAL_SEND: bytes20..27 (payload start) = ");
-        for (uint8_t jj = 20; jj < 28; jj++) { printf_hex(__pp[jj]); printf(" "); }
-        printf("\n");
-    }
-#endif
     jlos_internet_protocol_handler_send(&self->base_handler, socket->m_remote_ip, (uint8_t *)msg, m_total_length);
     jlos_free(buffer);
 }

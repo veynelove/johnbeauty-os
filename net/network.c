@@ -8,9 +8,22 @@ extern void printf_hex32(uint32_t);
 
 void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_)
 {
-    jlos_amd_am79c973_t *eth0 = (jlos_amd_am79c973_t *)(driver_manager_->drivers[2]);
+    /* 遍历所有驱动查找 AMD am79c973 网卡驱动（硬编码 index[2] 容易出问题） */
+    extern void jlos_amd_am79c973_activate(jlos_amd_am79c973_t*);
+    jlos_amd_am79c973_t *eth0 = NULL;
+    for (int i = 0; i < driver_manager_->m_num_drivers; i++) {
+        jlos_driver_t *drv = driver_manager_->drivers[i];
+        if (drv != NULL && drv->activate == (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate) {
+            eth0 = (jlos_amd_am79c973_t *)drv;
+            break;
+        }
+    }
+    if (eth0 == NULL) {
+        printf("WARNING: AMD am79c973 ethernet driver not found, skipping network stack init\n");
+        return;  /* 找不到网卡直接安全返回，不要让后面的测试代码跑不起来 */
+    }
     
-    uint32_t ip_be = BYTES_TO_BE32(144, 0x9F, 168, 192);
+    uint32_t ip_be = BYTES_TO_BE32(144, 159, 168, 192);
     uint32_t gateway_ip_be = BYTES_TO_BE32(1, 0x9F, 168, 192);
     uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
 

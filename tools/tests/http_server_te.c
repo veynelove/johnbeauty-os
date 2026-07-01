@@ -23,7 +23,7 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
         const char *body = "<html><head><title>john beauty</title></head><body><b>johnbeauty</b> - john_love operating system</body></html>\r\n";
         uint16_t body_len = 0;
         while (body[body_len] != '\0') body_len++;
-        const char *hdr = "AAAAAAAAHTTP/1.1 200 OK\r\nServer: JLOS\r\nContent-Type: text/html\r\nContent-Length: ";
+        const char *hdr = "HTTP/1.1 200 OK\r\nServer: JLOS\r\nContent-Type: text/html\r\nContent-Length: ";
         uint16_t hdr_len = 0;
         while (hdr[hdr_len] != '\0') hdr_len++;
         char clen[16];
@@ -46,7 +46,7 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
         for (uint16_t i = 0; i < 4; i++) resp[p++] = crlfcrlf[i];
         for (uint16_t i = 0; i < body_len; i++) resp[p++] = body[i];
         socket->send(socket, resp, total);
-        // socket->disconnect(socket);  // <--- 暂时注释掉！先不发 FIN，看 DATA 能不能完整收到！
+        socket->disconnect(socket);
     }
     return true;
 }

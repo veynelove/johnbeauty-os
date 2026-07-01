@@ -55,7 +55,7 @@ void mouse_console_init(mouse_console_t *mouse_handler)
         | ((video_memory[80 * mouse_handler->m_y + mouse_handler->m_x] & 0x00FF));
 }
 
-void debug_console_keyboard(jlos_interrupt_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
     printf_keyboard_event_handler_t *kbhandler = (printf_keyboard_event_handler_t *)jlos_malloc(sizeof(printf_keyboard_event_handler_t));
     jlos_keyboard_event_handler_init(&kbhandler->base);
@@ -66,7 +66,7 @@ void debug_console_keyboard(jlos_interrupt_manager_t *interrupts, jlos_driver_ma
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)keyboard);
 }
 
-void debug_console_mouse(jlos_interrupt_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+void debug_console_mouse(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
     mouse_console_t *mouse_handler_ = (mouse_console_t *)jlos_malloc(sizeof(mouse_console_t));
     jlos_mouse_event_handler_init(&mouse_handler_->base);
@@ -77,7 +77,7 @@ void debug_console_mouse(jlos_interrupt_manager_t *interrupts, jlos_driver_manag
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)mouse);
 }
 
-void debug_console_init(jlos_interrupt_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+void debug_console_init(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
     debug_console_keyboard(interrupts, driver_manager_);
     debug_console_mouse(interrupts, driver_manager_);
