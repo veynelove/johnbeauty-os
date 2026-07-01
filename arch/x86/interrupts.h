@@ -2,8 +2,8 @@
 #define __HDC_INTERUPTS_H
 
 #include <common/types.h>
-#include <hdc/port.h>
-#include <kernel/gdt.h>
+#include <arch/x86/port.h>
+#include <arch/x86/gdt.h>
 #include <kernel/multitask.h>
 
 typedef struct jlos_interrupt_manager jlos_interrupt_manager_t;

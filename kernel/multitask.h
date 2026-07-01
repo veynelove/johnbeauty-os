@@ -2,30 +2,32 @@
 #define __JLOS__KERNEL_MULTITASK_H
 
 #include <common/types.h>
-#include <kernel/gdt.h>
+#include <hal/mmu.h>
 
-typedef struct {
+/* 任务状态 */
+#define JLOS_TASK_RUNNING    0
+#define JLOS_TASK_TERMINATED 1
+
+typedef struct
+{
     uint32_t m_eax;
     uint32_t m_ebx;
     uint32_t m_ecx;
     uint32_t m_edx;
-
     uint32_t m_esi;
     uint32_t m_edi;
     uint32_t m_ebp;
-
     uint32_t m_error;
-
     uint32_t m_eip;
     uint32_t m_cs;
     uint32_t m_eflags;
-    uint32_t m_esp;
-    uint32_t m_ss;
 } __attribute__((packed)) jlos_cpu_state_t;
 
-typedef struct {
-    uint8_t stack[4096];
-    jlos_cpu_state_t *cpustate;
+typedef struct __attribute__((packed)) {
+    volatile uint32_t m_status;   /* JLOS_TASK_RUNNING / JLOS_TASK_TERMINATED */
+    uint8_t stack[4096];          /* 任务独立栈，4KB，从顶向下生长 */
+    jlos_cpu_state_t cpustate;    /* interruptstubs.s SAVE/RESTORE 格式快照 */
+    uint32_t m_saved_esp;         /* 栈上 cpustate 地址；0 表示从未被打断 */
 } jlos_task_t;
 
 typedef struct {
@@ -34,7 +36,7 @@ typedef struct {
     int m_current_task;
 } jlos_task_manager_t;
 
-void jlos_task_init(jlos_task_t* self, jlos_gdt_t *gdt, void (*entrypoint)(void));
+void jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void));
 void jlos_task_destroy(jlos_task_t* self);
 
 void jlos_task_manager_init(jlos_task_manager_t* self);

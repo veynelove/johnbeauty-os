@@ -144,7 +144,7 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     }
     uint64_t dst_mac = jlos_arp_lookup_or_request(self->arp, route);
     if (dst_mac == 0xFFFFFFFFFFFF) {
-#if KERNEL_CONFIG_DEBUG_LOG
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("IP4: ARP pending for route=");
         printf_hex32(route);
         printf(", packet dropped\n");

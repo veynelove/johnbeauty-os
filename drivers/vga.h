@@ -2,23 +2,23 @@
 #define __DRIVERS_VGA_H
 
 #include <common/types.h>
-#include <hdc/port.h>
+#include <hal/io.h>
 #include <drivers/driver.h>
 
 typedef struct jlos_vga jlos_vga_t;
 
 struct jlos_vga {
-    jlos_port8_bit_t m_misc_port;
-    jlos_port8_bit_t m_crtc_index_port;
-    jlos_port8_bit_t m_crtc_data_port;
-    jlos_port8_bit_t m_sequencer_index_port;
-    jlos_port8_bit_t m_sequencer_data_port;
-    jlos_port8_bit_t m_graphics_controller_index_port;
-    jlos_port8_bit_t m_graphics_controller_data_port;
-    jlos_port8_bit_t m_attribute_controller_index_port;
-    jlos_port8_bit_t m_attribute_controller_read_port;
-    jlos_port8_bit_t m_attribite_controller_write_port;
-    jlos_port8_bit_t m_attribite_controller_reset_port;
+    jlos_io8_t m_misc_port;
+    jlos_io8_t m_crtc_index_port;
+    jlos_io8_t m_crtc_data_port;
+    jlos_io8_t m_sequencer_index_port;
+    jlos_io8_t m_sequencer_data_port;
+    jlos_io8_t m_graphics_controller_index_port;
+    jlos_io8_t m_graphics_controller_data_port;
+    jlos_io8_t m_attribute_controller_index_port;
+    jlos_io8_t m_attribute_controller_read_port;
+    jlos_io8_t m_attribite_controller_write_port;
+    jlos_io8_t m_attribite_controller_reset_port;
 };
 
 void jlos_vga_init(jlos_vga_t* self);

@@ -1,5 +1,6 @@
 # ==================john_kernel=================
 JLOS := johnkernel
+ARCH := x86
 
 all: $(JLOS).iso
 
@@ -7,7 +8,7 @@ GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions -fno-leading-undersc
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 
-SRC_DIRS := kernel hdc drivers gui net filesystem tools
+SRC_DIRS := kernel arch/$(ARCH) drivers gui net filesystem tools
 OBJ_DIR := obj
 
 C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")

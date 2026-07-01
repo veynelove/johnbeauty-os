@@ -1,5 +1,6 @@
-#include <hdc/interrupts.h>
-#include <hdc/pci.h>
+#include <hal/irq.h>
+#include <hal/io.h>
+#include <hal/pci.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <drivers/vga.h>
@@ -9,10 +10,10 @@
 #include <filesystem/msdospath.h>
 #include <filesystem/fat.h>
 #include <common/multiboot.h>
-#include <kernel/gdt.h>
+#include <hal/mmu.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
-#include <kernel/syscalls.h>
+#include <hal/syscall.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -165,8 +166,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     serial_init();  // 初始化串口输出
     printf("princess yihan is safe and happy!\n");
 
-    jlos_gdt_t gdt;
-    jlos_gdt_init(&gdt);
+    jlos_mmu_t mmu_ctx;
+    jlos_mmu_init(&mmu_ctx);
     
     uint8_t* low_memory_heap = (uint8_t*)(0x50000);
     jlos_memory_manager_t low_memory_manager_;
@@ -179,18 +180,18 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);
     
-    jlos_interrupt_manager_t interrupts;
-    jlos_interrupt_manager_init(&interrupts, 0x20, &gdt, &task_manager_);
+    jlos_irq_manager_t irq_mgr;
+    jlos_irq_manager_init(&irq_mgr, 0x20, &mmu_ctx, &task_manager_);
     
-    jlos_syscall_handler_t syscalls;
-    jlos_syscall_handler_init(&syscalls, &interrupts, 0x80);
+    jlos_syscall_t syscalls;
+    jlos_syscall_init(&syscalls, &irq_mgr, 0x80);
 
-    printf("initializing hardware, stage 1.\n");
+    printf("initializing hardware, stage 1 start\n");
     jlos_driver_manager_t driver_manager_;
     jlos_driver_manager_init(&driver_manager_);
 
 #if KERNEL_CONFIG_DEBUG_CONSOLE
-    debug_console_init(&interrupts, &driver_manager_);
+    debug_console_init(&irq_mgr, &driver_manager_);
 #endif
 
     jlos_pci_controller_t pci_controller;
@@ -199,33 +200,44 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
     jlos_active_memory_manager = &low_memory_manager_;
     printf("switched to low memory manager for PCI driver allocation\n");
-    jlos_pci_controller_select_drivers(&pci_controller, &driver_manager_, &interrupts);
+    jlos_pci_controller_select_drivers(&pci_controller, &driver_manager_, &irq_mgr);
     jlos_active_memory_manager = old_manager;
     printf("switched back to main memory manager\n");
 
-    printf("initializing hardware, stage 2.\n");
+    printf("initializing hardware, stage 2 start\n");
     jlos_driver_manager_activate_all(&driver_manager_);
 
-    printf("initializing hardware, stage 3.\n");
+    printf("initializing hardware, stage 3 start\n");
 
-    jlos_interrupt_manager_activate(&interrupts); //激活中断
+    jlos_io8_slow_t pit_cmd, pit_ch0;
+    jlos_io8_slow_init(&pit_cmd, 0x43);
+    jlos_io8_slow_init(&pit_ch0, 0x40);
+    jlos_io8_slow_write(&pit_cmd, 0x36);
+    uint16_t divisor = 11931;
+    jlos_io8_slow_write(&pit_ch0, (uint8_t)(divisor & 0xFF));
+    jlos_io8_slow_write(&pit_ch0, (uint8_t)((divisor >> 8) & 0xFF));
+    printf("PIT timer initialized (100Hz)\n");
+
+    jlos_irq_manager_activate(&irq_mgr);
     printf("interrupts activated\n");
 
     #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
     #endif
-    network_stack_t network_stack;
-    network_init(&network_stack, &driver_manager_);
+    /* 避免栈溢出：network_stack_t 很大，改到静态存储区或堆上 */
+    network_stack_t *network_stack = (network_stack_t *)jlos_malloc(sizeof(network_stack_t));
+    network_init(network_stack, &driver_manager_);
 
 #if KERNEL_CONFIG_ENABLE_TESTS
     printf("running tests...\n");
     memory_manager_test(multiboot_structure);
-    //multitask_test(&gdt, &task_manager_);
+    multitask_test(&mmu_ctx, &task_manager_);
     hard_driver_test();
-    http_server_test(&network_stack.tcp);
-    udp_server_test(&network_stack.udp);
+    http_server_test(&network_stack->tcp);
+    udp_server_test(&network_stack->udp);
 #endif
     
-    while (1) {
+    for (;;) {
+        
     }
 }

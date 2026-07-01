@@ -1,7 +1,7 @@
 #ifndef __HDC_PCI_H
 #define __HDC_PCI_H
 
-#include <hdc/port.h>
+#include <arch/x86/port.h>
 #include <common/types.h>
 
 typedef struct jlos_interrupt_manager jlos_interrupt_manager_t;

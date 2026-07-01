@@ -1,4 +1,4 @@
-#include <kernel/gdt.h>
+#include <arch/x86/gdt.h>
 
 void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t m_base, uint32_t limit, uint8_t m_flags)
 {
