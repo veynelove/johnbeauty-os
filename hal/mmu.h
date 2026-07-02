@@ -14,35 +14,20 @@
 #error "Unknown KERNEL_CONFIG_HARDWARE_ARCH value"
 #endif
 
-/* ============================================================
- *  Unified Type Naming (ARM-style: mmu instead of x86-specific gdt)
- * ============================================================ */
+/* MMU 统一命名：x86 GDT / ARM TTBR0+MAIR / RISC-V satp 上层透明 */
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
   typedef jlos_gdt_t                    jlos_mmu_t;
   typedef jlos_gdt_segment_descriptor_t jlos_mmu_segment_t;
 
-  #define jlos_mmu_init(self)              jlos_gdt_init(self)
-  #define jlos_mmu_destroy(self)           jlos_gdt_destroy(self)
-  #define jlos_mmu_code_selector(self)     jlos_gdt_code_segment_selector(self)
-  #define jlos_mmu_data_selector(self)     jlos_gdt_data_segment_selector(self)
-  #define jlos_mmu_segment_init(...)       jlos_gdt_segment_descriptor_init(__VA_ARGS__)
-  #define jlos_mmu_segment_base(seg)       jlos_gdt_segment_descriptor_base(seg)
-  #define jlos_mmu_segment_limit(seg)      jlos_gdt_segment_descriptor_limit(seg)
-#endif
+  extern void jlos_mmu_init(jlos_mmu_t *self);
+  extern void jlos_mmu_destroy(jlos_mmu_t *self);
+  extern uint16_t jlos_mmu_code_selector(jlos_mmu_t *self);
+  extern uint16_t jlos_mmu_data_selector(jlos_mmu_t *self);
 
-/* ============================================================
- *  Unified API Contract
- *
- *  Any architecture port MUST provide:
- *    TYPES:
- *      - jlos_mmu_t            : MMU context (opaque, arch-specific)
- *      - jlos_mmu_segment_t    : Segment / page-table descriptor
- *
- *    FUNCTIONS:
- *      - void jlos_mmu_init(jlos_mmu_t *self)
- *      - void jlos_mmu_destroy(jlos_mmu_t *self)
- *      - uint16_t jlos_mmu_code_selector(jlos_mmu_t *self)
- *      - uint16_t jlos_mmu_data_selector(jlos_mmu_t *self)
- * ============================================================ */
+  extern void jlos_mmu_segment_init(jlos_mmu_segment_t *self, uint32_t m_base,
+                                    uint32_t limit, uint8_t m_flags);
+  extern uint32_t jlos_mmu_segment_base(jlos_mmu_segment_t *self);
+  extern uint32_t jlos_mmu_segment_limit(jlos_mmu_segment_t *self);
+#endif
 
 #endif
