@@ -113,5 +113,6 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
 #endif
     
     for (;;) {
+        __asm__ __volatile__("hlt");
     }
 }
