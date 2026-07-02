@@ -34,7 +34,38 @@ typedef struct jlos_driver_manager {
 } jlos_driver_manager_t;
 ```
 
-**生命周期流程**：
+**生命周期流程（ASCII 箭头链）**：
+
+```
+┌──────────────────────────────────────────┐
+│ manager_add_driver(drv*)                 │
+│   · 只把指针塞到 drivers[255] 数组        │
+│   · 完全不操作硬件，不占 IRQ/IO           │
+│   · 驱动对象必须 heap 分配(jlos_malloc)   │
+└──────────────────────┬───────────────────┘
+                       ▼
+┌──────────────────────────────────────────┐
+│ manager_activate_all()                    │
+│   · 数组顺序 for(i=0..num) drv.activate()│
+│   · activate: 上电 init + 注册 IRQ handler│
+│   · → HAL 自动 unmask 对应 IRQ           │
+└──────────────────────┬───────────────────┘
+                       ▼
+┌──────────────────────────────────────────┐
+│ 运行中：硬件中断 → 驱动 ISR 处理          │
+│   · 网卡: RINT=1 → 扫 RX desc 环        │
+│   · 键盘: 扫描码 → ASCII → 回调          │
+│   · 鼠标: 3字节包 → 坐标/按键事件        │
+└──────────────────────┬───────────────────┘
+                       ▼  (关机流程预留)
+┌──────────────────────────────────────────┐
+│ manager 逐个 drv.deactivate()            │
+│   · 注销 IRQ handler → PIC re-mask      │
+│   · 软复位 / 断电寄存器                  │
+└──────────────────────────────────────────┘
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart LR
@@ -45,6 +76,8 @@ flowchart LR
 
     A --> B --> C --> D
 ```
+
+</details>
 
 ---
 
@@ -126,7 +159,49 @@ Command Block Registers (port_base = 0x1F0 Primary / 0x170 Secondary)
 
 ---
 
-## 4. PCI 枚举与驱动绑定流程（kernel.c Stage 1）
+## 4. PCI 枚举与驱动绑定流程（kernel.c Stage 1 · ASCII 三层循环）
+
+```
+ HAL 启动入口            hal/pci.c 枚举        arch/x86/pci.c       driver_manager + 驱动probe
+       │                      │               Mechanism #1         (注册 + 堆分配)
+       │                      │               0xCF8/0xCFC            (AMD 1022:2000)
+       ▼                      │                    │                     │
+jlos_hal_pci_enumerate_and_bind_drivers()             │                     │
+       └─────────────────────▶│                    │                     │
+                              ▼                    │                     │
+                    ┌── bus = 0..255 ──┐          │                     │
+                    │  ┌── dev=0..31 ┐ │          │                     │
+                    │  │ ┌─func=0..7┐│ │          │                     │
+                    │  │ │          ││ │          │                     │
+                    │  │ ▼          ││ │          │                     │
+                    │  │ config_read16(Vendor ID) ─│─▶│                   │
+                    │  │          ┌───────────────┐   │                   │
+                    │  │ Vendor=0xFFFF? 空设备     │   │                   │
+                    │  │   Yes → continue 下一个  │   │                   │
+                    │  │          └─────────┬─────┘   │                   │
+                    │  │                    │ No(匹配)│                   │
+                    │  │                    ▼         │                   │
+                    │  │         Vendor ID 匹配表查找  │                   │
+                    │  │         (e.g. 1022:2000=AMD) │                   │
+                    │  │                    └─────────┐│                   │
+                    │  │                              ▼▼                   │
+                    │  │                 manager_add_driver(drv)            │
+                    │  │                              │                    │
+                    │  │                              ▼                    │
+                    │  │                 am79c973_probe(bus,dev,func)       │
+                    │  │                 · jlos_malloc driver_t(低地址堆!)  │
+                    │  │                 · 读 PCI BAR0~5 + IRQ line         │
+                    │  │                 · INIT 块 32 字节对齐 ⚠️           │
+                    │  │                              │                    │
+                    │  │                    返回 driver* = OK              │
+                    │  └──────────────────────────────┘                    │
+                    └─────────────────────────────────────┘                │
+                                                                           ▼
+                                                manager_activate_all()
+                                                  逐个 drv.activate() → 上电+注册IRQ
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 sequenceDiagram
@@ -149,6 +224,8 @@ sequenceDiagram
     end
     DrvMgr-->>HAL: activate_all
 ```
+
+</details>
 
 ---
 

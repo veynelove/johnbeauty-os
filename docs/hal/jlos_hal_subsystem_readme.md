@@ -27,7 +27,26 @@ hal/
 
 ---
 
-## 2. HAL 6 级升级架构图
+## 2. HAL 6 级升级架构图（ASCII 箭头链 · GitLab 清晰）
+
+```
+  🏆 Level 1          🏆 Level 2          🏆 Level 3          🏆 Level 4
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ 宏→inline函数 │───▶│ 硬件子系统包装 │───▶│ 只读信息聚合  │───▶│ 同步原语 HAL  │
+│ + IO ops 多态 │    │ PIT/PCI/Ser │    │ jlos_hal_info│    │ spinlock+bar │
+│ (解决类型安全)│    │ ATA/Block/DM│    │ (探测结果集中)│    │ (可重入irqsv)│
+└─────────────┘    └─────────────┘    └─────────────┘    └──────┬──────┘
+                                                                │
+                                                                ▼
+  🏆 Level 6                        🏆 Level 5
+┌─────────────────────┐          ┌──────────────────┐
+│ Test Harness + 诊断 │◀─────────│  统一设备模型     │
+│ 环形 512 条 I/O Trace│          │ jlos_device_t    │
+│ 0 开销开关 + dump()  │          │ 资源冲突检测+回滚  │
+└─────────────────────┘          └──────────────────┘
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart LR
@@ -40,6 +59,8 @@ flowchart LR
 
     Level1 --> Level2 --> Level3 --> Level4 --> Level5 --> Level6
 ```
+
+</details>
 
 ---
 
@@ -115,7 +136,35 @@ uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock);
 void     jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags);
 ```
 
-### 3.4 统一设备模型 + 资源冲突检测（Level 5）
+### 3.4 统一设备模型 + 资源冲突检测（Level 5 · ASCII 流程图）
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│          jlos_hal_device_register(dev)  入口                 │
+└──────────────────────────────┬───────────────────────────────┘
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│  逐个资源 claim（按 resources[] 顺序）                         │
+│    IO_PORT  → jlos_hal_register_io_range  重叠检测            │
+│    IRQ      → jlos_hal_irq_claim  bitmap 同步                │
+│    MMIO     → mmio_track[]  地址区间重叠检测                  │
+│    DMA_CHAN → 0-7 范围校验 + channel 独占检测                 │
+└──────────────┬───────────────────────────────┬───────────────┘
+               │ 全部 N 项成功                  │ 第 N 项冲突
+               ▼                                ▼
+┌──────────────────────────┐     ┌──────────────────────────────────┐
+│  ✅ 注册成功              │     │  ⏪ 按相反顺序回滚                │
+│  · 加入 s_devices[32]    │     │     N-1 → N-2 → … → 1            │
+│  · irq_reserved_bitmap   │     │     逐一 release 资源             │
+│    自动同步              │     └──────────────┬───────────────────┘
+└──────────────────────────┘                    ▼
+                                   ┌──────────────────────────┐
+                                   │  ❌ 返回负错误码          │
+                                   │  -10/-11/-20/-30 …       │
+                                   └──────────────────────────┘
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart TB
@@ -125,6 +174,8 @@ flowchart TB
     Claim -->|第 N 项冲突| Roll["按 claim 相反顺序回滚<br/>N-1、N-2…项逐一 release"]
     Roll --> Fail["返回负错误码（-10/-11/-20/-30…）"]
 ```
+
+</details>
 
 ```c
 /* hal/device.h — 每种总线一个 union 字段，驱动/上层无需关心差异 */

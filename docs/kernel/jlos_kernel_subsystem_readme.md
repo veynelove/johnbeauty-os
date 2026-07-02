@@ -15,7 +15,54 @@ kernel/
 
 ---
 
-## 2. kernel_main 三阶段启动架构
+## 2. kernel_main 三阶段启动架构（ASCII 四阶段流水线）
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║  Stage 1:  initializing hardware, stage 1                         ║
+╠═══════════════════════════════════════════════════════════════════╣
+║ ① jlos_hal_arch_init()                                            ║
+║    → 注册 5 个平台设备 + IO/IRQ claim + 保留位图同步              ║
+║ ② 内存管理器：切低地址堆（PCI BAR 必须 <4MB）                     ║
+║ ③ PCI 枚举(bus/dev/func) → 匹配 AMD 1022:2000                    ║
+║    → am79c973_probe() → 驱动在 0x00050010 + INIT 32B 对齐 ⚠️     ║
+╚═══════════════════════════════╤═══════════════════════════════════╝
+                                ▼  PCI 驱动绑定完成 → 切主堆
+╔═══════════════════════════════════════════════════════════════════╗
+║  Stage 2:  initializing hardware, stage 2                         ║
+╠═══════════════════════════════════════════════════════════════════╣
+║ ① 内存管理器：切回主堆  0x0EDCF000 ~ 0x0EDEFFFF                   ║
+║ ② IDT 256 门 + 双 8259PIC 初始化                                  ║
+║    → PIC mask = 0xFA ⚠️ 仅开 IRQ0(timer) + IRQ2(cascade)         ║
+║ ③ 网卡 activate 严格序列（顺序错 = 0xFFFF CSR0 死锁）              ║
+║    STOP(0x04) → CSR4 → CSR1/2(INIT addr) → INIT → STRT(0x42)     ║
+║    ⚠️ CSR3/CSR5 禁止手动写，硬件从 INIT 读                        ║
+╚═══════════════════════════════╤═══════════════════════════════════╝
+                                ▼
+╔═══════════════════════════════════════════════════════════════════╗
+║  Stage 3:  initializing hardware, stage 3                         ║
+╠═══════════════════════════════════════════════════════════════════╣
+║ ① jlos_hal_timer_start_periodic(100) → 10ms 一次 IRQ0            ║
+║ ② 键盘/鼠标：jlos_malloc 堆分配（绝对不能栈分配！）               ║
+║    → set_handler(IRQ1/IRQ12) → PIC 自动 unmask                   ║
+║ ③ asm volatile("sti")   ⚠️  必须在 network_init 之前！            ║
+║ ④ network_init() 分层 6 步                                        ║
+║    Ether → ARP → IPv4 → ICMP → UDP → TCP                         ║
+║    ↳ ARP 广播求网关 MAC → timeout 5,000,000 次 ⚠️ 防 hlt         ║
+╚═══════════════════════════════╤═══════════════════════════════════╝
+                                ▼  启动完成
+╔═══════════════════════════════════════════════════════════════════╗
+║  running tests…  +  servers                                        ║
+╠═══════════════════════════════════════════════════════════════════╣
+║ ① MEMORY test：multiboot / heap start / malloc 验证               ║
+║ ② multitask_test：task_A + task_B 各打 10 行 = 正常 RR 轮转        ║
+║ ③ ATA test：VMware 简化模式跳过（防 #GP）                         ║
+║ ④ 🟢 Starting HTTP server on port 1234...                         ║
+║    🟢 UDP server listening on port 5678                           ║
+╚═══════════════════════════════════════════════════════════════════╝
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart TB
@@ -45,12 +92,41 @@ flowchart TB
     Stage1 --> Stage2 --> Stage3 --> Tests
 ```
 
+</details>
+
 ---
 
 ## 3. 内存管理器（双堆架构）
 
 ### 3.1 为什么双堆？
 PCI 驱动的 BAR 分配要求物理地址低于 4MB（实模式兼容区），如果只有主堆（高地址 0x0EDCF000），分配的驱动对象会被 PCI 控制器拒接。因此启动阶段切换双堆：
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  🔌  PCI 枚举前：低地址堆启动                                        │
+│     jlos_active_memory_manager = &s_low_memory_manager             │
+└────────────────────────────────────┬───────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  jlos_malloc 分配 AMD am79c973 driver_t                             │
+│     → 地址在 0x00050010 附近（<4MB，PCI BAR 要求！）                 │
+│     → INIT 块 32 字节对齐 ⚠️                                        │
+└────────────────────────────────────┬───────────────────────────────┘
+                                     ▼  PCI 驱动绑定完成
+┌────────────────────────────────────────────────────────────────────┐
+│  🧮  切回主堆：高地址 64KB+                                          │
+│     jlos_active_memory_manager = &s_main_memory_manager            │
+│     主堆范围：0x0EDCF000 ~ 0x0EDEFFFF                               │
+└────────────────────────────────────┬───────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  后续所有 malloc：                                                  │
+│     net 协议栈 sockets[] / GUI 控件 / task 栈 / 其他驱动对象        │
+│     → 全部走 0x0EDCF000+ 高地址主堆                                 │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart LR
@@ -59,6 +135,8 @@ flowchart LR
     C --> D["🧮 切回主堆：<br/>jlos_active_memory_manager = main"]
     D --> E["后续所有 malloc<br/>（net stack/gui/task）<br/>→ 0x0EDCF000 高地址主堆"]
 ```
+
+</details>
 
 ### 3.2 核心结构
 ```c
@@ -105,7 +183,35 @@ typedef struct {
 } jlos_task_manager_t;
 ```
 
-### 4.2 调度时序图（每 10ms 一次 IRQ0）
+### 4.2 调度时序图（每 10ms 一次 IRQ0 · ASCII 时间轴）
+
+```
+ 时间轴 ──────────────────────────────────────────────────────────────────▶
+ 8253 PIT 硬件    interruptstubs.s     调度器 切栈       新task_B
+ (IRQ0 节拍)    (pusha+push)         (schedule)          (恢复+iret)
+      │                 │                   │                │
+      ▼  IRQ0 → int 0x20│                   │                │
+      └────────────────▶│ SAVE 宏           │                │
+                        │  ① pusha(eax ebx ecx edx esi edi ebp │
+                        │  ② pushl $error_code_or_0        │
+                        │  ③ pushl $int_number (4-byte movl!!)   │
+                        │  ④ 硬件已 push eip/cs/eflags       │
+                        └──────────────────▶│                   │
+                                           │ old_cpustate = task_A 栈│
+                                           │ task_A.m_saved_esp = &old│
+                                           │ m_current_task++ 找下一个│
+                                           │ 跳过 TERMINATED task    │
+                        ┌───────────────────┘                   │
+                        │ 返回 task_B.m_saved_esp 指针       │
+                        ▼                                     │
+        RESTORE 恢复：                                          │
+          ① popl int# / popl error                           │
+          ② popa (恢复 ebp edi esi edx ecx ebx eax)          │
+          ③ iret (弹出 eip/cs/eflags → 切到 task_B 代码)     │
+                        └──────────────────────────────────────▶│ 运行 task_B
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 sequenceDiagram
@@ -122,6 +228,8 @@ sequenceDiagram
     SCH->>T:   返回 task_B.cpustate*
     REST->>T:   popa → iret 切到 task_B
 ```
+
+</details>
 
 ### 4.3 硬约束（教训总结）
 1. `cpustate` **必须嵌入 jlos_task_t**，放栈上会被下一次中断 pusha 覆盖

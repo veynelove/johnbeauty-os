@@ -30,7 +30,35 @@ common/
 
 ## 2. x86 平台启动汇编与关键结构
 
-### 2.1 loader.s → kernel_main 时序
+### 2.1 loader.s → kernel_main 时序（ASCII 纵向流程）
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  GRUB 引导                                                     ║
+║  multiboot magic = 0x2BADB002 (EAX)                          ║
+║  multiboot_info* 指针 = EBX                                   ║
+╚═══════════════════════════╤═══════════════════════════════════╝
+                            ▼  跳转到 loader.s entry
+╔═══════════════════════════════════════════════════════════════╗
+║  arch/x86/loader.s  汇编启动代码（关键 6 步）                    ║
+║                                                                 ║
+║  ①  cli                     关中断（防止引导期间硬件打断）      ║
+║  ②  mov CR0.PE = 1         开启 32-bit 保护模式                ║
+║  ③  ljmp $0x08, $flush      远跳转 → 切到 0x08 code 段         ║
+║                              （清空流水线 + 加载 CS 描述符）     ║
+║  ④  DS/ES/FS/GS/SS = 0x10  所有数据段 = 0x10 flat 数据段       ║
+║  ⑤  mov ESP = stack_top    设置内核栈到安全位置                ║
+║  ⑥  push EBX → call kernel_main   参数 = multiboot_info*      ║
+╚═══════════════════════════╤═══════════════════════════════════╝
+                            ▼  C 函数调用
+╔═══════════════════════════════════════════════════════════════╗
+║  kernel/kernel.c : kernel_main(struct multiboot_info *mb)     ║
+║  第一行: printf("princess yihan is safe and happy!")          ║
+║  公主平安开心 🌸 → 三阶段硬件初始化 → 测试 + 起服务            ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart LR
@@ -44,6 +72,8 @@ flowchart LR
        6. call kernel_main(EBX=multiboot_ptr)"]
     A --> B["kernel.c kernel_main(struct multiboot_info*)"]
 ```
+
+</details>
 
 ### 2.2 GDT（全局描述符表）
 
@@ -93,7 +123,47 @@ typedef struct {
 
 **教训**：顺序错一位 → 调度返回 EIP=0x00000003 → UNHANDLED INT 0x06(无效指令) → 键盘鼠标崩。
 
-### 2.5 上下文切换（任务调度）
+### 2.5 上下文切换（任务调度 · ASCII 时间轴）
+
+```
+ 时间轴 ─────────────────────────────────────────────────────────────────▶
+ PIT IRQ0   interruptstubs.s SAVE   调度器 schedule   context_switch    RESTORE + task_B
+ int 0x20    (pusha + push 汇编)   (选下一个 task)     (切 ESP)      (popa + iret)
+    │               │                     │                  │              │
+    ▼ 节拍触发       │                     │                  │              │
+    └──────────────▶│                     │                  │              │
+                    ▼ 构造 cpustate(44B)  │                  │              │
+                  ① pushl %eax            │                  │              │
+                  ② pushl %ebx            │                  │              │
+                  ③ pushl %ecx            │                  │              │
+                  ④ pushl %edx            │                  │              │
+                  ⑤ pushl %esi            │                  │              │
+                  ⑥ pushl %edi            │                  │              │
+                  ⑦ pushl %ebp            │                  │              │
+                  ⑧ pushl $error_code     │                  │              │
+                  ⑨ pushl $int_number (4B!!)  │              │              │
+                  ⑩ 硬件自动 push eip/cs/eflags              │              │
+                    └────────────────────▶│                  │              │
+                                         ▼ old = task_A      │              │
+                                   old_task.m_saved_esp = &old_cpustate     │
+                                   RR 轮转 m_current_task++ 找下一个          │
+                                   跳过 status=TERMINATED 的任务             │
+                    ┌─────────────────────┘                  │              │
+                    │ 返回 task_B.m_saved_esp 指针            │              │
+                    ▼                                        │              │
+                                          mov ESP, task_B.cpustate*         │
+                    ┌────────────────────────────────────────┘              │
+                    ▼                                                       │
+          RESTORE 弹出：                                                    │
+            ① popl int_number                                              │
+            ② popl error_code                                              │
+            ③ popa (ebp→edi→esi→edx→ecx→ebx→eax)                           │
+            ④ iret (弹出 eip/cs/eflags → 跳到 task_B EIP)                  │
+                    └──────────────────────────────────────────────────────▶│
+                                                                      task_B 继续执行
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 sequenceDiagram
@@ -114,6 +184,8 @@ sequenceDiagram
     STUB2-->>task_B: 继续执行 task_B 代码
 ```
 
+</details>
+
 **关键规则**（切任务稳定性）：
 - task->cpustate 必须 **嵌入 jlos_task_t**，不能放在 task stack 上（否则中断 push 会被下次调度覆盖）
 - task_init 时 `m_eflags = 0x002`（IF=0，关中断切完再开）
@@ -121,7 +193,35 @@ sequenceDiagram
 
 ---
 
-## 3. GUI 子系统（Composite Widget 模式）
+## 3. GUI 子系统（Composite Widget 模式 · ASCII 控件树）
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🏠  Desktop（根容器 jlos_composite_widget_t）                                ║
+║  · 所有 window 的父容器                                                       ║
+║  · 鼠标事件总入口：做 hit test（命中测试）→ 派发给子窗口                       ║
+║  · Paint() 自顶向下递归绘制                                                   ║
+╠═══════════════════════════════════════╤══════════════════════════════════════╣
+║  🪟  Window 1 (可拖动)                │  🪟  Window 2 (可拖动)               ║
+║  · m_dragging = true/false            │  · m_dragging = false                ║
+║  · 标题栏 hit → 拖动坐标 dx/dy        │  · 客户区放控件                       ║
+╠══════════════════╤════════════════════╬══════════════════╤═══════════════════╣
+║  📦 Button       │  📦 Label          ║  📦 Label        │  📦 EditBox       ║
+║  (on_click回调)  │  (静态文字)        │  (静态文字)       │  (输入框光标)     ║
+╚══════════════════╧════════════════════╩══════════════════╧═══════════════════╝
+
+          ▲                                    ▲
+          │ 鼠标事件                           │ Paint 绘制递归
+          │                                    │
+┌─────────────────────────────┐   ┌────────────────────────────────────┐
+│ PS/2 鼠标 IRQ12 3-byte 包   │   │ Desktop.paint()                    │
+│  Y_ov/X_ov/btn/X_rel/Y_rel  │   │   → Window1.paint()→ Button.paint │
+│  → Desktop.on_mouse_xxx()   │   │   → Window2.paint()→ Label.paint  │
+│    → 命中窗口标题栏拖动     │   │              → EditBox.paint 光标│
+└─────────────────────────────┘   └────────────────────────────────────┘
+```
+
+<details><summary>📐 查看原始 Mermaid 源码（装 mmdc 可导出大图 SVG）</summary>
 
 ```mermaid
 flowchart TB
@@ -144,6 +244,8 @@ flowchart TB
     D -->|命中测试(hit test)| W1.on_mouse_down(窗口标题栏→dragging=1)
     Paint --> D.paint → W1/W2.paint → Widget.paint
 ```
+
+</details>
 
 ### 3.1 控件继承关系
 
