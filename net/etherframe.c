@@ -1,9 +1,7 @@
 #include <net/etherframe.h>
 #include <kernel/memory_manager.h>
 #include <tools/config.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE)
 {

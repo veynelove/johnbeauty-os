@@ -1,7 +1,6 @@
 #include <arch/x86/syscalls.h>
 #include <arch/x86/interrupts.h>
-
-extern void printf(const char *str);
+#include <kernel/printk.h>
 
 void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_interrupt_manager_t *interrupt_manager, uint8_t m_interrupt_number)
 {

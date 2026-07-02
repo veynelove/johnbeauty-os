@@ -1,9 +1,6 @@
 #include <net/tcp.h>
 #include <kernel/memory_manager.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#include <kernel/printk.h>
 
 static const char *tcp_state_str(uint8_t state)
 {

@@ -1,9 +1,6 @@
 #include <arch/x86/interrupts.h>
 #include <hal/timer.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#include <kernel/printk.h>
 
 jlos_interrupt_manager_t *jlos_active_interrupt_manager = NULL;
 

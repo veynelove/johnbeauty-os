@@ -1,10 +1,6 @@
 #include <net/network.h>
 #include <tools/config.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex16(uint16_t);
-extern void printf_hex32(uint32_t);
+#include <kernel/printk.h>
 
 void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_)
 {

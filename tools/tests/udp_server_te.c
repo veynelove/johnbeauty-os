@@ -1,7 +1,6 @@
 #include <tools/tests/udp_server_te.h>
 #include <kernel/memory_manager.h>
-
-extern void printf(const char *str);
+#include <kernel/printk.h>
 
 typedef struct {
     jlos_udp_handler_t base;

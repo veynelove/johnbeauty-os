@@ -1,6 +1,5 @@
 #include <drivers/ata.h>
-
-extern void printf(const char *str);
+#include <kernel/printk.h>
 
 void jlos_ata_init(jlos_ata_t* self, uint16_t m_port_base, bool m_master)
 {

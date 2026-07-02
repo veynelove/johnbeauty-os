@@ -1,11 +1,6 @@
 #include <hal/hal.h>
 #include <hal/device.h>
-
-/* hal.c 不依赖 kernel 头；直接 extern 用的输出函数 */
-extern void printf(const char *str);
-extern void printf_hex32(uint32_t value);
-extern void printf_hex16(uint16_t value);
-extern void printf_char(char c);
+#include <kernel/printk.h>
 
 /* 前向声明：io ranges / irq table，后面定义，给前面的 sanity_check / claim 用 */
 static jlos_hal_io_range_t  s_io_ranges[JLOS_HAL_IO_RANGES_MAX];

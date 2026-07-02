@@ -1,9 +1,7 @@
 #include <net/udp.h>
 #include <kernel/memory_manager.h>
 #include <tools/config.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self)
 {

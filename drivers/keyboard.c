@@ -1,7 +1,5 @@
 #include <drivers/keyboard.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self)
 {

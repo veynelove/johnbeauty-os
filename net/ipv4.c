@@ -1,10 +1,7 @@
 #include <net/ipv4.h>
 #include <kernel/memory_manager.h>
 #include <tools/config.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#include <kernel/printk.h>
 
 void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self, jlos_internet_protocol_provider_t *backend, uint8_t m_protocol)
 {

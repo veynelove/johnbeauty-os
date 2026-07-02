@@ -1,7 +1,6 @@
 #include <tools/tests/http_server_te.h>
 #include <kernel/memory_manager.h>
-
-extern void printf(const char *str);
+#include <kernel/printk.h>
 
 typedef struct {
     jlos_tcp_handler_t base;
