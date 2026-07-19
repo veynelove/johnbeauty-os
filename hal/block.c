@@ -88,13 +88,6 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self,
     self->total_sectors = 0;
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;
-    /* jlos_ata_init 会把 port_base 填到 m_data_port + 各端口里，这里先让
-     * m_data_port.m_portnumber = port_base，让 init 时能用；其余字段由 ata_init 填。
-     * 因为 jlos_ata_init 签名是 init(self, port_base, master)，我们不需要手动填太多。 */
-    (void)port_base; (void)master;
-    /* 但 master 和 port_base 要传给 jlos_ata_init，我们用 ata 对象的位置先存一份？
-     * 简单：调用 ata_init 之前 jlos_ata_t 里的信息没用，直接在 create 里先 ata_init
-     * 就好了，这也符合 HAL "create 后即 init 好" 的语义。 */
     jlos_ata_init(&self->dev_priv.ata, port_base, master);
     self->bytes_per_sector = self->dev_priv.ata.m_bytes_per_sector;
     self->inited = 1;

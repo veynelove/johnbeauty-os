@@ -84,7 +84,6 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_hal_pci_enumerate_and_bind_drivers(&pci_controller, &driver_manager_, &irq_mgr);
     jlos_active_memory_manager = old_manager;
     printf("switched back to main memory manager\n");
-
     printf("initializing hardware, stage 2 start\n");
     jlos_driver_manager_activate_all(&driver_manager_);
 
