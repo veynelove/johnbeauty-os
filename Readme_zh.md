@@ -375,6 +375,7 @@ task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
 3. 原作者主页：<http://www.algorithman.de/Autor/index.php>
 4. 语言选择：原教程 C++（有优雅命名空间）；本项目重写为纯 C（考虑内核可移植性 + 编译器支持广度）。
 5. ⚠️ GUI 提示：建议不要开启 GUI 图形模式（老硬件/某些 VMware 版本对 VGA 寄存器有损坏风险），默认用串口/VGA 文本模式即可。
+6. 源项目的网卡驱动，arp, tcp, udp, gdt, interrupts等存在问题，无法直接跑通。本项目继承并修复了问题，并做了自己的优化。个人觉得优化的不错。
 
 ---
 
@@ -408,7 +409,7 @@ for (uint8_t i = 0; i < 3; i++)
 
 | 历史 TODO | 当前状态 |
 |---|---|
-| 网卡仅 AMD am79c973，Intel 芯片机器跑不了 | ✅ 现跑 VMware/QEMU（都模拟 AMD PCnet-FAST III），功能全覆盖；Intel e1000 为未来可选驱动 |
+| 网卡仅 AMD am79c973，Intel 芯片机器无法跑通 | ✅ 现跑 VMware/QEMU（都模拟 AMD PCnet-FAST III），功能全覆盖；Intel e1000 为未来可选驱动 |
 | 文件系统未实现 | ✅ 已实现 FAT16/FAT32 + 块设备 HAL + MS-DOS 路径解析；见 filesystem/ 目录和文档 |
 
 ---
