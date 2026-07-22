@@ -1,5 +1,7 @@
 #include <net/icmp.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
 
 void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend)
 {

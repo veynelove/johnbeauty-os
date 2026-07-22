@@ -3,7 +3,10 @@
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
 #include <arch/x86/pci.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
+extern void printf_hex32(uint32_t);
 
 void jlos_pci_controller_init(jlos_pci_controller_t* self)
 {

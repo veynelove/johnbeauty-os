@@ -1,5 +1,6 @@
 #include <drivers/mouse.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *);
 
 void jlos_mouse_event_handler_init(jlos_mouse_event_handler_t* self)
 {

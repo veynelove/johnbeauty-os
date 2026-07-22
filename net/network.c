@@ -1,6 +1,10 @@
 #include <net/network.h>
 #include <tools/config.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
+extern void printf_hex16(uint16_t);
+extern void printf_hex32(uint32_t);
 
 void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_)
 {
@@ -36,7 +40,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
 
     #if KERNEL_CONFIG_DEBUG_NETWORK
     bool ether_ok = true;
-    if (stack->etherframe.handlers == NULL) {
+    if (stack->etherframe.handlers.buckets == NULL) {
         printf("NET: [FAIL] EtherFrame handlers allocation failed!\n");
         ether_ok = false;
     }
@@ -50,7 +54,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     }
     if (ether_ok) {
         printf("NET: [ OK ] EtherFrame initialized (handlers=0x");
-        printf_hex32((uint32_t)stack->etherframe.handlers);
+        printf_hex32((uint32_t)stack->etherframe.handlers.buckets);
         printf(")\n");
     }
     #endif
@@ -85,7 +89,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("\n");
         arp_ok = false;
     }
-    if (stack->etherframe.handlers[arp_etype] != &stack->arp.base_handler) {
+    jlos_hash_node_t *ether_node = jlos_hash_chain_see(&stack->etherframe.handlers, &arp_etype);
+    jlos_ether_frame_handler_t *ether_handler = container_of(ether_node, jlos_ether_frame_handler_t, hash_node);
+    if (ether_handler != &stack->arp.base_handler) {
         printf("ARP: [FAIL] not registered in EtherFrame handlers!\n");
         arp_ok = false;
     }
@@ -130,7 +136,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("IP4: [FAIL] subnet mask mismatch!\n");
         ipv4_ok = false;
     }
-    if (stack->etherframe.handlers[ip_etype] != &stack->ipv4.base_handler) {
+    jlos_hash_node_t *ip_node = jlos_hash_chain_see(&stack->etherframe.handlers, &ip_etype);
+    jlos_ether_frame_handler_t *ip_handler = container_of(ip_node, jlos_ether_frame_handler_t, hash_node);
+    if (ip_handler != &stack->ipv4.base_handler) {
         printf("IP4: [FAIL] not registered in EtherFrame handlers!\n");
         ipv4_ok = false;
     }
@@ -194,7 +202,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("UDP: [FAIL] protocol handler is NULL!\n");
         udp_ok = false;
     }
-    if (stack->udp.sockets == NULL) {
+    if (stack->udp.sockets.buckets == NULL) {
         printf("UDP: [FAIL] sockets array allocation failed!\n");
         udp_ok = false;
     }
@@ -216,7 +224,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     }
     if (udp_ok) {
         printf("UDP: [ OK ] initialized (proto=0x11, sockets=0x");
-        printf_hex32((uint32_t)stack->udp.sockets);
+        printf_hex32((uint32_t)stack->udp.sockets.buckets);
         printf(")\n");
     }
     #endif
@@ -242,7 +250,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("TCP: [FAIL] protocol handler is NULL!\n");
         tcp_ok = false;
     }
-    if (stack->tcp.sockets == NULL) {
+    if (stack->tcp.sockets.buckets == NULL) {
         printf("TCP: [FAIL] sockets array allocation failed!\n");
         tcp_ok = false;
     }
@@ -264,7 +272,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     }
     if (tcp_ok) {
         printf("TCP: [ OK ] initialized (proto=0x06, sockets=0x");
-        printf_hex32((uint32_t)stack->tcp.sockets);
+        printf_hex32((uint32_t)stack->tcp.sockets.buckets);
         printf(")\n");
     }
     #endif

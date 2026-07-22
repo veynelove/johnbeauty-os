@@ -1,5 +1,6 @@
 #include <tools/tests/multitask_te.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *);
 
 jlos_task_t task1;
 jlos_task_t task2;

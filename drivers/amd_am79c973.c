@@ -1,6 +1,9 @@
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
+extern void printf_hex32(uint32_t);
 
 void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend)
 {

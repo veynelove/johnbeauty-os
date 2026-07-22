@@ -1,10 +1,16 @@
 #include <hal/diag.h>
 #include <hal/timer.h>
-#include <kernel/printk.h>
 
 #if HAL_CONFIG_TRACE_IO
 
 #define JLOS_HAL_TRACE_CAPACITY  512
+
+extern void printf(const char *str);
+extern void printf_hex32(uint32_t value);
+extern void printf_hex16(uint16_t value);
+extern void printf_hex8(uint8_t value);
+extern void printf_char(char c);
+extern void printf_uint(uint32_t value);
 
 typedef struct {
     const char *file;

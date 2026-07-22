@@ -2,7 +2,8 @@
 
 #include <drivers/ata.h>
 #include <filesystem/msdospath.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *);
 
 void hard_driver_test()
 {

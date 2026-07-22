@@ -2,7 +2,8 @@
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *);
 
 #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
 

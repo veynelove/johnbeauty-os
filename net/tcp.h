@@ -2,6 +2,7 @@
 #define __JLOS_NET_TCP_H
 
 #include <net/ipv4.h>
+#include <dsa/hash_chain.h>
 
 typedef enum {
     JLOS_TCP_CLOSED = 0,
@@ -74,6 +75,7 @@ struct jlos_tcp_socket {
     jlos_tcp_provider_t *backend;
     jlos_tcp_handler_t *handler;
     jlos_tcp_socket_state_t m_state;
+    jlos_hash_node_t hash_node;
     bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *m_data, uint16_t m_size);
     void (*send)(struct jlos_tcp_socket* self, uint8_t *m_data, uint16_t m_size);
     void (*disconnect)(struct jlos_tcp_socket* self);
@@ -81,10 +83,15 @@ struct jlos_tcp_socket {
 
 struct jlos_tcp_provider {
     jlos_internet_protocol_handler_t base_handler;
-    jlos_tcp_socket_t **sockets;
+    jlos_hash_chain_t sockets;
     uint16_t m_num_sockets;
     uint16_t m_free_port;
 };
+
+typedef struct {
+    uint32_t ip;
+    uint16_t port;
+} jlos_tcp_key_t;
 
 void jlos_tcp_handler_init(jlos_tcp_handler_t* self);
 void jlos_tcp_handler_destroy(jlos_tcp_handler_t* self);

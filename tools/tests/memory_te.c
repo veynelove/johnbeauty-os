@@ -1,7 +1,10 @@
 #include <tools/tests/memory_te.h>
 #include <kernel/memory_manager.h>
 #include <common/multiboot.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *);
+extern void printf_hex(uint8_t);
+extern void printf_hex32(uint32_t);
 
 void memory_manager_test(const void *multiboot_structure)
 {

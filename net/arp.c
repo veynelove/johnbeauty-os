@@ -1,6 +1,8 @@
 #include <net/arp.h>
 #include <tools/config.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex32(uint32_t);
 
 static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
 {

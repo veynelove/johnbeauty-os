@@ -1,7 +1,9 @@
 #include <net/udp.h>
 #include <kernel/memory_manager.h>
 #include <tools/config.h>
-#include <kernel/printk.h>
+
+extern void printf(const char *str);
+extern void printf_hex(uint8_t);
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self)
 {
@@ -65,20 +67,35 @@ void jlos_udp_socket_disconnect(jlos_udp_socket_t* self)
     jlos_udp_provider_disconnect(self->backend, self);
 }
 
+static uint32_t udp_hash_ip_port(const void *key)
+{
+    jlos_udp_key_t *k = (jlos_udp_key_t *)key;
+    return k->ip ^ (k->port << 16) ^ (k->port >> 16);
+}
+
+static int udp_cmp_ip_port(const void *key, const void *node)
+{
+    uint16_t port = ((jlos_udp_key_t *)key)->port;
+    uint32_t ip = ((jlos_udp_key_t *)key)->ip;
+    jlos_udp_socket_t *socket = container_of(node, jlos_udp_socket_t, hash_node);
+    if (port == socket->m_local_port && ip == socket->m_local_ip) {
+        return 0;
+    }
+    return -1;
+}
+
 void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_provider_t *backend)
 {
     #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("UDP: Provider initializing...\n");
     #endif
     jlos_internet_protocol_handler_init(&self->base_handler, backend, 0x11);
-    self->base_handler.on_internet_protocol_received = (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_udp_provider_on_internet_protocol_received;
+    self->base_handler.on_internet_protocol_received =
+        (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_udp_provider_on_internet_protocol_received;
     self->m_num_sockets = 0;
     self->m_free_port = 1024;
 
-    self->sockets = (jlos_udp_socket_t **)jlos_malloc(sizeof(jlos_udp_socket_t*) * JLOS_NET_MAX_SLOTS);
-    for (int i = 0; i < JLOS_NET_MAX_SLOTS; i++) {
-        self->sockets[i] = NULL;
-    }
+    jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, udp_hash_ip_port, udp_cmp_ip_port);
     #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("UDP: Provider initialized\n");
     #endif
@@ -86,8 +103,7 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
 
 void jlos_udp_provider_destroy(jlos_udp_provider_t* self)
 {
-    jlos_free(self->sockets);
-    self->sockets = NULL;
+    jlos_hash_chain_destroy(&self->sockets);
     jlos_internet_protocol_handler_destroy(&self->base_handler);
 }
 
@@ -113,21 +129,30 @@ bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, 
     #endif
 
     jlos_udp_socket_t *socket = NULL;
-    for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
-        if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
-            && self->sockets[i]->m_remote_port == msg->m_src_port && self->sockets[i]->m_remote_ip == srcIP_BE) {
-            socket = self->sockets[i];
+    jlos_udp_key_t key = {dstIP_BE, msg->m_dst_port};
+    jlos_hash_node_t *node = jlos_hash_chain_see(&self->sockets, &key);
+    while (node) {
+        socket = container_of(node, jlos_udp_socket_t, hash_node);
+        if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
+            && socket->m_remote_port == msg->m_src_port && socket->m_remote_ip == srcIP_BE) {
+            break;
         }
+        node = node->next;
     }
-    for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
-        if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
-            && self->sockets[i]->m_listening) {
-            socket = self->sockets[i];
-            socket->m_remote_port = msg->m_src_port;
-            socket->m_remote_ip = srcIP_BE;
-            #if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("UDP: Socket matched\n");
-            #endif
+    if (!socket) {
+        node = jlos_hash_chain_see(&self->sockets, &key);
+        while (node) {
+            socket = container_of(node, jlos_udp_socket_t, hash_node);
+            if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
+                && socket->m_listening) {
+                socket->m_remote_port = msg->m_src_port;
+                socket->m_remote_ip = srcIP_BE;
+                #if KERNEL_CONFIG_DEBUG_NETWORK
+                printf("UDP: Socket matched\n");
+                #endif
+                break;
+            }
+            node = node->next;
         }
     }
     if (socket) {
@@ -145,7 +170,9 @@ jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t
         socket->m_remote_ip = ip;
         socket->m_local_port = JLOS_SWAP_ENDIAN_16(self->m_free_port++);
         socket->m_local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
-        self->sockets[self->m_num_sockets++] = socket;
+        jlos_udp_key_t key = {socket->m_local_ip, socket->m_local_port};
+        jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
+        self->m_num_sockets++;
     }
     return socket;
 }
@@ -158,20 +185,18 @@ jlos_udp_socket_t *jlos_udp_provider_listen(jlos_udp_provider_t* self, uint16_t 
         socket->m_listening = true;
         socket->m_local_port = JLOS_SWAP_ENDIAN_16(port);
         socket->m_local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
-        self->sockets[self->m_num_sockets++] = socket;
+        jlos_udp_key_t key = {socket->m_local_ip, socket->m_local_port};
+        jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
+        self->m_num_sockets++;
     }
     return socket;
 }
 
 void jlos_udp_provider_disconnect(jlos_udp_provider_t* self, jlos_udp_socket_t *socket)
 {
-    for (uint16_t i = 0; i < self->m_num_sockets && socket != NULL; i++) {
-        if (self->sockets[i] == socket) {
-            self->sockets[i] = self->sockets[--self->m_num_sockets];
-            jlos_free(socket);
-            break;
-        }
-    }
+    jlos_hash_chain_remove(&self->sockets, &socket->hash_node);
+    self->m_num_sockets--;
+    jlos_free(socket);
 }
 
 void jlos_udp_provider_send(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, uint8_t *m_data, uint16_t m_size)
