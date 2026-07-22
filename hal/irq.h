@@ -12,48 +12,33 @@
 #error "ARM architecture IRQ support not implemented yet"
 #endif
 
-/* ============================================================
- *  Unified Type Naming (irq = Interrupt Request, generic term)
- * ============================================================ */
+/* IRQ 统一命名：x86 8259+IDT / ARM GIC 上层透明 */
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
   typedef jlos_interrupt_manager_t       jlos_irq_manager_t;
   typedef jlos_interrupt_handler_t       jlos_irq_handler_t;
   typedef jlos_interrupt_handler_func_t  jlos_irq_handler_func_t;
 
+  /* 全局活跃 IRQ 管理器（变量别名用宏，inline 无法表达左值语义） */
   #define jlos_active_irq_manager         jlos_active_interrupt_manager
 
-  #define jlos_irq_handler_init(...)           jlos_interrupt_handler_init(__VA_ARGS__)
-  #define jlos_irq_handler_destroy(...)        jlos_interrupt_handler_destroy(__VA_ARGS__)
-  #define jlos_irq_handler_handle(...)         jlos_interrupt_handler_handle_interrupt(__VA_ARGS__)
+  extern void jlos_irq_handler_init(jlos_irq_handler_t *self,
+                                    jlos_irq_manager_t *mgr, uint8_t irq);
+  extern void jlos_irq_handler_destroy(jlos_irq_handler_t *self);
+  extern uint32_t jlos_irq_handler_handle(jlos_irq_handler_t *self, uint32_t esp);
 
-  #define jlos_irq_manager_init(...)           jlos_interrupt_manager_init(__VA_ARGS__)
-  #define jlos_irq_manager_destroy(...)        jlos_interrupt_manager_destroy(__VA_ARGS__)
-  #define jlos_irq_manager_activate(...)       jlos_interrupt_manager_activate(__VA_ARGS__)
-  #define jlos_irq_manager_deactivate(...)     jlos_interrupt_manager_deactivate(__VA_ARGS__)
-  #define jlos_irq_manager_handle(...)         jlos_interrupt_manager_handle_interrupt(__VA_ARGS__)
-  #define jlos_irq_manager_hw_offset(...)      jlos_interrupt_manager_hardware_interrupt_offset(__VA_ARGS__)
-  #define jlos_irq_manager_do_handle(...)      jlos_interrupt_manager_do_handle_interrupt(__VA_ARGS__)
-  #define jlos_irq_manager_register(...)       jlos_interrupt_manager_register_handler(__VA_ARGS__)
+  extern void jlos_irq_manager_init(jlos_irq_manager_t *self, uint16_t offset,
+                                    jlos_mmu_t *mmu, jlos_task_manager_t *tm);
+  extern void jlos_irq_manager_destroy(jlos_irq_manager_t *self);
+  extern void jlos_irq_manager_activate(jlos_irq_manager_t *self);
+  extern void jlos_irq_manager_deactivate(jlos_irq_manager_t *self);
+  extern uint32_t jlos_irq_manager_handle(uint8_t irq, uint32_t esp);
+  extern uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t *self);
+  extern uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t *self,
+                                              uint8_t irq, uint32_t esp);
+  extern void jlos_irq_manager_register(jlos_irq_manager_t *self,
+                                        uint8_t irq, jlos_irq_handler_t *h);
 
-  #define jlos_irq_ignore_request()            jlos_ignore_interrupt_request()
+  extern void jlos_irq_ignore_request(void);
 #endif
-
-/* ============================================================
- *  Unified API Contract
- *
- *  Any architecture port MUST provide:
- *    TYPES:
- *      - jlos_irq_manager_t   : Interrupt controller context
- *      - jlos_irq_handler_t   : Individual IRQ handler descriptor
- *      - jlos_irq_handler_func_t : IRQ handler function pointer type
- *
- *    GLOBALS:
- *      - jlos_irq_manager_t *jlos_active_irq_manager
- *
- *    FUNCTIONS:
- *      - void jlos_irq_manager_init(jlos_irq_manager_t*, uint16_t offset, jlos_mmu_t*, jlos_task_manager_t*)
- *      - void jlos_irq_manager_activate(jlos_irq_manager_t*)
- *      - void jlos_irq_manager_register(jlos_irq_manager_t*, uint8_t irq, jlos_irq_handler_t*)
- * ============================================================ */
 
 #endif

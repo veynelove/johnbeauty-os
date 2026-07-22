@@ -1,8 +1,6 @@
 #include <filesystem/msdospath.h>
 #include <filesystem/fat.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_msdos_partition_table_read_partitions(jlos_ata_t *hd)
 {

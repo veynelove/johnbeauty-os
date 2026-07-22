@@ -1,0 +1,28 @@
+#ifndef __JLOS_HAL_SERIAL_H
+#define __JLOS_HAL_SERIAL_H
+
+#include <tools/config.h>
+#include <common/types.h>
+
+/* 默认 COM1 38400 8N1。参数可在 init 时指定，未来做 QEMU debugcon / 16550A / USB serial 切换时保持 API 不变。 */
+#define JLOS_HAL_SERIAL_DEFAULT_COM   0x3F8
+#define JLOS_HAL_SERIAL_DEFAULT_BAUD  38400
+
+/* 初始化串口；目前只实现 COM1 16550 兼容模式。 */
+void jlos_hal_serial_init(uint16_t com_base, uint32_t baud);
+
+/* 单字符 / 字符串写（16550 LSR 5 bit 为 1 才写，避免丢字符） */
+void jlos_hal_serial_putc(uint16_t com_base, char c);
+void jlos_hal_serial_puts(uint16_t com_base, const char *s);
+
+/* 常用简化版：使用上次 init 过的默认 COM 口。
+ * 这样 printf 里不用每次传 base。 */
+void jlos_hal_serial_default_init(void);
+void jlos_hal_serial_default_putc(char c);
+void jlos_hal_serial_default_puts(const char *s);
+
+/* 高层 console：一次写出去到所有 console 后端
+ * 目前实现 = 串口默认 COM 端。未来加 VGA text / framebuffer / UDP log 都在这里汇总。 */
+void jlos_hal_console_write(const char *s);
+
+#endif
