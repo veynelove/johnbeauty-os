@@ -51,17 +51,17 @@ void jlos_internet_protocol_provider_destroy(jlos_internet_protocol_provider_t* 
 
 bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_protocol_provider_t* self, uint8_t *etherframe_payload, uint32_t m_size)
 {
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("IP: Received IPv4 packet, size=");
     printf_hex((m_size >> 0) & 0xFF);
     printf_hex((m_size >> 8) & 0xFF);
     printf("\n");
-    #endif
+#endif
     
     if (m_size < sizeof(jlos_ipv4_message_t)) {
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("IP: Packet too small\n");
-        #endif
+#endif
         return false;
     }
     jlos_ipv4_message_t *ip_message = (jlos_ipv4_message_t *)etherframe_payload;
@@ -69,39 +69,39 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
     
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
     
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("IP: Protocol=");
     printf_hex(ip_message->m_protocol);
     printf("\n");
-    #endif
+#endif
     
     if (ip_message->m_dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("IP: Packet is for us\n");
-        #endif
+#endif
         int m_length = JLOS_SWAP_ENDIAN_16(ip_message->m_total_length);
         if (m_length > (int)m_size) {
             m_length = m_size;
         }
         if (self->handlers[ip_message->m_protocol]) {
-            #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
             printf("IP: Handler found, calling it\n");
-            #endif
+#endif
             send_back = self->handlers[ip_message->m_protocol]->on_internet_protocol_received(
                 self->handlers[ip_message->m_protocol], ip_message->m_src_ip, ip_message->m_dst_ip,
                 etherframe_payload + 4 * header_length, m_length - 4 * header_length);
         }
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         else {
             printf("IP: No handler for this protocol\n");
         }
-        #endif
+#endif
     }
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     else {
         printf("IP: Packet not for us\n");
     }
-    #endif
+#endif
     
     if (send_back) {
         uint32_t temp = ip_message->m_dst_ip;

@@ -1,0 +1,35 @@
+@echo off
+chcp 65001 >nul
+echo ========================================
+echo  自动化构建与启动流程
+echo ========================================
+
+echo.
+echo [1/3] 正在远程编译 Ubuntu 项目...
+ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"
+if errorlevel 1 (
+    echo.
+    echo [错误] 编译失败
+    pause
+    exit /b 1
+)
+
+echo.
+echo [2/3] 正在下载 ISO 文件到 Windows 桌面...
+scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Desktop\johnkernel.iso
+if errorlevel 1 (
+    echo.
+    echo [错误] 文件下载失败
+    pause
+    exit /b 1
+)
+
+echo.
+echo [3/3] 正在启动 johnbeauty 虚拟机...
+start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"
+
+echo.
+echo ========================================
+echo  全部流程执行完毕！
+echo ========================================
+pause

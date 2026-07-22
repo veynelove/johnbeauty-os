@@ -13,9 +13,8 @@ __attribute__((naked)) void jlos_task_exit_stub(void)
         "movl %0, (%%eax)\n\t"
     "1:\n\t"
         "sti\n\t"
-    "2:\n\t"
         "hlt\n\t"
-        "jmp 2b\n\t"
+        "jmp 1b\n\t"
         : : "i"(JLOS_TASK_TERMINATED) : "eax", "memory"
     );
 }
@@ -37,7 +36,7 @@ __attribute__((naked)) void jlos_task_entry_stub(void)
 void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack)
 {
     cpustate->m_ebx = (uint32_t)entrypoint;
-    cpustate->m_edx = (uint32_t)(stack + 4096);
+    cpustate->m_edx = (uint32_t)(stack + 16384);
     cpustate->m_eip = (uint32_t)jlos_task_entry_stub;
     cpustate->m_cs = jlos_mmu_code_selector(mmu);
 }

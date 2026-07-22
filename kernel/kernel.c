@@ -95,9 +95,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_irq_manager_activate(&irq_mgr);
     printf("interrupts activated\n");
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
-    #endif
+#endif
     /* 避免栈溢出：network_stack_t 很大，改到静态存储区或堆上 */
     network_stack_t *network_stack = (network_stack_t *)jlos_malloc(sizeof(network_stack_t));
     network_init(network_stack, &driver_manager_);

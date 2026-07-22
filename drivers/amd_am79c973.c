@@ -239,7 +239,7 @@ int jlos_amd_am79c973_reset(jlos_amd_am79c973_t* self)
 
 uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_t m_esp)
 {
-    #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
+#define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
     jlos_amd_am79c973_t* eth = (jlos_amd_am79c973_t*)((char*)handler - offsetof(jlos_amd_am79c973_t, base_handler));
 
     jlos_io16_write(&eth->m_register_address_port, 0);
