@@ -1,23 +1,19 @@
 #include <net/etherframe.h>
 #include <kernel/memory_manager.h>
 #include <tools/config.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE)
 {
     self->m_etherType_BE = JLOS_SWAP_ENDIAN_16(m_etherType_BE);
     self->backend = backend;
     self->on_ether_frame_received = jlos_ether_frame_handler_on_ether_frame_received;
-    backend->handlers[self->m_etherType_BE] = self;
+    jlos_hash_chain_insert(&backend->handlers, &self->m_etherType_BE, &self->hash_node);
 }
 
 void jlos_ether_frame_handler_destroy(jlos_ether_frame_handler_t* self)
 {
-    if (self->backend->handlers[self->m_etherType_BE] == self) {
-        self->backend->handlers[self->m_etherType_BE] = NULL;
-    }
+    jlos_hash_chain_remove(&self->backend->handlers, &self->hash_node);
 }
 
 bool jlos_ether_frame_handler_on_ether_frame_received(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t m_size)
@@ -35,21 +31,24 @@ uint32_t jlos_ether_frame_handler_get_ip_address(jlos_ether_frame_handler_t* sel
     return jlos_ether_frame_provider_get_ip_address(self->backend);
 }
 
+static int ether_frame_cmp(const void *key, const void *node)
+{
+    uint16_t be = *(uint16_t *)key;
+    jlos_ether_frame_handler_t *handler = container_of(node, jlos_ether_frame_handler_t, hash_node);
+    return be - handler->m_etherType_BE;
+}
+
 void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_amd_am79c973_t *backend)
 {
     jlos_rawdata_handler_init(&self->base_handler, backend);
     self->base_handler.on_raw_data_received = (bool (*)(jlos_rawdata_handler_t*, uint8_t*, uint32_t))jlos_ether_frame_provider_on_raw_data_received;
 
-    self->handlers = (jlos_ether_frame_handler_t **)jlos_malloc(sizeof(jlos_ether_frame_handler_t*) * JLOS_NET_MAX_SLOTS);
-    for (uint32_t i = 0; i < JLOS_NET_MAX_SLOTS; i++) {
-        self->handlers[i] = NULL;
-    }
+    jlos_hash_chain_init(&self->handlers, JLOS_NET_HASH_CHAIN_NUM, jlos_hash_uint16, ether_frame_cmp);
 }
 
 void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self)
 {
-    jlos_free(self->handlers);
-    self->handlers = NULL;
+    jlos_hash_chain_destroy(&self->handlers);
     jlos_rawdata_handler_destroy(&self->base_handler);
 }
 
@@ -108,12 +107,14 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
         #if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ETHER: Frame is for us, looking for handler\n");
         #endif
-        if (self->handlers[frame->m_etherType_BE]) {
+        jlos_hash_node_t *node = jlos_hash_chain_see(&self->handlers, &frame->m_etherType_BE);
+        if (node) {
+            jlos_ether_frame_handler_t *handler = container_of(node, jlos_ether_frame_handler_t, hash_node);
             #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ETHER: Handler found, calling it\n");
             #endif
-            send_back = self->handlers[frame->m_etherType_BE]->on_ether_frame_received(
-                self->handlers[frame->m_etherType_BE], buffer + sizeof(jlos_ether_frame_header_t), m_size - sizeof(jlos_ether_frame_header_t));
+            send_back = handler->on_ether_frame_received(
+                handler, buffer + sizeof(jlos_ether_frame_header_t), m_size - sizeof(jlos_ether_frame_header_t));
         }
         #if KERNEL_CONFIG_DEBUG_NETWORK
         else {

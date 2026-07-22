@@ -2,6 +2,7 @@
 #define __JLOS_NET_UDP_H
 
 #include <net/ipv4.h>
+#include <dsa/hash_chain.h>
 
 typedef struct jlos_udp_socket jlos_udp_socket_t;
 typedef struct jlos_udp_provider jlos_udp_provider_t;
@@ -26,6 +27,7 @@ struct jlos_udp_socket {
     uint32_t m_local_ip;
     jlos_udp_provider_t *backend;
     jlos_udp_handler_t *handler;
+    jlos_hash_node_t hash_node;
     bool m_listening;
     void (*handle_udp_message)(struct jlos_udp_socket* self, uint8_t *m_data, uint16_t m_size);
     void (*send)(struct jlos_udp_socket* self, uint8_t *m_data, uint16_t m_size);
@@ -34,10 +36,15 @@ struct jlos_udp_socket {
 
 struct jlos_udp_provider {
     jlos_internet_protocol_handler_t base_handler;
-    jlos_udp_socket_t **sockets;
+    jlos_hash_chain_t sockets;
     uint16_t m_num_sockets;
     uint16_t m_free_port;
 };
+
+typedef struct {
+    uint32_t ip;
+    uint16_t port;
+} jlos_udp_key_t;
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self);
 void jlos_udp_handler_destroy(jlos_udp_handler_t* self);

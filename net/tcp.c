@@ -67,27 +67,42 @@ void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self)
     jlos_tcp_provider_disconnect(self->backend, self);
 }
 
+static uint32_t tcp_hash_ip_port(const void *key)
+{
+    jlos_tcp_key_t *k = (jlos_tcp_key_t *)key;
+    return k->ip ^ (k->port << 16) ^ (k->port >> 16);
+}
+
+static int tcp_cmp_ip_port(const void *key, const void *node)
+{
+    uint16_t port = ((jlos_tcp_key_t *)key)->port;
+    uint32_t ip = ((jlos_tcp_key_t *)key)->ip;
+    jlos_tcp_socket_t *socket = container_of(node, jlos_tcp_socket_t, hash_node);
+    if (port == socket->m_local_port && ip == socket->m_local_ip) {
+        return 0;
+    }
+    return -1;
+}
+
 void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_provider_t *backend)
 {
     jlos_internet_protocol_handler_init(&self->base_handler, backend, 0x06);
-    self->base_handler.on_internet_protocol_received = (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_tcp_provider_on_internet_protocol_received;
+    self->base_handler.on_internet_protocol_received =
+        (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_tcp_provider_on_internet_protocol_received;
     self->m_num_sockets = 0;
     self->m_free_port = 1024;
 
-    self->sockets = (jlos_tcp_socket_t **)jlos_malloc(sizeof(jlos_tcp_socket_t*) * JLOS_NET_MAX_SLOTS);
-    for (int i = 0; i < JLOS_NET_MAX_SLOTS; i++) {
-        self->sockets[i] = NULL;
-    }
+    jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, tcp_hash_ip_port, tcp_cmp_ip_port);
 }
 
 void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self)
 {
-    jlos_free(self->sockets);
-    self->sockets = NULL;
+    jlos_hash_chain_destroy(&self->sockets);
     jlos_internet_protocol_handler_destroy(&self->base_handler);
 }
 
-bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size)
+bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE,
+    uint8_t *internet_protocol_payload, uint32_t m_size)
 {
     if (m_size < 20) {
         return false;
@@ -118,15 +133,19 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
 #endif
 
     jlos_tcp_socket_t *socket = NULL;
-    for (uint16_t i = 0; i < self->m_num_sockets && socket == NULL; i++) {
-        if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
-            && self->sockets[i]->m_state == JLOS_TCP_LISTEN && (flags & (JLOS_TCP_SYN | JLOS_TCP_ACK)) == JLOS_TCP_SYN) {
-            socket = self->sockets[i];
+    jlos_tcp_key_t key = {dstIP_BE, msg->m_dst_port};
+    jlos_hash_node_t *node = jlos_hash_chain_see(&self->sockets, &key);
+    while (node) {
+        socket = container_of(node, jlos_tcp_socket_t, hash_node);
+        if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
+            && socket->m_state == JLOS_TCP_LISTEN && (flags & (JLOS_TCP_SYN | JLOS_TCP_ACK)) == JLOS_TCP_SYN) {
+            break;
         }
-        else if (self->sockets[i]->m_local_port == msg->m_dst_port && self->sockets[i]->m_local_ip == dstIP_BE
-            && self->sockets[i]->m_remote_port == msg->m_src_port && self->sockets[i]->m_remote_ip == srcIP_BE) {
-            socket = self->sockets[i];
+        else if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
+            && socket->m_remote_port == msg->m_src_port && socket->m_remote_ip == srcIP_BE) {
+            break;
         }
+        node = node->next;
     }
 
     bool reset = false;
@@ -263,12 +282,17 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
         }
     }
     if (socket && socket->m_state == JLOS_TCP_CLOSED) {
-        for (uint16_t i = 0; i < self->m_num_sockets && socket != NULL; i++) {
-            if (self->sockets[i] == socket) {
-                self->sockets[i] = self->sockets[--self->m_num_sockets];
+        jlos_tcp_key_t key = {socket->m_local_ip, socket->m_local_port};
+        jlos_hash_node_t *node = jlos_hash_chain_see(&self->sockets, &key);
+        while (node) {
+            jlos_tcp_socket_t *socket_tmp = container_of(node, jlos_tcp_socket_t, hash_node);
+            if (socket_tmp == socket) {
+                jlos_hash_chain_remove(&self->sockets, node);
+                self->m_num_sockets--;
                 jlos_free(socket);
                 break;
             }
+            node = node->next;
         }
     }
     return false;
@@ -368,9 +392,12 @@ jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t
         socket->m_remote_ip = ip;
         socket->m_local_port = JLOS_SWAP_ENDIAN_16(self->m_free_port++);
         socket->m_local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
-        self->sockets[self->m_num_sockets++] = socket;
         socket->m_state = JLOS_TCP_SYN_SENT;
         socket->m_sequence_number = 0xbeefcafe;
+
+        jlos_tcp_key_t key = {socket->m_local_ip, socket->m_local_port};
+        jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
+        self->m_num_sockets++;
         jlos_tcp_provider_send(self, socket, 0, 0, JLOS_TCP_SYN);
     }
     return socket;
@@ -391,7 +418,9 @@ jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t 
         socket->m_state = JLOS_TCP_LISTEN;
         socket->m_local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
         socket->m_local_port = JLOS_SWAP_ENDIAN_16(port);
-        self->sockets[self->m_num_sockets++] = socket;
+        jlos_tcp_key_t key = {socket->m_local_ip, socket->m_local_port};
+        jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
+        self->m_num_sockets++;
     }
     return socket;
 }

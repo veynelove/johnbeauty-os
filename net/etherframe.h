@@ -3,6 +3,7 @@
 
 #include <common/types.h>
 #include <drivers/amd_am79c973.h>
+#include <dsa/hash_chain.h>
 
 #define JLOS_SWAP_ENDIAN_16(m_x) ((((m_x) & 0x00FF) << 8) | (((m_x) & 0xFF00) >> 8))
 #define JLOS_SWAP_ENDIAN_32(m_x) ((((m_x) & 0xFF000000) >> 24) | (((m_x) & 0x00FF0000) >> 8) | (((m_x) & 0x0000FF00) << 8) | (((m_x) & 0x000000FF) << 24))
@@ -21,12 +22,13 @@ typedef struct jlos_ether_frame_handler jlos_ether_frame_handler_t;
 struct jlos_ether_frame_handler {
     jlos_ether_frame_provider_t *backend;
     uint16_t m_etherType_BE;
+    jlos_hash_node_t hash_node;
     bool (*on_ether_frame_received)(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t m_size);
 };
 
 struct jlos_ether_frame_provider {
     jlos_rawdata_handler_t base_handler;
-    jlos_ether_frame_handler_t **handlers;
+    jlos_hash_chain_t handlers;
 };
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE);

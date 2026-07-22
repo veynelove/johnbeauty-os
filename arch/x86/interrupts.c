@@ -1,4 +1,5 @@
 #include <arch/x86/interrupts.h>
+#include <hal/timer.h>
 
 extern void printf(const char *str);
 extern void printf_hex(uint8_t);
@@ -252,6 +253,8 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     }
     
     if (m_interrupt == self->m_hardware_interrupt_offset) {
+        /* PIT tick：先记 tick，再调度——调度器和任务都能读到最新 tick 值 */
+        jlos_hal_timer_on_tick();
         if (self != NULL && self->task_manager != NULL && self->task_manager->m_num_tasks > 0) {
             m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
         }
