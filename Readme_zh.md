@@ -5,6 +5,7 @@
 ## ✨ 功能亮点一览
 
 | 类别 | 已实现功能 |
+
 |---|---|
 | 🧠 **内核核心** | 32-bit 保护模式 flat 段、分页/堆 malloc/free(双堆切换)、PIT 100Hz 抢占调度、IDT+双8259 PIC 动态屏蔽 |
 | 🧩 **HAL 层 (6级完成)** | IO ops 运行时多态 + jlos_hal_info_t 只读硬件信息 + 统一设备模型(资源冲突检测+回滚) + 可重入自旋锁irqsave + mfence/lfence/sfence 内存屏障 + 环形I/O诊断 Trace |
@@ -18,7 +19,7 @@
 
 ## 📂 项目目录结构
 
-```
+```text
 johnbeauty-os/
 ├── arch/x86/               # x86 底层：loader.s、GDT/IDT、interruptstubs.s(4-byte int#)、context_switch、port I/O、PCI cfg、syscall 0x80
 ├── hal/                    # HAL 硬件抽象层（6级全部完成）：io/irq/mmu/syscall/context/barrier/spinlock/timer/pci/serial/block/dma/device/diag
@@ -38,7 +39,8 @@ johnbeauty-os/
 
 ---
 
-## 关键硬约束（踩坑总结）：
+## 关键硬约束（踩坑总结）
+
 1. `am79c973 INIT 块` 必须 **32 字节对齐**；`CSR3/CSR5` 禁止手动写，硬件从 INIT 块读
 2. 网卡初始化序列：`STOP → CSR4 → CSR1/CSR2 → INIT → STRT(0x42=STRT\|INEA)`；`CSR0.IENA(0x0400)=1`
 3. `sti()` 必须在 `network_init()` 之前（ARP resolve 要收中断包）
@@ -52,7 +54,8 @@ johnbeauty-os/
 ## 🔧 编译与运行
 
 ### 环境依赖
-```
+
+```text
 gcc-multilib  (支持 gcc -m32)
 nasm + binutils (i386 as / ld melf_i386)
 grub-pc-bin + xorriso  (grub-mkrescue 生成可引导 ISO)
@@ -60,6 +63,7 @@ grub-pc-bin + xorriso  (grub-mkrescue 生成可引导 ISO)
 ```
 
 ### 构建命令
+
 ```bash
 cd johnbeauty-os
 make            # 生成 johnkernel.iso（GRUB2 multiboot）
@@ -67,13 +71,17 @@ make clean      # 清理 obj / johnkernel.bin / johnkernel.iso
 ```
 
 1. 根目录auto_build_run.test文件存放有.bat文件内容，可用于自动编译加载iso，不过在运行之前需要修改文件内容:
-    *(ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"), 修改虚拟机ssh地址，以及虚拟机中项目地址
-    *(scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Desktop\johnkernel.iso), 修改iso复制到windows的路径，这里的路径要与虚拟机配置的iso路径一致，这样就可以覆盖旧的iso
-    *(start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"), 这里是命令行启动虚拟机，因虚拟机不同而不同，我用的是vmplayer 17
-    *note，另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如
-    "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
 
-2. 开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
+```text
+(ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"), 修改虚拟机ssh地址，以及虚拟机中项目地址
+(scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Desktop\johnkernel.iso), 修改iso复制到windows的路径，这里的路径要与虚拟机配置的iso路径一致，这样就可以覆盖旧的iso
+(start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"), 这里是命令行启动虚拟机，因虚拟机不同而不同，我用的是vmplayer 17
+```
+
+1. 另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如
+2. "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
+
+3. 开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
 
 ```bash
 CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
@@ -81,7 +89,8 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 ```
 
 ### ✅ 启动成功关键字段（串口/VGA 输出）
-```
+
+```text
 princess yihan is safe and happy!     # kernel_main 第 1 行（公主平安开心）
 initializing hardware, stage 1..3 start
 switched to low memory manager for PCI driver allocation
@@ -108,7 +117,9 @@ task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
 ## ❓ 历史 Question（留档）
 
 ### 1. GDT i[0]/i[1] 顺序问题
+
 原 `gdt.cpp:10` 代码：
+
 ```cpp
 i[0] = (uint32_t)this;
 i[1] = sizeof(GlobalDescriptorTable) << 16;
@@ -116,10 +127,13 @@ i[1] = sizeof(GlobalDescriptorTable) << 16;
 i[1] = (uint32_t)this;
 i[0] = sizeof(global_descriptor_table) << 16;
 ```
+
 > 在 `interrupts.activate()` 后启动虚拟机失败，提示虚拟 CPU 异常。**交换 i[0] 和 i[1] 后**，正常收到硬件中断。（GDTR 低 16 位是 limit，高 32 位是 base）
 
 ### 2. Mouse 颜色反转问题
+
 原 `mouse.cpp:60` 点击颜色代码：
+
 ```cpp
 for (uint8_t i = 0; i < 3; i++)
     if ((buffer[0] & (1<<i)) != (buttons & (1<<i)))
@@ -127,13 +141,14 @@ for (uint8_t i = 0; i < 3; i++)
                              | ((VideoMemory[80*y+x] & 0x0F00)<<4)
                              | ((VideoMemory[80*y+x] & 0x00FF));
 ```
+
 > 加上这段后，光标点击移动时**初始位置颜色不会恢复**（翻转后未复位）。本项目 VGA 驱动改为独立鼠标光标缓冲避免。
 
 ---
 
 ## 🏗️ 整体架构图
 
-```
+```text
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║                        🧑‍💻  用户态（多任务 + 测试服务）                           ║
 ╠════════════════════════════╦═══════════════════════╦═════════════════════════════╣
