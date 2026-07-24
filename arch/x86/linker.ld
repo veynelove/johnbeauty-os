@@ -2,11 +2,11 @@ ENTRY(loader)   /* 入口符号 */
 OUTPUT_FORMAT(elf32-i386)
 OUTPUT_ARCH(i386:i386)
 
-KERNEL_VIRTAL_BASE = 0x100000;  /* 1mb */
+KERNEL_VIRTUAL_BASE = 0x100000;  /* 1mb */
 
 SECTIONS
 {
-    . = KERNEL_VIRTAL_BASE; /* 为BIOS,VGA等预留内存 */
+    . = KERNEL_VIRTUAL_BASE; /* 为BIOS,VGA等预留内存 */
     .text ALIGN(4K) :
     {
         *(.multiboot)
@@ -30,12 +30,13 @@ SECTIONS
         *(COMMON)
         __bss_end = .;
     }
-    
+    . = ALIGN(4K);
     _kernel_end = .;
 
     /DISCARD/ : /* 丢弃不用节 */
     {
         *(.comment)
+        *(.note*)
     }
 }
 

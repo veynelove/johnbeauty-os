@@ -17,6 +17,8 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
+#include <kernel/paging.h>
+#include <kernel/page_frame_allocator.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -41,7 +43,7 @@ void call_constructors()
     }
 }
 
-void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_magicnumber)
+void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_magicnumber, uint32_t kernel_end)
 {
     jlos_printk_init();
     jlos_hal_arch_init();
@@ -94,6 +96,11 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
 
     jlos_irq_manager_activate(&irq_mgr);
     printf("interrupts activated\n");
+
+    jlos_page_frame_allocator_init(0x100000, 0x8000000, kernel_end);
+    printf("page frame allocator initialized\n");
+    jlos_paging_initialize_kernel_paging();
+    printf("paging initialized\n");
 
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");

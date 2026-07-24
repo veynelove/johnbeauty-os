@@ -1,5 +1,6 @@
 #include <arch/x86/interrupts.h>
 #include <hal/timer.h>
+#include <hal/paging.h>
 
 extern void printf(const char *str);
 extern void printf_hex(uint8_t);
@@ -236,6 +237,17 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     if (self->handles[m_interrupt] != NULL) {
         jlos_interrupt_handler_t *handler = (jlos_interrupt_handler_t*)self->handles[m_interrupt];
         m_esp = handler->handle_interrupt(handler, m_esp);
+    }
+    else if (m_interrupt == 0x0E) {
+        uint32_t cr2 = jlos_hal_paging_get_fault_addr();
+        jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
+        printf("PAGE FAULT at 0x");
+        printf_hex32(cr2);
+        printf(" err=0x");
+        printf_hex32(cpu->m_error);
+        printf(" @ EIP=0x");
+        printf_hex32(cpu->m_eip);
+        printf("\n");
     }
     else if (m_interrupt != self->m_hardware_interrupt_offset) {
         jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
