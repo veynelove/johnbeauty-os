@@ -5,8 +5,7 @@
 ## ✨ 功能亮点一览
 
 | 类别 | 已实现功能 |
-
-|---|---|
+| --- | --- |
 | 🧠 **内核核心** | 32-bit 保护模式 flat 段、分页/堆 malloc/free(双堆切换)、PIT 100Hz 抢占调度、IDT+双8259 PIC 动态屏蔽 |
 | 🧩 **HAL 层 (6级完成)** | IO ops 运行时多态 + jlos_hal_info_t 只读硬件信息 + 统一设备模型(资源冲突检测+回滚) + 可重入自旋锁irqsave + mfence/lfence/sfence 内存屏障 + 环形I/O诊断 Trace |
 | 🚗 **驱动** | AMD am79c973 PCI 网卡(20 RX + 8 TX desc 环)、ATA PIO-28 硬盘、PS/2 键盘、PS/2 鼠标、VGA 字符/图形模式、16550 UART COM1、8237 DMA |
