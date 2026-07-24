@@ -64,6 +64,7 @@ grub-pc-bin + xorriso  (grub-mkrescue 生成可引导 ISO)
 cd johnbeauty-os
 make            # 生成 johnkernel.iso（GRUB2 multiboot）
 make clean      # 清理 obj / johnkernel.bin / johnkernel.iso
+```
 
 1. 根目录auto_build_run.test文件存放有.bat文件内容，可用于自动编译加载iso，不过在运行之前需要修改文件内容:
     *(ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"), 修改虚拟机ssh地址，以及虚拟机中项目地址
@@ -71,9 +72,9 @@ make clean      # 清理 obj / johnkernel.bin / johnkernel.iso
     *(start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"), 这里是命令行启动虚拟机，因虚拟机不同而不同，我用的是vmplayer 17
     *note，另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如
     "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
-```
 
-开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
+2. 开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
+
 ```bash
 CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 # 运行到怀疑点：调用 jlos_hal_trace_dump(128) 打印最近 128 条 in/out 记录
