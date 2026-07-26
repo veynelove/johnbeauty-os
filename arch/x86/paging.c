@@ -46,3 +46,18 @@ uint32_t jlos_hal_paging_get_fault_addr(void)
     );
     return cr2;
 }
+
+bool jlos_hal_paging_supports_4mb_pages(void)
+{
+    uint32_t eax, ebx, ecx, edx;
+    
+    __asm__ __volatile__(
+        "cpuid\n\t"
+        : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+        : "a"(1)
+    );
+    
+    // PAE (Physical Address Extension) bit in edx[6]
+    // PSE (Page Size Extension) bit in edx[3]
+    return (edx & (1 << 6)) && (edx & (1 << 3));
+}

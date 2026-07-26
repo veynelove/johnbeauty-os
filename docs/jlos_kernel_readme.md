@@ -6,7 +6,7 @@
 
 ## 1. 目录结构
 
-```
+```text
 johnbeauty-os/
 ├── arch/x86/               # x86 平台启动与底层机制（loader、GDT、IDT、中断汇编、任务切换、PCI、port I/O、syscall）
 ├── hal/                    # 🧩 HAL 硬件抽象层（6 级扩展完成，隔离 arch 与上层）
@@ -28,7 +28,7 @@ johnbeauty-os/
 
 > 默认显示纯文本 ASCII 架构图（无依赖、无留白、字大图全）；折叠块保留原始 Mermaid 源码，**未来本地装 mmdc 可一键导出 2560px 大图 SVG**（见 ./images/README.txt）。
 
-```
+```text
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║                       🧑‍💻  用户态（多任务 + 测试服务）                            ║
 ╠════════════════════════════╦═══════════════════════╦═════════════════════════════╣
@@ -178,7 +178,7 @@ flowchart TB
 
 > 时间从上往下推进，每个节点写清动作 + 关键硬约束（踩过的坑直接标 ⚠️）。
 
-```
+```text
   ═══════════════════════════════════════════════════════════════════════
   T0   GRUB 装载 kernel.bin 到内存
        │
@@ -291,7 +291,7 @@ sequenceDiagram
 ## 4. 子系统索引文档
 
 | 文档（相对路径） | 子系统 | 内容 |
-|---|---|---|
+| --- | --- | --- |
 | [hal/jlos_hal_subsystem_readme.md](./hal/jlos_hal_subsystem_readme.md) | HAL 硬件抽象层 | 6 级设计总览 + ops 多态 + 设备模型 + 同步 + trace 图 |
 | [kernel/jlos_kernel_subsystem_readme.md](./kernel/jlos_kernel_subsystem_readme.md) | kernel/ 核心 | 内存管理器 + 多任务调度 + 中断/异常 + 三阶段硬件 init |
 | [net/jlos_net_subsystem_readme.md](./net/jlos_net_subsystem_readme.md) | net/ 网络协议栈 | 7 层协议栈分层图 + AMD 网卡 RX/TX 描述符环 + ARP/TCP/UDP Socket |
@@ -322,7 +322,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 ```
 
 ### 启动日志关键字段（成功标志）
-```
+```text
 princess yihan is safe and happy!   // kernel_main 第一行
 initializing hardware, stage 1..3 start
 switched to low memory manager for PCI driver allocation

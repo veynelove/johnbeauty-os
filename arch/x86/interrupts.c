@@ -1,6 +1,7 @@
 #include <arch/x86/interrupts.h>
 #include <hal/timer.h>
 #include <hal/paging.h>
+#include <hal/irq.h>
 
 extern void printf(const char *str);
 extern void printf_hex(uint8_t);
@@ -239,15 +240,9 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         m_esp = handler->handle_interrupt(handler, m_esp);
     }
     else if (m_interrupt == 0x0E) {
-        uint32_t cr2 = jlos_hal_paging_get_fault_addr();
-        jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
-        printf("PAGE FAULT at 0x");
-        printf_hex32(cr2);
-        printf(" err=0x");
-        printf_hex32(cpu->m_error);
-        printf(" @ EIP=0x");
-        printf_hex32(cpu->m_eip);
-        printf("\n");
+        jlos_irq_context_t context;
+        jlos_irq_context_init(&context, m_esp);
+        jlos_paging_page_fault_handler(&context);
     }
     else if (m_interrupt != self->m_hardware_interrupt_offset) {
         jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
@@ -284,4 +279,13 @@ void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uin
 {
     self->handles[m_interrupt] = handler;
     jlos_irq_pic_unmask(self, m_interrupt);  /* 注册即 unmask */
+}
+
+void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
+{
+    jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)arch_state_ptr;
+    context->m_error = cpu->m_error;
+    context->m_instruction_pointer = cpu->m_eip;
+    context->m_code_segment = cpu->m_cs;
+    context->m_flags = cpu->m_eflags;
 }

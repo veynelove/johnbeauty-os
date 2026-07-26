@@ -54,10 +54,14 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self);
 bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t flags);
 bool jlos_paging_unmap(jlos_paging_context_t *self, uint32_t virtual_addr);
 uint32_t jlos_paging_get_physical_addr(jlos_paging_context_t *self, uint32_t virtual_addr);
+bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_start,
+    uint32_t physical_addr_start, size_t size, uint32_t flags);
 
 void jlos_paging_enable(jlos_paging_context_t *self);
 void jlos_paging_disable(void);
 void jlos_paging_switch(jlos_paging_context_t *self);
+void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
+    uint32_t flags);
 
 void jlos_paging_initialize_kernel_paging(void);
 
@@ -73,6 +77,6 @@ static inline uint32_t jlos_paging_get_page_table_index(uint32_t virtual_addr)
 
 static inline uint32_t jlos_paging_get_page_offset(uint32_t virtual_addr)
 {
-    return virtual_addr & 0x3FF;
+    return virtual_addr & 0xFFF;
 }
 #endif

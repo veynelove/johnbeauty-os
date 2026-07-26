@@ -36,12 +36,14 @@
 **当前状态**：仅有链表式堆分配器，无分页/内存保护
 
 **目标**：
+
 1. x86 4KB 分页机制 + 页表/页目录管理
 2. CR3 切换 + 虚拟地址空间映射
 3. Page Fault 中断处理
 4. 内核/用户空间隔离
 
 **文件结构**：
+
 ```
 kernel/
 ├── paging.h/c       ← 分页实现（map/unmap/enable/switch）
@@ -55,6 +57,7 @@ kernel/
 **当前状态**：仅 1 个 SYS_PRINTF
 
 **目标**：
+
 | 编号 | 名称 | 功能 | 参数 |
 |------|------|------|------|
 | 0 | SYS_EXIT | 退出进程 | int status |
@@ -77,6 +80,7 @@ kernel/
 **当前状态**：简单轮转 + 256 任务上限 + 无状态管理
 
 **目标**：
+
 1. 调度：优先级调度 + 时间片轮转（Round Robin / Multilevel Queue）
 2. 进程状态机：就绪 → 运行 → 阻塞（时间片用完返回就绪）
 3. 同步：信号量 + 互斥锁 + 条件变量
@@ -89,9 +93,11 @@ kernel/
 **当前状态**：仅基础 FAT32 结构定义
 
 **目标 API**：
+
 ```c
 mount/unmount → open/close → read/write/seek → create/delete → readdir
 ```
+
 **配套**：文件权限 + 目录遍历 + 缓冲区缓存
 
 ---
@@ -101,10 +107,12 @@ mount/unmount → open/close → read/write/seek → create/delete → readdir
 **已完成协议**：ARP ✅ IPv4 ✅ ICMP ✅ UDP ✅ TCP ✅ HTTP ✅
 
 **待完成**：
+
 - [ ] DHCP（自动获取 IP）
 - [ ] DNS（域名解析）
 
 **性能优化**：
+
 - DMA 减少 CPU 拷贝 + 中断合并 + 零拷贝 + 缓冲池预分配
 
 ---
@@ -136,10 +144,12 @@ mount/unmount → open/close → read/write/seek → create/delete → readdir
 ## 📝 开发日志
 
 ### 2026-07-01
+
 - 网络栈全部打通：ARP/IPv4/ICMP/UDP/TCP/HTTP 全部验证通过
 - TCP 序列号三次握手对齐 Bug 修复完成，`curl -v` 原生 HTTP/1.1 200 OK
 
 ### 2026-06-23
+
 - 初始化优化计划
 - 启动阶段一：虚拟内存管理
 
@@ -148,6 +158,6 @@ mount/unmount → open/close → read/write/seek → create/delete → readdir
 ## 🔗 参考资料
 
 1. Intel x86 Architecture Manual
-2. OSDEV Wiki：https://wiki.osdev.org/
+2. OSDEV Wiki：<https://wiki.osdev.org/>
 3. 《Operating Systems: Three Easy Pieces》
 4. 《Modern Operating Systems》 - Andrew Tanenbaum

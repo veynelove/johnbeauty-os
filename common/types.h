@@ -33,4 +33,6 @@ typedef uint32_t                   uintptr_t;
      (((uint32_t)(x2) & 0xFF) << 8)  | \
       ((uint32_t)(x1) & 0xFF))
 
+#define JLOS_EXCEPT_CEIL(a, b) (((a) + (b) - 1) / (b))
+
 #endif

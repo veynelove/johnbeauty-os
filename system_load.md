@@ -88,13 +88,16 @@ loader:
 
 > **L20：设内核栈——最关键的一行。**  
 > 指向 BSS 段尾巴（[loader.s#L33-L36](./arch/x86/loader.s#L33-L36)）：
+>
 > ```asm
 > .section .bss
 > .align 16
 > .space 4*1024*1024   ; 先留 4MB 空间（从低往高写）
 > kernel_stack:        ; 栈顶 = 空间末尾（栈是从高往低 push）
 > ```
+>
 > 为什么 4MB？
+>
 > - 中断嵌套越深，压栈越多（ISR 里 pusha = 8 个寄存器）；
 > - 以后多任务每个 task 还要留独立栈（后面还要加）；
 > - 4MB 是 2^22 对齐，SSE/AVX 指令 16 字节对齐不炸。
@@ -105,17 +108,21 @@ loader:
 
 > **L22：调用 C constructor（.init_array 段）。**  
 > 对应 [kernel/kernel.c#L37-L42](./kernel/kernel.c#L37-L42) 的 for 循环：
+>
 > ```c
 > for (constructor* i = &__init_array_start; i != &__init_array_end; i++)
 >     (*i)();
 > ```
+>
 > 段边界由 [linker.ld#L19-L22](./linker.ld#L19-L22) 定义：
+>
 > ```
 > __init_array_start = .;
 > KEEP(*(.init_array));
 > KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)));
 > __init_array_end = .;
 > ```
+>
 > 目前我们没有任何 `__attribute__((constructor))`，所以 start == end，循环 0 次立即返回，占位用。
 
 ```asm
@@ -126,10 +133,12 @@ loader:
 
 > **L24-L26：正式进入 C 世界！**  
 > cdecl 约定（C 函数调用 ABI）：**第一个参数最后 push**。所以：
+>
 > - 先 push EAX（第二个参数 `m_magicnumber`）
 > - 再 push EBX（第一个参数 `multiboot_structure`）
 >
 > 刚好对应函数签名：
+>
 > ```c
 > void john_beauty_main(
 >     const multiboot_info_t *multiboot_structure,  // ← push %ebx, 参数1
@@ -156,7 +165,7 @@ _stop:
 
 ### 🚩 L46：`jlos_printk_init()` — 「让你看得见东西」
 
-文件位置：[kernel/printk.c#L7-L11](./kernel/printk.c#L7-L11) 
+文件位置：[kernel/printk.c#L7-L11](./kernel/printk.c#L7-L11)
 
 ```c
 void jlos_printk_init(void) {
@@ -173,6 +182,7 @@ void jlos_printk_init(void) {
 | **串口 init** | 16550 UART @ 0x3F8（COM1）：<br>设 LCR=0x80 → 写分频器 12（115200Hz）→ 关 FIFO → 关中断 | ⚠️ **OS 开发第一铁律：先打通「能看见报错」的通道！**<br>如果后面 jlos_hal_arch_init 炸了，没串口 init = 黑屏等死，根本不知道哪步挂的。 |
 
 后面所有 `printf()` 都会**同时写两个地方**：
+
 - COM1 串口（VMware/QEMU 看日志的出口）；
 - VGA text buffer 0xB8000（虚拟机屏幕上显示的 80×25 字符）。
 
@@ -200,6 +210,7 @@ HAL 层的「平台资源注册」函数，内部核心：
 ### 🚩 L48：`printf("princess yihan is safe and happy!\n")` — 「系统活了」标记
 
 这是整个内核**第一个正式打印**的消息。如果屏幕上看不到它：
+
 - 99% 可能是 [linker.ld](./linker.ld) 的内存基址（0x100000 = 1MB）错了，GRUB 没找到 C 入口；
 - 0.9% 可能是 [loader.s L20](./arch/x86/loader.s#L20) 栈顶地址算炸，call printf 第一条 push 就 #GP 死机；
 - 0.1% 可能是串口 init 全挂了（少见）。
@@ -211,11 +222,13 @@ HAL 层的「平台资源注册」函数，内部核心：
 ⚠️ **现在还没开分页（CR0.PG=0，物理地址直连）**，那 mmu_ctx 干嘛用？
 
 `jlos_mmu_t` 里装的是：
+
 - 页目录 PD（Page Directory，1024 PDE）
 - 页表 PT 数组（Page Table，每个 1024 PTE）；
 - 当前启用的页表根。
 
 虽然现在没开 PG，但：
+
 1. **中断管理器、任务管理器都要求传 mmu_ctx 指针当参数**——以后 #PF 缺页处理、切任务换页表、Copy-On-Write 都靠它；
 2. 先「壳子挂全局」，后面子系统要存 mmu 信息就有地方挂；
 3. 开分页只需要一条 `mov CR3, PD_Phys; mov CR0, PGbit` 的事，到时候直接用。
@@ -267,6 +280,7 @@ jlos_memory_manager_init(&memory_manager_, heap_start,
 | `× 1024` | = 251658240 字节 = `0x0F000000` | 转成字节地址（你日志里 heap 是 `0x0EDCF000`，差一点是 GRUB 对齐 + multiboot mem_upper 取整的偏差，正常） |
 
 为什么放「内存尾巴的倒数 16MB」而不是 1MB 紧挨着放？
+
 1. **1MB-4MB 预留**：留给 .bss / 内核栈 / 低地址堆 / DMA bounce buffer 用；
 2. **越界容错**：万一有人 malloc 然后越界写，写的是物理内存末尾的「空洞区」，不会踩坏 0x100000 开头的内核正文 .text 段（踩 .text 会飞随机错误，查半年都找不到）；
 3. **大小 16MB 够用**：网络栈 sockets[] 65535 × 结构体（~256B）≈16MB，刚好塞下（你项目记忆里的硬约束，65535 硬编码会栈爆炸 → 改堆上分配就是靠这个堆）。
@@ -276,6 +290,7 @@ jlos_memory_manager_init(&memory_manager_, heap_start,
 ### 🚩 L61-L62：`jlos_task_manager_init(&task_manager_)` — 「调度器壳子」
 
 内部核心：
+
 1. 任务双向链表 `head = tail = NULL`（当前没任务）；
 2. 全局 `jlos_active_task_manager = &task_manager_`（PIT IRQ0 来了调度点要用）；
 3. 调度策略 = **RR（Round-Robin 轮转，时间片 10ms）**；
@@ -285,7 +300,7 @@ jlos_memory_manager_init(&memory_manager_, heap_start,
 
 ### 🚩 L64-L65：`jlos_irq_manager_init(&irq_mgr, 0x20, &mmu_ctx, &task_manager_)` — 「中断准备（但不开中断！）」
 
-#### 4 个参数表解：
+#### 4 个参数表解
 
 | 参数 | 值 | 作用 |
 |---|---|---|
@@ -294,7 +309,7 @@ jlos_memory_manager_init(&memory_manager_, heap_start,
 | `&mmu_ctx` | L51 建好的 | #PF 缺页异常（vector 14）要查页目录，给缺页处理用 |
 | `&task_manager_` | L62 建好的 | ⚠️ 关键关联：PIT IRQ0（vector 32）ISR 跑完会调用 `jlos_task_manager_schedule(cpustate)` 切任务，所以 irq_mgr 必须拿 task_manager_ 指针才能切。 |
 
-#### 内部关键动作（都是踩坑出来的硬约束）：
+#### 内部关键动作（都是踩坑出来的硬约束）
 
 1. **填 256 个 IDT 门**（0-255）：
    - 异常（0-31）：每个挂自己的 stub。⚠️ **必须区分带/不带错误码的 stub**！（项目记忆硬约束）：
@@ -322,6 +337,7 @@ jlos_memory_manager_init(&memory_manager_, heap_start,
 | `0x80` = 128 | Linux 经典约定号 | **用户态 `int $0x80` → 内核入口**（你写的 sysprintf 就是 eax=4） |
 
 内部关键动作（踩坑 ⚠️）：
+
 1. IDT 向量 128 的 DPL 设成 3（用户态 CPL=3 才能触发 `int 0x80`，否则直接 #GP 把用户程序杀了）；
 2. 注册 syscall 表：`eax=0`→sys_exit / `eax=4`→sys_write（printf）；
 3. ⚠️ **`jlos_syscall_handler_init` 必须在 `jlos_interrupt_handler_init` 之后**手动把 `handle_interrupt` 回调 set 回去。HAL 的初始化顺序小坑：如果 syscall init 不手动设置回调 → HAL 不认识 vector 128 → 用户态 `int 0x80` 直接走 unhandled_interrupt → 黑屏。
@@ -357,6 +373,7 @@ L72 的 driver_manager_init 就是建个空链表，后面 PCI 枚举到设备�
 ### 🚩 L78-L79：`jlos_hal_pci_init(&pci_controller)` — 「PCI 控制器初始化」
 
 PCI Mechanism #1（x86 PC 标准）初始化：
+
 - 验证配置空间可用：对 bus0/dev0/func0 读 Vendor ID，如果不是 `0xFFFF` 就说明 Mechanism #1 正常；
 - 把「地址端口 0xCF8 / 数据端口 0xCFC」的 HAL ops 表填好；
 - 为什么走 HAL？以后上 RISC-V（ECAM）/ ARM（GICv3 ITS）直接换 PCI ops 表，kernel.c 不动。
@@ -384,7 +401,7 @@ printf("switched back to main memory manager\n");                  // L86
 
 类似 Linux 的 `set_current_mm()` 切换当前进程页表的思路：改全局指针，下面所有子函数不用传堆参数。
 
-#### L84：`jlos_hal_pci_enumerate_and_bind_drivers` 核心动作（三层嵌套循环）：
+#### L84：`jlos_hal_pci_enumerate_and_bind_drivers` 核心动作（三层嵌套循环）
 
 ```
 for bus 0..255:
@@ -406,6 +423,7 @@ for bus 0..255:
 ```
 
 你日志里对得上的打印：
+
 ```
 Allocating AMD am79c973 driver structure...
 AMD am79c973 driver allocated at: 0x00050010      ← 0x50010 = 低地址堆基址 0x50000 + 0x10，完美命中
@@ -413,6 +431,7 @@ AMD am79c973 IRQ=0B interrupt=2B
 ```
 
 为什么 L85 必须立刻切回主堆？
+
 - 低地址堆只有 320KB！后面 network_init() 要 malloc 一个 `network_stack_t`（里面 65535 个 socket 的超大数组，直接超 320KB）；
 - 不切回去 → 低地址堆炸 → 描述符被 network_stack_t 踩 → 网卡 MISS 错误（项目记忆里的「MISSED ERROR」大坑）。
 
@@ -447,6 +466,7 @@ STOP → CSR4 → CSR1/CSR2(INIT block addr, 32B 对齐) → INIT → STRT(0x42)
 | 6 | CSR0 | `0x0042` (STRT \| INEA) | ⚠️ 必须**同时**设置：<br>STRT=1 开始收发；<br>INEA=1 让 IRQ 引脚能输出（不设 INEA 芯片收到包只会设 RINT 位不发 IRQ） | 只写 STRT=0x02 不写 INEA → 网卡收包但 CPU 不知道，你会看见 receive descriptor 有数据但 ISR 永远不进（项目踩过的坑）。 |
 
 激活完日志里会看到：
+
 ```
 POST-START CSR0=0x01F3
   STRT=01 INEA=01 INTR=01 RXON=01 TXON=01
@@ -493,6 +513,7 @@ printf("PIT timer initialized (100Hz)\n");
 > ARP 协议栈 `network_init` 最后一步是「广播求网关 MAC → 等 ARP reply」。如果没开中断，`hlt` 会睡死没人能收 ARP reply → 死循环超时。开了 sti，网卡 IRQ 打断 hlt → ISR 收 ARP → cache 更新 → 继续。
 
 sti 之后你会看到这行打印，系统从此进入事件驱动模式：
+
 ```
 interrupts activated
 ```

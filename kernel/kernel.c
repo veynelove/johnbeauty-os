@@ -52,20 +52,28 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_mmu_t mmu_ctx;
     jlos_mmu_init(&mmu_ctx);
     
+    jlos_page_frame_allocator_init(KERNEL_MEMORY_ADDR_START, KERNEL_MEMORY_ADDR_END, kernel_end);
+    printf("page frame allocator initialized\n");
+    jlos_paging_initialize_kernel_paging();
+    printf("paging initialized\n");
+    
     uint8_t* low_memory_heap = (uint8_t*)(0x50000);
     jlos_memory_manager_t low_memory_manager_;
     jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, 0x50000);
     
-    uint8_t* heap_start = (uint8_t*)(1024 * (multiboot_structure->mem_upper - 1024 * 16));
+    void *first_free_frame_ptr = jlos_page_frame_malloc();
+    jlos_page_frame_free(first_free_frame_ptr);
+    uint8_t* heap_start = (uint8_t*)(first_free_frame_ptr);
     jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init(&memory_manager_, heap_start, 1024 * 1024 * 16);
+    jlos_memory_manager_init(&memory_manager_, heap_start, 16 * 1024 * 1024);
     
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);
     
     jlos_irq_manager_t irq_mgr;
     jlos_irq_manager_init(&irq_mgr, 0x20, &mmu_ctx, &task_manager_);
-    
+    printf("interrupt manager initialized\n");
+
     jlos_syscall_t syscalls;
     jlos_syscall_init(&syscalls, &irq_mgr, 0x80);
 
@@ -83,6 +91,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
     jlos_active_memory_manager = &low_memory_manager_;
     printf("switched to low memory manager for PCI driver allocation\n");
+    
     jlos_hal_pci_enumerate_and_bind_drivers(&pci_controller, &driver_manager_, &irq_mgr);
     jlos_active_memory_manager = old_manager;
     printf("switched back to main memory manager\n");
@@ -97,15 +106,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_irq_manager_activate(&irq_mgr);
     printf("interrupts activated\n");
 
-    jlos_page_frame_allocator_init(0x100000, 0x8000000, kernel_end);
-    printf("page frame allocator initialized\n");
-    jlos_paging_initialize_kernel_paging();
-    printf("paging initialized\n");
-
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
 #endif
-    /* 避免栈溢出：network_stack_t 很大，改到静态存储区或堆上 */
     network_stack_t *network_stack = (network_stack_t *)jlos_malloc(sizeof(network_stack_t));
     network_init(network_stack, &driver_manager_);
 
@@ -119,6 +122,6 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
 #endif
     
     for (;;) {
-        __asm__ __volatile__("hlt");
+        jlos_hal_halt();
     }
 }

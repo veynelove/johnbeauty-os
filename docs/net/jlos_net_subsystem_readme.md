@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 net/
 ├── network.h / network.c         🚀 网络入口：分层 init + IP 设置 + ARP 求网关
 ├── etherframe.h / etherframe.c   🖇️  L2 数据链路：Ethernet II 收/发 → 按 ethertype 分发
@@ -21,7 +21,7 @@ net/
 
 ## 2. 协议栈分层架构图（ASCII 7 层塔 · GitLab 清晰）
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │  应用层  L7                                                           │
 │  ┌─────────────────────────┐  ┌─────────────────────────────────┐    │
@@ -104,7 +104,7 @@ flowchart TB
 
 ### 3.1 收包（IRQ 0x2B → 应用 · ASCII 分层流水线）
 
-```
+```text
  AMD网卡硬件     am79c973 ISR     etherframe      L3: ARP/IPv4      L4: UDP/TCP     应用层server
  (RINT中断)     (int 0x2B)       handler         (分发处理)        (socket匹配)   (on_data回调)
       │              │                │                 │                │               │
@@ -177,7 +177,7 @@ sequenceDiagram
 </details>
 
 ### 3.2 发包（应用 → 网卡 TX desc 环）
-```
+```text
 应用 send() → udp_send / tcp_send_segment
   → ipv4_send(src,dst,proto)：加 IP 头 + checksum
     → arp_resolve(dst_ip)：查缓存 → 未命中→广播 ARP request（timeout 5,000,000）
@@ -238,7 +238,7 @@ typedef struct {
 ```
 
 | Layer | 端口占用 | 启动日志 |
-|---|---|---|
+| --- | --- | --- |
 | HTTP server (TCP) | 1234 | `Starting HTTP server on port 1234...` |
 | UDP server | 5678 | `UDP server listening on port 5678` |
 

@@ -363,6 +363,7 @@ void jlos_hal_arch_init(void)
 
     /* jlos_hal_device_register 内部已调 jlos_hal_irq_claim → refresh_reserved_bitmap，
      * s_hal_info.irq_reserved_bitmap_31_0 自动同步 */
+    jlos_hal_kernel_segments_init();
 }
 
 /* -------------------- 对外只读查询 + bitmap 同步 -------------------- */
