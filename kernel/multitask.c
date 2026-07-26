@@ -29,6 +29,7 @@ void jlos_task_manager_init(jlos_task_manager_t* self)
 {
     self->m_num_tasks = 0;
     self->m_current_task = -1;
+    self->main_thread_saved = false;
 }
 
 void jlos_task_manager_destroy(jlos_task_manager_t* self)
@@ -52,10 +53,19 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
         return cpustate;
     }
 
-    if (self->m_current_task >= 0 && self->m_current_task < (int)self->m_num_tasks) {
-        if (self->tasks[self->m_current_task] != NULL) {
-            self->tasks[self->m_current_task]->cpustate = *cpustate;
-            self->tasks[self->m_current_task]->m_saved_esp = (uint32_t)cpustate;
+    /* 如果当前是主线程（m_current_task == -1），保存主线程的状态 */
+    if (self->m_current_task == -1) {
+        if (!self->main_thread_saved) {
+            self->main_thread_state = *cpustate;
+            self->main_thread_esp = (uint32_t)cpustate;
+            self->main_thread_saved = true;
+        }
+    } else if (self->m_current_task < (int)self->m_num_tasks) {
+        /* 如果当前是任务，保存任务的状态 */
+        jlos_task_t *current = self->tasks[self->m_current_task];
+        if (current != NULL && current->m_status == JLOS_TASK_RUNNING) {
+            current->cpustate = *cpustate;
+            current->m_saved_esp = (uint32_t)cpustate;
         }
     }
 
@@ -81,7 +91,15 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
         }
     }
 
-    /* 所有任务已终止，回到主循环上下文 */
+    /* 所有任务已终止，恢复主线程的状态 */
     g_current_task_ptr = NULL;
+    self->m_current_task = -1;
+    if (self->main_thread_saved) {
+        self->main_thread_saved = false;
+        uint32_t *src = (uint32_t*)&self->main_thread_state;
+        uint32_t *dst = (uint32_t*)self->main_thread_esp;
+        for (int k = 0; k < 11; k++) dst[k] = src[k];
+        return (jlos_cpu_state_t*)self->main_thread_esp;
+    }
     return cpustate;
 }

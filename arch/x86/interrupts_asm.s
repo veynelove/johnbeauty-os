@@ -70,7 +70,7 @@ handle_interrupt_request 0x31
 handle_interrupt_request 0x80
 
 int_bottom:
-	# save registers
+# save registers
 
 	pushl %ebp
 	pushl %edi
@@ -86,7 +86,7 @@ int_bottom:
 	call jlos_interrupt_manager_handle_interrupt
 	mov %eax, %esp
 
-	# restore registers
+# restore registers
 	popl %eax
 	popl %ebx
 	popl %ecx

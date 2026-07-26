@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 hal/
 ├── hal.h / hal.c              🧱 核心：IO ops 多态表 + jlos_hal_info_t(硬件探测只读) + IO/IRQ 资源 claim
 ├── io.h  / io.c               ⚡ IO 抽象：jlos_io8/16/32[_slow]，宏→inline→ops运行时调度
@@ -29,7 +29,7 @@ hal/
 
 ## 2. HAL 6 级升级架构图（ASCII 箭头链 · GitLab 清晰）
 
-```
+```text
   🏆 Level 1          🏆 Level 2          🏆 Level 3          🏆 Level 4
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │ 宏→inline函数 │───▶│ 硬件子系统包装 │───▶│ 只读信息聚合  │───▶│ 同步原语 HAL  │
@@ -114,7 +114,7 @@ const jlos_hal_info_t *jlos_hal_get_info(void);   /* 只读指针，禁止修改
 #### 内存屏障（[hal/barrier.h](../../hal/barrier.h)）
 
 | 宏 | x86 | ARM | RISC-V | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `jlos_barrier()` | 编译器屏障 `""::: "memory"` | 同左 | 同左 | 防 GCC 重排 |
 | `jlos_mb()`   | `mfence`（全） | `dmb ish`（内共享域） | `fence rw, rw` | Load+Store 全部序化 |
 | `jlos_rmb()`  | `lfence`（Load） | `dmb ishld` | `fence r, r` | WC/UC 内存读序化 |
@@ -138,7 +138,7 @@ void     jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags);
 
 ### 3.4 统一设备模型 + 资源冲突检测（Level 5 · ASCII 流程图）
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │          jlos_hal_device_register(dev)  入口                 │
 └──────────────────────────────┬───────────────────────────────┘
@@ -207,7 +207,7 @@ typedef struct jlos_device {
 > **`HAL_CONFIG_TRACE_IO` 作用域判定**：仅 HAL 内部（hal/ 子目录）使用，因此放在 [hal.h#L8-L11](../../hal/hal.h#L8-L11)，默认 0（关闭），编译时 `-D` 覆盖，不污染全局 config。
 
 | 宏 | =0（默认） | =1（诊断） |
-|---|---|---|
+| --- | --- | --- |
 | `HAL_TRACE_IO(op,port,val)` | `do{}while(0)` → 0 字节 | 写环形 512 条缓冲：file+line+op+port+val+tick |
 | `HAL_TRACE_MSG(m)` | 空 | 打高层语义（"ATA read sectors"/"DMA start"） |
 | `HAL_TRACE_DUMP(64)` | 空 | 打印最近 64 条（basename + 行号） |
@@ -223,7 +223,7 @@ typedef struct jlos_device {
 ## 4. 对外关键 API 速查
 
 | 分类 | API | 功能 |
-|---|---|---|
+| --- | --- | --- |
 | 初始化 | `jlos_hal_arch_init()` | 启动时一次性：设 ops 表 + 注册 5 个平台设备 + 同步 IRQ bitmap |
 | 只读硬件信息 | `jlos_hal_get_info()` | 返回 `const jlos_hal_info_t*`（所有硬件假设集中读这里） |
 | 资源 claim | `jlos_hal_register_io_range(s,e,owner)` / `jlos_hal_irq_claim(irq,owner)` | 冲突返回非 0，bitmap 自动同步 |

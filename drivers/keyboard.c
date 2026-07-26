@@ -53,7 +53,7 @@ void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self)
 
 uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t m_esp)
 {
-    #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
+#define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
     jlos_keyboard_driver_t* keyboard = (jlos_keyboard_driver_t*)((char*)self - offsetof(jlos_keyboard_driver_t, base_handler));
 
     uint8_t status = jlos_io8_read(&keyboard->m_commandport);

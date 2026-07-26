@@ -66,7 +66,7 @@ void jlos_mouse_driver_activate(jlos_mouse_driver_t* self)
 
 uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t m_esp)
 {
-    #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
+#define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
     jlos_mouse_driver_t* mouse = (jlos_mouse_driver_t*)((char*)self - offsetof(jlos_mouse_driver_t, base_handler));
 
     uint8_t status = jlos_io8_read(&mouse->m_commandport);

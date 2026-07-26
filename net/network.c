@@ -27,18 +27,18 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     uint32_t gateway_ip_be = BYTES_TO_BE32(1, 0x9F, 168, 192);
     uint32_t subnet_be = BYTES_TO_BE32(0, 255, 255, 255);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
     printf("NET: Setting IP to 192.168.159.144\n");
-    #endif
+#endif
     jlos_amd_am79c973_set_ip_address(eth0, ip_be);
     
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing Ethernet frame provider...\n");
-    #endif
+#endif
     jlos_ether_frame_provider_init(&stack->etherframe, eth0);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool ether_ok = true;
     if (stack->etherframe.handlers.buckets == NULL) {
         printf("NET: [FAIL] EtherFrame handlers allocation failed!\n");
@@ -57,14 +57,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf_hex32((uint32_t)stack->etherframe.handlers.buckets);
         printf(")\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing ARP protocol...\n");
-    #endif
+#endif
     jlos_arp_init(&stack->arp, &stack->etherframe);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool arp_ok = true;
     uint16_t arp_etype = JLOS_SWAP_ENDIAN_16(0x806);
     if (stack->arp.base_handler.backend == NULL) {
@@ -98,14 +98,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     if (arp_ok) {
         printf("ARP: [ OK ] initialized (type=0x0806, cache_size=128)\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing IPv4 protocol (gateway: 192.168.159.1, subnet: 255.255.255.0)...\n");
-    #endif
+#endif
     jlos_internet_protocol_provider_init(&stack->ipv4, &stack->etherframe, &stack->arp, gateway_ip_be, subnet_be);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool ipv4_ok = true;
     uint16_t ip_etype = JLOS_SWAP_ENDIAN_16(0x800);
     if (stack->ipv4.base_handler.backend == NULL) {
@@ -149,14 +149,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf_hex32(stack->ipv4.m_subnet_mask);
         printf(")\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing ICMP protocol...\n");
-    #endif
+#endif
     jlos_icmp_init(&stack->icmp, &stack->ipv4);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool icmp_ok = true;
     if (stack->icmp.base_handler.backend == NULL) {
         printf("ICMP: [FAIL] backend is NULL!\n");
@@ -179,14 +179,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     if (icmp_ok) {
         printf("ICMP: [ OK ] initialized (proto=0x01)\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing UDP protocol...\n");
-    #endif
+#endif
     jlos_udp_provider_init(&stack->udp, &stack->ipv4);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool udp_ok = true;
     if (stack->udp.base_handler.backend == NULL) {
         printf("UDP: [FAIL] backend is NULL!\n");
@@ -227,14 +227,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf_hex32((uint32_t)stack->udp.sockets.buckets);
         printf(")\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Initializing TCP protocol...\n");
-    #endif
+#endif
     jlos_tcp_provider_init(&stack->tcp, &stack->ipv4);
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     bool tcp_ok = true;
     if (stack->tcp.base_handler.backend == NULL) {
         printf("TCP: [FAIL] backend is NULL!\n");
@@ -275,14 +275,14 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf_hex32((uint32_t)stack->tcp.sockets.buckets);
         printf(")\n");
     }
-    #endif
+#endif
 
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Sending ARP broadcast to resolve gateway...\n");
-    #endif
+#endif
     jlos_arp_broadcast_mac_address(&stack->arp, gateway_ip_be);
     
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("NET: Network stack initialization complete!\n");
-    #endif
+#endif
 }

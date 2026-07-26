@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 filesystem/
 ├── msdospath.h / msdospath.c    🛤️  MS-DOS 风格路径解析（a/b/c.txt, 8.3, 支持 / 和 \）
 └── fat.h / fat.c                📀  FAT16/FAT32 文件系统：BPB 读取 + 目录项 + 簇链
@@ -20,7 +20,7 @@ drivers/
 
 ## 2. 三层架构图（ASCII 从上到下调用链 · GitLab 清晰）
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │  👤 应用 / 内核组件  (cp 拷贝 / ls 列目录 / shell 命令)              │
 └────────────────────────────────────┬───────────────────────────────┘
@@ -96,7 +96,7 @@ typedef struct jlos_hal_block_dev {
 ### 3.2 API（上层只调这些）
 
 | API | 行为 |
-|---|---|
+| --- | --- |
 | `jlos_hal_block_ata_pio28_create(dev, port_base, master)` | 绑定 ATA PIO-28 后端 |
 | `jlos_hal_block_init/destroy/identify/flush(dev)` | 生命周期 |
 | `jlos_hal_block_read(dev, lba, buf, count)` | 连续读 count 扇区 → 内部扇区循环 + LBA 校验 |
@@ -153,7 +153,7 @@ typedef struct {
 ```
 
 **cluster → LBA 换算**：
-```
+```text
 data_area_lba = reserved_sectors + fat_copies × fat_sector_count
                 + (root_dir_entries × 32 + bytes_per_sector - 1) / bytes_per_sector
 cluster_lba(cl) = data_area_lba + (cl - 2) × sectors_per_cluster

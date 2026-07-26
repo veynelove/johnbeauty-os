@@ -51,16 +51,14 @@ uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock)
 
 void jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags)
 {
-    if (!lock) return;
-    if (lock->recursion_depth <= 0) return;
+    if (!lock || lock->recursion_depth <= 0) return;
     lock->recursion_depth--;
     if (lock->recursion_depth == 0) {
         /* release barrier：临界区内的 load/store 不能跑到放锁之后 */
         jlos_mb();
         __asm__ __volatile__("movl $0, %0" : "+m"(lock->lock) :: "memory");
-        __asm__ __volatile__("push %0; popf" :: "r"(lock->irq_state) : "memory", "cc");
+        __asm__ __volatile__("push %0; popf" :: "r"(flags) : "memory", "cc");
     }
-    (void)flags;
 }
 
 #elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_ARM

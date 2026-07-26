@@ -70,7 +70,8 @@ void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self)
 static uint32_t tcp_hash_ip_port(const void *key)
 {
     jlos_tcp_key_t *k = (jlos_tcp_key_t *)key;
-    return k->ip ^ (k->port << 16) ^ (k->port >> 16);
+    uint32_t port = k->port;
+    return k->ip ^ (port << 16) ^ (port >> 16);
 }
 
 static int tcp_cmp_ip_port(const void *key, const void *node)
@@ -99,6 +100,28 @@ void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self)
 {
     jlos_hash_chain_destroy(&self->sockets);
     jlos_internet_protocol_handler_destroy(&self->base_handler);
+}
+
+static int tcp_match_socket(jlos_hash_node_t *node, void *args1)
+{
+    jlos_tcp_socket_t *socket = container_of(node, jlos_tcp_socket_t, hash_node);
+    uint32_t *args = args1;
+    if (socket->m_local_ip != args[3] || socket->m_local_port != (uint16_t)args[4]) {
+        return -1;
+    }
+    if (socket->m_state == JLOS_TCP_LISTEN && ((uint16_t)args[2] & (JLOS_TCP_SYN | JLOS_TCP_ACK)) == JLOS_TCP_SYN) {
+        return 0;
+    }
+    if (socket->m_remote_ip == args[0] && socket->m_remote_port == (uint16_t)args[1]) {
+        return 0;
+    }
+    return -1;
+}
+
+static int tcp_match_closed_socket(jlos_hash_node_t *node, void *arg)
+{
+    jlos_tcp_socket_t *socket = container_of(node, jlos_tcp_socket_t, hash_node);
+    return (socket == arg) ? 0 : -1;
 }
 
 bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE,
@@ -134,18 +157,10 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
 
     jlos_tcp_socket_t *socket = NULL;
     jlos_tcp_key_t key = {dstIP_BE, msg->m_dst_port};
-    jlos_hash_node_t *node = jlos_hash_chain_see(&self->sockets, &key);
-    while (node) {
+    uint32_t args[] = {srcIP_BE, msg->m_src_port, flags, dstIP_BE, msg->m_dst_port};
+    jlos_hash_node_t *node = jlos_hash_chain_find(&self->sockets, &key, tcp_match_socket, args);
+    if (node) {
         socket = container_of(node, jlos_tcp_socket_t, hash_node);
-        if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
-            && socket->m_state == JLOS_TCP_LISTEN && (flags & (JLOS_TCP_SYN | JLOS_TCP_ACK)) == JLOS_TCP_SYN) {
-            break;
-        }
-        else if (socket->m_local_port == msg->m_dst_port && socket->m_local_ip == dstIP_BE
-            && socket->m_remote_port == msg->m_src_port && socket->m_remote_ip == srcIP_BE) {
-            break;
-        }
-        node = node->next;
     }
 
     bool reset = false;
@@ -283,16 +298,11 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
     }
     if (socket && socket->m_state == JLOS_TCP_CLOSED) {
         jlos_tcp_key_t key = {socket->m_local_ip, socket->m_local_port};
-        jlos_hash_node_t *node = jlos_hash_chain_see(&self->sockets, &key);
-        while (node) {
-            jlos_tcp_socket_t *socket_tmp = container_of(node, jlos_tcp_socket_t, hash_node);
-            if (socket_tmp == socket) {
-                jlos_hash_chain_remove(&self->sockets, node);
-                self->m_num_sockets--;
-                jlos_free(socket);
-                break;
-            }
-            node = node->next;
+        jlos_hash_node_t *node = jlos_hash_chain_find(&self->sockets, &key, tcp_match_closed_socket, socket);
+        if (node) {
+            jlos_hash_chain_remove(&self->sockets, node);
+            self->m_num_sockets--;
+            jlos_free(socket);
         }
     }
     return false;

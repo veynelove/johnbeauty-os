@@ -25,7 +25,7 @@ $(OBJ_DIR)/%.o: %.s
 	@mkdir -p $(@D)
 	@as $(ASPARAMS) -o $@ $<
 
-$(JLOS).bin: linker.ld  $(OBJS)
+$(JLOS).bin: arch/$(ARCH)/linker.ld  $(OBJS)
 	@ld $(LDPARAMS) -T $< -o $@  $(OBJS)
 
 install: $(JLOS).bin

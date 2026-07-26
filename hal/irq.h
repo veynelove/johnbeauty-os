@@ -19,7 +19,7 @@
   typedef jlos_interrupt_handler_func_t  jlos_irq_handler_func_t;
 
   /* 全局活跃 IRQ 管理器（变量别名用宏，inline 无法表达左值语义） */
-  #define jlos_active_irq_manager         jlos_active_interrupt_manager
+#define jlos_active_irq_manager         jlos_active_interrupt_manager
 
   extern void jlos_irq_handler_init(jlos_irq_handler_t *self,
                                     jlos_irq_manager_t *mgr, uint8_t irq);
@@ -41,4 +41,13 @@
   extern void jlos_irq_ignore_request(void);
 #endif
 
+typedef struct {
+    uint32_t m_error;
+    uint32_t m_instruction_pointer;
+    uint32_t m_code_segment;
+    uint32_t m_flags;
+} jlos_irq_context_t;
+
+void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr);
+void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 #endif
