@@ -30,4 +30,16 @@
   extern uint32_t jlos_mmu_segment_limit(jlos_mmu_segment_t *self);
 #endif
 
+typedef struct {
+  uint32_t text_start;
+  uint32_t text_end;
+  uint32_t data_start;
+  uint32_t data_end;
+  uint32_t bss_start;
+  uint32_t bss_end;
+  uint32_t kernel_end;
+} jlos_hal_kernel_segments_t;
+
+void jlos_hal_kernel_segments_init(void);
+const jlos_hal_kernel_segments_t *jlos_hal_get_kernel_segments(void);
 #endif

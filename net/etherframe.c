@@ -77,17 +77,17 @@ static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
 
 bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, uint8_t *buffer, uint32_t m_size)
 {
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ETHER: Received frame, size=");
     printf_hex((m_size >> 0) & 0xFF);
     printf_hex((m_size >> 8) & 0xFF);
     printf("\n");
-    #endif
+#endif
     
     if (m_size < sizeof(jlos_ether_frame_header_t)) {
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ETHER: Frame too small\n");
-        #endif
+#endif
         return false;
     }
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)buffer;
@@ -96,37 +96,37 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
     uint8_t my_mac[6];
     uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), my_mac);
     
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ETHER: Frame type=");
     printf_hex(frame->m_etherType_BE & 0xFF);
     printf_hex((frame->m_etherType_BE >> 8) & 0xFF);
     printf("\n");
-    #endif
+#endif
     
     if (mac_address_is_broadcast(frame->dstMAC) || mac_address_eq(frame->dstMAC, my_mac)) {
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ETHER: Frame is for us, looking for handler\n");
-        #endif
+#endif
         jlos_hash_node_t *node = jlos_hash_chain_see(&self->handlers, &frame->m_etherType_BE);
         if (node) {
             jlos_ether_frame_handler_t *handler = container_of(node, jlos_ether_frame_handler_t, hash_node);
-            #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ETHER: Handler found, calling it\n");
-            #endif
+#endif
             send_back = handler->on_ether_frame_received(
                 handler, buffer + sizeof(jlos_ether_frame_header_t), m_size - sizeof(jlos_ether_frame_header_t));
         }
-        #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
         else {
             printf("ETHER: No handler for this type\n");
         }
-        #endif
+#endif
     }
-    #if KERNEL_CONFIG_DEBUG_NETWORK
+#if KERNEL_CONFIG_DEBUG_NETWORK
     else {
         printf("ETHER: Frame not for us\n");
     }
-    #endif
+#endif
     
     if (send_back) {
         uint8_t temp[6];

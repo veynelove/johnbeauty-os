@@ -21,6 +21,7 @@ loader:
 
     call call_constructors
 
+    push $_kernel_end
     push %eax ; // multiboot magic
     push %ebx   ; // multiboot info
     call john_beauty_main

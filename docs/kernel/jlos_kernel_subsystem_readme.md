@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 kernel/
 ├── kernel.c                 🚀 启动入口 kernel_main + printf(线程安全) + 三阶段硬件初始化
 ├── memory_manager.h/.c      🧠 内存管理器：页分配 + 堆 malloc/free + 双堆(主/低地址)切换
@@ -17,7 +17,7 @@ kernel/
 
 ## 2. kernel_main 三阶段启动架构（ASCII 四阶段流水线）
 
-```
+```text
 ╔═══════════════════════════════════════════════════════════════════╗
 ║  Stage 1:  initializing hardware, stage 1                         ║
 ╠═══════════════════════════════════════════════════════════════════╣
@@ -101,7 +101,7 @@ flowchart TB
 ### 3.1 为什么双堆？
 PCI 驱动的 BAR 分配要求物理地址低于 4MB（实模式兼容区），如果只有主堆（高地址 0x0EDCF000），分配的驱动对象会被 PCI 控制器拒接。因此启动阶段切换双堆：
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │  🔌  PCI 枚举前：低地址堆启动                                        │
 │     jlos_active_memory_manager = &s_low_memory_manager             │
@@ -138,22 +138,56 @@ flowchart LR
 
 </details>
 
-### 3.2 核心结构
+### 3.2 核心结构（bitmap + size class 分级）
 ```c
 /* memory_manager.h */
-typedef struct jlos_memory_manager {
-    jlos_mmu_t *mmu_ctx;            /* 所属地址空间 */
-    uint8_t  *heap_start, *heap_end;
-    struct jlos_memory_chunk_header *first_chunk;
-} jlos_memory_manager_t;
+#define JLOS_MM_MIN_ALLOC      16
+#define JLOS_MM_CLASS_COUNT    32
 
-/* malloc/free 操作的是当前活跃管理器；启动时切换全局指针实现双堆 */
-void jlos_memory_manager_switch_active(jlos_memory_manager_t *new_mgr);
-void *jlos_malloc(uint32_t size);
-void  jlos_free(void *ptr);
+struct jlos_memory_chunk {
+    jlos_memory_chunk_t *next;       /* 主链表：所有 chunk 按地址顺序 */
+    jlos_memory_chunk_t *prev;
+    jlos_memory_chunk_t *free_next;  /* per-class 空闲链表（双向） */
+    jlos_memory_chunk_t *free_prev;
+    bool m_allocated;
+    size_t m_size;                   /*  usable size（不含 header） */
+};
+
+typedef struct {
+    jlos_memory_chunk_t *first;
+    jlos_memory_chunk_t *m_tail;     /* O(1) 堆扩展 */
+    uint8_t *m_heap_start;
+    uint8_t *m_heap_end;
+    uint8_t *m_heap_current;         /* 当前堆边界 */
+    uint32_t m_size_bitmap;          /* bit N = class N 有空闲 chunk */
+    int m_max_class;
+    jlos_memory_chunk_t *m_class_head[JLOS_MM_CLASS_COUNT];
+} jlos_memory_manager_t;
 ```
 
-### 3.3 硬约束
+### 3.3 分配算法（O(1) 级别）
+| 操作 | 复杂度 | 关键机制 |
+| --- | --- | --- |
+| malloc 查找空闲 class | O(1) | `__builtin_ctz(m_size_bitmap >> target_cls)` |
+| malloc 取空闲 chunk | O(1) | `m_class_head[cls]` 头部弹出 |
+| malloc split | O(1) | 指针算术直接切分 + 尾部加入对应 class |
+| free 合并邻居 | O(1) | `free_prev` / `free_next` 双向删除 |
+| expand_heap 追加 | O(1) | `m_tail` 直接追加，无需遍历 |
+
+### 3.4 页帧分配器（32-bit word 级扫描）
+```text
+页帧分配器（page_frame_allocator.c）
+├── 位图：每 bit 代表 1 个物理页帧（4KB）
+├── s_first_free_frame：跳过已分配的低地址帧
+├── 32-bit word 扫描：每次检查 32 帧
+│   ├── word == 0xFFFFFFFF → 整字跳过
+│   └── __builtin_ctz(~word) → O(1) 定位第一个空闲帧
+└── O(n/32) 扫描效率（相比逐 bit 扫描提升 ~32x）
+```
+
+### 3.5 硬约束
+- 最小分配 16 字节（向上取整到 2 的幂）
+- chunk header 24 字节（next + prev + free_next + free_prev + allocated + size）
 - 测试堆必须放在主堆**下方 4096 字节**（防 overlap 覆盖）
 - 任何测试运行前必须先初始化内存管理器（否则 heap=NULL，分配 0x00000000 触发 GPF）
 
@@ -185,7 +219,7 @@ typedef struct {
 
 ### 4.2 调度时序图（每 10ms 一次 IRQ0 · ASCII 时间轴）
 
-```
+```text
  时间轴 ──────────────────────────────────────────────────────────────────▶
  8253 PIT 硬件    interruptstubs.s     调度器 切栈       新task_B
  (IRQ0 节拍)    (pusha+push)         (schedule)          (恢复+iret)
@@ -248,7 +282,7 @@ sequenceDiagram
 
 ### 5.2 IRQ → 向量映射（x86 双 8259）
 | 硬件 IRQ | 向量号 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | IRQ0 | 0x20 | 8253 PIT（调度） |
 | IRQ1 | 0x21 | PS/2 键盘 |
 | IRQ2 | 0x22 | PIC 级联（始终保留） |
@@ -286,7 +320,7 @@ void printf(const char *str) {
 ## 7. 关键入口点
 
 | 函数/文件 | 作用 | 调用时机 |
-|---|---|---|
+| --- | --- | --- |
 | `kernel_main(multiboot_info*)` [kernel.c](../../kernel/kernel.c) | C 启动入口，跑三阶段 init + 测试 + servers | loader.s 跳转到这里 |
 | `jlos_memory_manager_init(mgr, mmu, start, size)` | 堆 chunk 链表初始化 | Stage1 早期 |
 | `jlos_task_init(task, mmu, entrypoint)` | 4KB 栈顶设初值，构造 entry_stub 返回的 cpustate | multitask_test 前 |

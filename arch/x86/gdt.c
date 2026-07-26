@@ -1,4 +1,26 @@
 #include <arch/x86/gdt.h>
+#include <hal/mmu.h>
+
+extern uint32_t _text_start, _text_end;
+extern uint32_t _data_start, _data_end;
+extern uint32_t _bss_start, _bss_end;
+
+static jlos_hal_kernel_segments_t s_kernel_segments = {0};
+
+void jlos_hal_kernel_segments_init(void)
+{
+    s_kernel_segments.text_start = (uint32_t)&_text_start;
+    s_kernel_segments.text_end = (uint32_t)&_text_end;
+    s_kernel_segments.data_start = (uint32_t)&_data_start;
+    s_kernel_segments.data_end = (uint32_t)&_data_end;
+    s_kernel_segments.bss_start = (uint32_t)&_bss_start;
+    s_kernel_segments.bss_end = (uint32_t)&_bss_end;
+}
+
+const jlos_hal_kernel_segments_t *jlos_hal_get_kernel_segments(void)
+{
+    return &s_kernel_segments;
+}
 
 void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t m_base, uint32_t limit, uint8_t m_flags)
 {

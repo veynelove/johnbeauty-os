@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 drivers/
 ├── driver.h / driver.c          🗂️  驱动基类 + manager（255 个驱动槽）
 ├── ata.h / ata.c                💽  ATA PIO-28：IDE 命令块读写（0x1F0/0x170）
@@ -36,7 +36,7 @@ typedef struct jlos_driver_manager {
 
 **生命周期流程（ASCII 箭头链）**：
 
-```
+```text
 ┌──────────────────────────────────────────┐
 │ manager_add_driver(drv*)                 │
 │   · 只把指针塞到 drivers[255] 数组        │
@@ -96,7 +96,7 @@ flowchart LR
 
 **结构图示**：
 
-```
+```text
 am79c973 driver 对象 (heap 上分配 jlos_malloc)
 ├── m_port_base    = 0xC000 (PCI BAR0)
 ├── m_interrupt    = 0x0B (IRQ 11 → int 0x2B)
@@ -112,7 +112,7 @@ am79c973 driver 对象 (heap 上分配 jlos_malloc)
 ```
 
 **ISR 流程（IRQ 0x2B）**：
-```
+```text
 读 CSR0 → 写 W1C 位清中断
   → RINT(0x0020)=1 → 遍历 desc 环直到 OWN=0
        → ALE+EOF=0xC0 → 递交给 etherframe_receive()
@@ -122,7 +122,7 @@ am79c973 driver 对象 (heap 上分配 jlos_malloc)
 
 ### 3.2 ATA PIO-28 硬盘驱动
 
-```
+```text
 Command Block Registers (port_base = 0x1F0 Primary / 0x170 Secondary)
 0x1F0 Data       ← 16-bit in/out 512B/sector
 0x1F1 Error
@@ -140,7 +140,7 @@ Command Block Registers (port_base = 0x1F0 Primary / 0x170 Secondary)
 
 ### 3.3 PS/2 键盘 + 鼠标
 
-```
+```text
      Keyboard IRQ1 (int 0x21)                Mouse IRQ12 (int 0x2C)
      port 0x60=data / 0x64=cmd/status         0x64 cmd: 0xD4 下一字节→mouse
            ↓                                           ↓
@@ -161,7 +161,7 @@ Command Block Registers (port_base = 0x1F0 Primary / 0x170 Secondary)
 
 ## 4. PCI 枚举与驱动绑定流程（kernel.c Stage 1 · ASCII 三层循环）
 
-```
+```text
  HAL 启动入口            hal/pci.c 枚举        arch/x86/pci.c       driver_manager + 驱动probe
        │                      │               Mechanism #1         (注册 + 堆分配)
        │                      │               0xCF8/0xCFC            (AMD 1022:2000)
@@ -232,7 +232,7 @@ sequenceDiagram
 ## 5. 驱动调试开关
 
 | 开关 | 位置 | 作用 |
-|---|---|---|
+| --- | --- | --- |
 | `KERNEL_CONFIG_DEBUG_LOG` | tools/config.h | 通用驱动日志 |
 | `KERNEL_CONFIG_DEBUG_NETWORK` | tools/config.h | AMD 网卡每步打印 + 发送内容 hex dump |
 | `HAL_CONFIG_TRACE_IO=1` | hal.h (override with -D) | 抓所有驱动 in/out → 查"写 CF8 后网卡中断丢"类竞态 |

@@ -6,7 +6,7 @@
 
 ## 1. 目录与文件
 
-```
+```text
 arch/x86/
 ├── loader.s                 🚀 GRUB multiboot 入口（关中断 → GDT → 32-bit 保护模式 → C kernel_main）
 ├── gdt.h / gdt.c            📐 GDT(全局描述符表): flat 4GB 代码段/数据段/TSS
@@ -32,7 +32,7 @@ common/
 
 ### 2.1 loader.s → kernel_main 时序（ASCII 纵向流程）
 
-```
+```text
 ╔═══════════════════════════════════════════════════════════════╗
 ║  GRUB 引导                                                     ║
 ║  multiboot magic = 0x2BADB002 (EAX)                          ║
@@ -77,7 +77,7 @@ flowchart LR
 
 ### 2.2 GDT（全局描述符表）
 
-```
+```text
 GDT 布局（flat memory model, 简化无分段）：
 0x00 null        (0)
 0x08 code seg    base=0 limit=4GB  G=1k DPL=0 P=1 S=1 TYPE=code(XR)
@@ -87,7 +87,7 @@ GDT 布局（flat memory model, 简化无分段）：
 
 ### 2.3 IDT（256 门描述符）
 
-```
+```text
 int 0x00..0x1F  → CPU 异常 (#DE/#DB/NMI/#BP/#OF/#BR/#UD/#NM/#DF/…/#MF/#AC/#MC/#XF)
 int 0x20..0x2F  → 双8259A PIC: IRQ0(PIT)=0x20, IRQ1(KBD)=0x21, IRQ11(NIC)=0x2B, IRQ12(Mouse)=0x2C
 int 0x80        → syscall 软中断（预留）
@@ -95,7 +95,7 @@ int 0x80        → syscall 软中断（预留）
 
 ### 2.4 中断/异常栈压入顺序（⚠️ 100% 匹配 jlos_cpu_state_t 顺序！）
 
-```
+```text
 interruptstubs.s 汇编 SAVE 宏（按序 push）
   ① pusha（按 PUSHA 顺序: EAX, ECX, EDX, EBX, ESP(old), EBP, ESI, EDI）
     但是！我们自己的 push 顺序严格写成:
@@ -125,7 +125,7 @@ typedef struct {
 
 ### 2.5 上下文切换（任务调度 · ASCII 时间轴）
 
-```
+```text
  时间轴 ─────────────────────────────────────────────────────────────────▶
  PIT IRQ0   interruptstubs.s SAVE   调度器 schedule   context_switch    RESTORE + task_B
  int 0x20    (pusha + push 汇编)   (选下一个 task)     (切 ESP)      (popa + iret)
@@ -195,7 +195,7 @@ sequenceDiagram
 
 ## 3. GUI 子系统（Composite Widget 模式 · ASCII 控件树）
 
-```
+```text
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  🏠  Desktop（根容器 jlos_composite_widget_t）                                ║
 ║  · 所有 window 的父容器                                                       ║

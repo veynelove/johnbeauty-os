@@ -39,6 +39,8 @@ extern const jlos_hal_io_ops_t  jlos_hal_x86_slow_io_ops;   /* 带 jmp $+2 延�
 
 /* HAL 层启动总入口：探测 CPU → 选 ops → 注册系统保留 IO 段 → 注册系统保留 IRQ */
 void jlos_hal_arch_init(void);
+void jlos_hal_kernel_segments_init(void);
+void jlos_hal_halt(void);
 
 /* -------------------- IO sanity check -------------------- */
 

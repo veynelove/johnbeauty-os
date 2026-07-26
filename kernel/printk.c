@@ -98,6 +98,144 @@ void printf_char(char c)
     jlos_spin_unlock_irqrestore(&s_printf_lock, flags);
 }
 
+static void printk_putchar(char c)
+{
+    static uint16_t *video_memory = (uint16_t *)0xb8000;
+    static uint8_t m_x = 0, m_y = 0;
+    
+    switch (c) {
+        case '\n': m_y++; m_x = 0; break;
+        default:
+            video_memory[80 * m_y + m_x] = (video_memory[80 * m_y + m_x] & 0xFF00) | c;
+            m_x++;
+    }
+    if (m_x >= 80) {
+        m_y++;
+        m_x = 0;
+    }
+    if (m_y >= 25) {
+        printf_scroll_screen();
+        m_y = 24;
+        m_x = 0;
+    }
+    jlos_hal_serial_default_putc(c);
+}
+
+static void printk_puts(const char *str)
+{
+    for (int i = 0; str[i] != '\0'; i++) {
+        printk_putchar(str[i]);
+    }
+}
+
+static void printk_itoa(int value, int base)
+{
+    char buffer[32];
+    char *digits = "0123456789ABCDEF";
+    int i = 0;
+    bool negative = false;
+    if (value == 0) {
+        printk_putchar('0');
+        return;
+    }
+    if (value < 0 && base == 10) {
+        negative = true;
+        value = -value;
+    }
+    while (value > 0) {
+        buffer[i++] = digits[value % base];
+        value /= base;
+    }
+    if (negative) {
+        printk_putchar('-');
+    }
+    while (i > 0) {
+        printk_putchar(buffer[--i]);
+    }
+}
+
+static void printk_utoa(unsigned int value, int base, bool uppercase)
+{
+    char buffer[32];
+    char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+    int i = 0;
+    
+    if (value == 0) {
+        printk_putchar('0');
+        return;
+    }
+    
+    while (value > 0) {
+        buffer[i++] = digits[value % base];
+        value /= base;
+    }
+    
+    while (i > 0) {
+        printk_putchar(buffer[--i]);
+    }
+}
+
+void printk(const char *fmt, ...)
+{
+    uint32_t *args = (uint32_t *)&fmt + 1;
+    uint32_t flags = jlos_spin_lock_irqsave(&s_printf_lock);
+    for (int i = 0; fmt[i] != '\0'; i++) {
+        if (fmt[i] == '%') {
+            i++;
+            switch(fmt[i]) {
+                case 'd': {
+                    int value = *args++;
+                    printk_itoa(value, 10);
+                    break;
+                }
+                case 'u': {
+                    unsigned int value = *args++;
+                    printk_utoa(value, 10, false);
+                    break;
+                }
+                case 'x': {
+                    unsigned int value = *args++;
+                    printk_utoa(value , 16, false);
+                    break;
+                }
+                case 'X': {
+                    unsigned int value = *args++;
+                    printk_utoa(value, 16, true);
+                    break;
+                }
+                case 's': {
+                    const char *str = (const char *)*args++;
+                    printk_puts(str);
+                    break;
+                }
+                case 'c': {
+                    char c = (char)*args++;
+                    printk_putchar(c);
+                    break;
+                }
+                case 'p': {
+                    unsigned int value = *args++;
+                    printk_puts("0x");
+                    printk_utoa(value, 16, false);
+                    break;
+                }
+                case '%': {
+                    printk_putchar('%');
+                    break;
+                }
+                default: {
+                    printk_putchar('%');
+                    printk_putchar(fmt[i]);
+                    break;
+                }
+            }
+        } else {
+            printk_putchar(fmt[i]);
+        }
+    }
+    jlos_spin_unlock_irqrestore(&s_printf_lock, flags);
+}
+
 void sysprintf(char *str)
 {
     __asm__ __volatile__("int $0x80" : : "a" (4), "b" (str));

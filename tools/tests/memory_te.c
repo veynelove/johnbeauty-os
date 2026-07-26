@@ -9,15 +9,18 @@ extern void printf_hex32(uint32_t);
 void memory_manager_test(const void *multiboot_structure)
 {
     printf("MEMORY test start\n");
-    uint32_t *memupper = (uint32_t *)((size_t)multiboot_structure + 8);
 #if KERNEL_CONFIG_DEBUG_MEMORY
     printf("multiboot_structure: 0x");
     printf_hex32((uint32_t)multiboot_structure);
     printf(" ");
 #endif
     size_t test_heap_size = 64 * 1024;
-    uint8_t *main_heap_start = (uint8_t*)(1024 * ((size_t)(*memupper) - 1024 * 16));
-    uint8_t *heap = main_heap_start - test_heap_size - 4096;
+    jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
+    uint8_t *heap = (uint8_t *)jlos_malloc(test_heap_size);
+    if (!heap) {
+        printf("MEMORY test: failed to allocate test heap\n");
+        return;
+    }
     size_t m_size = test_heap_size;
     
 #if KERNEL_CONFIG_DEBUG_MEMORY
@@ -32,7 +35,6 @@ void memory_manager_test(const void *multiboot_structure)
     printf("\n");
 #endif
 
-    jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
     jlos_memory_manager_t memory_manager_;
     jlos_memory_manager_init(&memory_manager_, heap, m_size);
 
@@ -58,4 +60,5 @@ void memory_manager_test(const void *multiboot_structure)
     jlos_free(m_allocated);
     jlos_memory_manager_destroy(&memory_manager_);
     jlos_active_memory_manager = old_manager;
+    jlos_free(heap);
 }
