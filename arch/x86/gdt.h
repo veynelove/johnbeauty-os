@@ -17,15 +17,25 @@ typedef struct {
     jlos_gdt_segment_descriptor_t m_unused_segment_selector;
     jlos_gdt_segment_descriptor_t m_code_segment_selector;
     jlos_gdt_segment_descriptor_t m_data_segment_selector;
+    jlos_gdt_segment_descriptor_t m_user_code_segment_selector;
+    jlos_gdt_segment_descriptor_t m_user_data_segment_selector;
+    jlos_gdt_segment_descriptor_t m_tss_segment_selector;
 } __attribute__((packed)) jlos_gdt_t;
 
-void jlos_gdt_init(jlos_gdt_t* self);
+void jlos_gdt_init();
 void jlos_gdt_destroy(jlos_gdt_t* self);
 uint16_t jlos_gdt_code_segment_selector(jlos_gdt_t* self);
 uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self);
 
+uint16_t jlos_gdt_user_code_segment_selector(jlos_gdt_t *self);
+uint16_t jlos_gdt_user_data_segment_selector(jlos_gdt_t *self);
+uint16_t jlos_gdt_tss_selector(jlos_gdt_t *self);
+void jlos_gdt_set_tss(jlos_gdt_t *self, uint32_t base, uint32_t limit);
+
 void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t m_base, uint32_t limit, uint8_t m_flags);
 uint32_t jlos_gdt_segment_descriptor_base(jlos_gdt_segment_descriptor_t* self);
 uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self);
+
+jlos_gdt_t *jlos_gdt_get_kernel(void);
 
 #endif

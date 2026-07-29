@@ -7,7 +7,13 @@ extern void printf(const char *str);
 extern void printf_hex(uint8_t);
 extern void printf_hex32(uint32_t);
 
+extern void jlos_arch_tss_init_for_asm(void);
+
 jlos_interrupt_manager_t *jlos_active_interrupt_manager = NULL;
+
+/* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
+uint32_t jlos_syscall_ring3_ctx = 0;
+uint32_t jlos_syscall_ring3_kstack = 0;
 
 typedef struct {
     uint16_t m_handle_address_low_bits;
@@ -118,6 +124,11 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
     self->m_hardware_interrupt_offset = hardware_interruptoffset;
     uint16_t code_segment = jlos_gdt_code_segment_selector(gdt);
     const uint8_t IDT_INTERRUPT_GATE = 0xE;
+    const uint8_t IDT_TRAP_GATE = 0xF;
+    
+    /* 初始化 TSS 基地址 (供汇编使用) */
+    jlos_arch_tss_init_for_asm();
+    
     for (uint16_t i = 0; i < 256; i++) {
         self->handles[i] = NULL;
         jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_ignore_interrupt_request, 0,
@@ -158,8 +169,9 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
     jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x31, code_segment,
         &jlos_handle_interrupt_request0x31, 0, IDT_INTERRUPT_GATE);
 
+    /* syscall 入口：DPL=3 允许 ring3 调用，但 handler 运行在 ring0（内核代码段） */
     jlos_set_interrupt_descriptor_table_entry(0x80, code_segment,
-        &jlos_handle_interrupt_request0x80, 0, IDT_INTERRUPT_GATE);
+        &jlos_handle_interrupt_request0x80, 3, IDT_TRAP_GATE);
 
     jlos_set_interrupt_descriptor_table_entry(0x00, code_segment, &jlos_handle_exception0x00, 0, IDT_INTERRUPT_GATE);
     jlos_set_interrupt_descriptor_table_entry(0x01, code_segment, &jlos_handle_exception0x01, 0, IDT_INTERRUPT_GATE);
@@ -234,17 +246,25 @@ uint16_t jlos_interrupt_manager_hardware_interrupt_offset(jlos_interrupt_manager
 }
 
 uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* self, uint8_t m_interrupt, uint32_t m_esp)
-{   
-    if (self->handles[m_interrupt] != NULL) {
-        jlos_interrupt_handler_t *handler = (jlos_interrupt_handler_t*)self->handles[m_interrupt];
-        m_esp = handler->handle_interrupt(handler, m_esp);
-    }
-    else if (m_interrupt == 0x0E) {
+{
+    /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
+    if (m_interrupt == 0x0E) {
         jlos_irq_context_t context;
         jlos_irq_context_init(&context, m_esp);
         jlos_paging_page_fault_handler(&context);
+        return m_esp;
     }
-    else if (m_interrupt != self->m_hardware_interrupt_offset) {
+
+    uint8_t vector = m_interrupt;
+    if (m_interrupt < 16) {
+        vector = m_interrupt + self->m_hardware_interrupt_offset;
+    }
+
+    if (self->handles[vector] != NULL) {
+        jlos_interrupt_handler_t *handler = (jlos_interrupt_handler_t*)self->handles[vector];
+        m_esp = handler->handle_interrupt(handler, m_esp);
+    }
+    else if (m_interrupt >= 16) {
         jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
         printf("UNHANDLED INTERUPT 0x");
         printf_hex(m_interrupt);
@@ -258,19 +278,18 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         printf_hex32(cpu->m_eflags);
         printf("\n");
     }
-    
-    if (m_interrupt == self->m_hardware_interrupt_offset) {
-        /* PIT tick：先记 tick，再调度——调度器和任务都能读到最新 tick 值 */
+
+    /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
+    if (m_interrupt == 0 && self != NULL && self->task_manager != NULL && self->task_manager->m_num_tasks > 0) {
         jlos_hal_timer_on_tick();
-        if (self != NULL && self->task_manager != NULL && self->task_manager->m_num_tasks > 0) {
-            m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
-        }
+        m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
     }
-    
-    if (self->m_hardware_interrupt_offset <= m_interrupt && m_interrupt < self->m_hardware_interrupt_offset + 16) {
+
+    if (m_interrupt < 16) {
         jlos_port8_bit_slow_write(&self->m_pic_master_command, 0x20);
-        if (self->m_hardware_interrupt_offset + 8 <= m_interrupt)
+        if (m_interrupt >= 8) {
             jlos_port8_bit_slow_write(&self->m_pic_slave_command, 0x20);
+        }
     }
     return m_esp;
 }

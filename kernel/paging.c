@@ -254,7 +254,8 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     uint32_t flags)
 {
     uint32_t fl = jlos_spin_lock_irqsave(&s_paging_lock);
-    for (uint32_t addr = virtual_addr_start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
+    uint32_t start = virtual_addr_start & ~0xFFFUL;
+    for (uint32_t addr = start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
         uint32_t pd_idx = jlos_paging_get_page_dir_index(addr);
         uint32_t pt_idx = jlos_paging_get_page_table_index(addr);
 
@@ -271,6 +272,9 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
         if (!(*pte & JLOS_PTE_PRESENT)) continue;
         uint32_t phys = *pte & ~0xFFF;
         *pte = phys | flags;
+        if (flags & JLOS_PTE_USER) {
+            *pde |= JLOS_PDE_USER;
+        }
         jlos_hal_paging_flush_tlb(addr);
     }
     jlos_spin_unlock_irqrestore(&s_paging_lock, fl);
@@ -287,11 +291,11 @@ void jlos_paging_initialize_kernel_paging(void)
     const jlos_hal_kernel_segments_t *segments = jlos_hal_get_kernel_segments();
     if (segments->text_start != 0) {
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->text_start, segments->text_end, 
-            JLOS_PTE_PRESENT);
+            JLOS_PTE_PRESENT | JLOS_PTE_USER);
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->data_start, segments->data_end,
-            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
+            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->bss_start, segments->bss_end,
-            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
+            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
     }
 
     jlos_paging_enable(&s_kernel_paging_context);

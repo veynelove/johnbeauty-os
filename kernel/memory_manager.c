@@ -301,6 +301,31 @@ void jlos_memset(void *ptr, uint8_t value, size_t size) {
     }
 }
 
+void *jlos_memcpy(void *dst, const void *src, size_t size)
+{
+    uint8_t *d = (uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    while (size > 0 && ((size_t)d & 3)) {
+        *d++ = *s++;
+        size--;
+    }
+    uint32_t *d32 = (uint32_t *)d;
+    const uint32_t *s32 = (const uint32_t *)s;
+    while (size >= 4) {
+        *d32++ = *s32++;
+        size -= 4;
+    }
+    d = (uint8_t *)d32;
+    s = (const uint8_t *)s32;
+    while (size > 0) {
+        *d++ = *s++;
+        size--;
+    }
+    return dst;
+}
+
+void *memcpy(void *dst, const void *src, size_t size) __attribute__((weak, alias("jlos_memcpy")));
+
 void jlos_malloc_stats(jlos_memory_manager_t *self)
 {
     if (!self) return;

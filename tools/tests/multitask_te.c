@@ -1,9 +1,11 @@
 #include <tools/tests/multitask_te.h>
+#include <hal/user_syscall.h>
 
 extern void printf(const char *);
 
 jlos_task_t task1;
 jlos_task_t task2;
+jlos_task_t task_user;
 
 void task_a()
 {
@@ -19,6 +21,13 @@ void task_b()
     }
 }
 
+void task_user_fn()
+{
+    const char msg[] = "Hello from ring3!\n";
+    jlos_user_write(msg, sizeof(msg) - 1);
+    jlos_user_exit(0);
+}
+
 void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
 {
     printf("multitask_test: adding 2 tasks (task_A, task_B)\n");
@@ -26,4 +35,7 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     jlos_task_init(&task2, mmu, task_b);
     jlos_task_manager_add_task(task_manager_, &task1);
     jlos_task_manager_add_task(task_manager_, &task2);
+
+    jlos_task_init_user(&task_user, mmu, task_user_fn);
+    jlos_task_manager_add_task(task_manager_, &task_user);
 }

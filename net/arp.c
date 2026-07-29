@@ -39,11 +39,7 @@ void jlos_arp_destroy(jlos_arp_t* self)
 }
 
 bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payload, uint32_t m_size)
-{
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("ARP: Received ARP packet\n");
-#endif
-    
+{   
     if (m_size < sizeof(jlos_arp_message_t)) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ARP: Packet too small\n");

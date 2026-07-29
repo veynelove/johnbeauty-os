@@ -45,6 +45,7 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr);
 void *jlos_malloc(size_t m_size);
 void jlos_free(void *ptr);
 void jlos_memset(void *ptr, uint8_t value, size_t size);
+void *jlos_memcpy(void *dst, const void *src, size_t size);
 
 void jlos_malloc_stats(jlos_memory_manager_t *self);
 

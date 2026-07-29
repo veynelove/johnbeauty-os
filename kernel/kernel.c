@@ -2,9 +2,10 @@
 #include <hal/io.h>
 #include <hal/pci.h>
 #include <hal/mmu.h>
-#include <hal/syscall.h>
+#include <hal/kernel_syscall.h>
 #include <hal/timer.h>
 #include <hal/hal.h>
+#include <hal/context.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <drivers/vga.h>
@@ -49,17 +50,18 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_hal_arch_init();
     printf("princess yihan is safe and happy!\n");
 
-    jlos_mmu_t mmu_ctx;
-    jlos_mmu_init(&mmu_ctx);
+    jlos_mmu_t *mmu = jlos_mmu_get_kernel();
+    jlos_mmu_init();
+    jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
     
     jlos_page_frame_allocator_init(KERNEL_MEMORY_ADDR_START, KERNEL_MEMORY_ADDR_END, kernel_end);
     printf("page frame allocator initialized\n");
     jlos_paging_initialize_kernel_paging();
     printf("paging initialized\n");
     
-    uint8_t* low_memory_heap = (uint8_t*)(0x50000);
+    uint8_t* low_memory_heap = (uint8_t*)(KERNEL_LOW_MEMORY_ADDR_START);
     jlos_memory_manager_t low_memory_manager_;
-    jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, 0x50000);
+    jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
     
     void *first_free_frame_ptr = jlos_page_frame_malloc();
     jlos_page_frame_free(first_free_frame_ptr);
@@ -71,7 +73,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_task_manager_init(&task_manager_);
     
     jlos_irq_manager_t irq_mgr;
-    jlos_irq_manager_init(&irq_mgr, 0x20, &mmu_ctx, &task_manager_);
+    jlos_irq_manager_init(&irq_mgr, 0x20, mmu, &task_manager_);
     printf("interrupt manager initialized\n");
 
     jlos_syscall_t syscalls;
@@ -115,7 +117,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
 #if KERNEL_CONFIG_ENABLE_TESTS
     printf("running tests...\n");
     memory_manager_test(multiboot_structure);
-    multitask_test(&mmu_ctx, &task_manager_);
+    multitask_test(mmu, &task_manager_);
     hard_driver_test();
     http_server_test(&network_stack->tcp);
     udp_server_test(&network_stack->udp);

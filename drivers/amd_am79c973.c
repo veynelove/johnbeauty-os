@@ -246,28 +246,6 @@ uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_
     uint32_t temp = jlos_io16_read(&eth->m_register_data_port);
     uint16_t command = temp & 0x00C6;
 
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("AMDIRQ CSR0=0x");
-    printf_hex(((uint16_t)temp >> 8) & 0xFF);
-    printf_hex((uint16_t)temp & 0xFF);
-    printf("\n");
-#endif
-
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("NET: [IRQ] CSR0=");
-    printf_hex(((uint16_t)temp >> 8) & 0xFF);
-    printf_hex((uint16_t)temp & 0xFF);
-    printf(" RINT=");
-    printf_hex((temp & 0x0400) ? 1 : 0);
-    printf(" TINT=");
-    printf_hex((temp & 0x0200) ? 1 : 0);
-    printf(" IDON=");
-    printf_hex((temp & 0x0100) ? 1 : 0);
-    printf(" ERR=");
-    printf_hex((temp & 0x8000) ? 1 : 0);
-    printf("\n");
-#endif
-
     if ((temp & 0x8000) == 0x8000) {
         command |= 0x8000;
     }
@@ -384,9 +362,6 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int m_si
 
 void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
 {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("AMDRCV enter\n");
-#endif
     uint32_t bs = (2048 / 256) << 16;
     uint8_t start_idx = self->m_current_recv_buffer;
     int8_t last_processed_iter = -1;
@@ -415,14 +390,6 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
                 m_size -= 4;
             }
             uint8_t *buffer = (uint8_t *)(self->recv_buffer_descr[idx].m_address);
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("RECV: ");
-            for (int j = 0; j < (int)m_size && j < 128; j++) {
-                printf_hex(buffer[j]);
-                printf(" ");
-            }
-            printf("\n");
-#endif
             if (self->handler) {
                 if (self->handler->on_raw_data_received(self->handler, buffer, m_size)) {
                     jlos_amd_am79c973_send(self, buffer, m_size);
@@ -431,6 +398,7 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
         }
         self->recv_buffer_descr[idx].m_flags = (0x80000000 | bs | 0xF800);
         self->recv_buffer_descr[idx].m_flags2 = 0;
+        self->recv_buffer_descr[idx].m_avail = 0x8000;
         self->recv_buffer_descr[idx].m_reserved = 0;
         last_processed_iter = i;
     }
