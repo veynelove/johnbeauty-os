@@ -71,9 +71,9 @@ void jlos_arch_tss_init(uint16_t kernel_data_selector)
     jlos_x86_tss_load(&s_tss, tss_sel);
 }
 
-void jlos_arch_tss_set_esp0(uint32_t esp0)
+void jlos_arch_tss_set_ctx(uint32_t ctx)
 {
-    s_tss.m_esp0 = esp0;
+    s_tss.m_esp0 = ctx;
 }
 
 uint32_t jlos_arch_tss_get_esp0(void)

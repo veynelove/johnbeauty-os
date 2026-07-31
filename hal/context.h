@@ -26,7 +26,7 @@ extern void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate,
   jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack, uint32_t stack_size,
   uint32_t user_stack_top, uint16_t user_ss);
 extern void jlos_arch_tss_init(uint16_t kernel_data_selector);
-extern void jlos_arch_tss_set_esp0(uint32_t esp0);
+extern void jlos_arch_tss_set_ctx(uint32_t ctx);
 #elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_ARM
 #error "ARM architecture task context switch not implemented yet"
 #endif

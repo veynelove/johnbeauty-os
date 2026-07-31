@@ -25,7 +25,7 @@ void task_user_fn()
 {
     uint32_t pid = jlos_user_get_pid();
     jlos_user_printf("Hello from ring3! PID=%u\n", pid);
-    jlos_user_debug_tasks();
+    jlos_user_get_tasks_info();
     jlos_user_sleep(100);
     jlos_user_puts("Wake up!\n");
     jlos_user_exit(0);

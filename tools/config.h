@@ -7,6 +7,8 @@
 
 #define KERNEL_CONFIG_HARDWARE_ARCH  KERNEL_CONFIG_ARCH_X86
 
+#define KERNEL_CONFIG_PREEMPTIVE        1
+
 /* ====== 功能开关 ====== */
 #define KERNEL_CONFIG_DEBUG_CONSOLE     0
 

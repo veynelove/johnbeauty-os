@@ -271,9 +271,17 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
     if (m_interrupt == 0 && self != NULL && self->task_manager != NULL && self->task_manager->m_num_tasks > 0) {
         jlos_hal_timer_on_tick();
-        m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
+        jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
+#if KERNEL_CONFIG_PREEMPTIVE
+        if (!curr || curr->m_remain_slice == 0 || curr->m_status != JLOS_TASK_RUNNING) {
+            m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
+        }
+#else
+        if (!curr || curr->m_status != JLOS_TASK_RUNNING) {
+            m_esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)m_esp);
+        }
+#endif
     }
-
     if (m_interrupt < 16) {
         jlos_port8_bit_slow_write(&self->m_pic_master_command, 0x20);
         if (m_interrupt >= 8) {

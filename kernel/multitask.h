@@ -6,12 +6,17 @@
 #include <hal/cpu_state.h>
 #include <kernel/paging.h>
 
-#define JLOS_TASK_RUNNING       0
-#define JLOS_TASK_TERMINATED    1
-#define JLOS_TASK_WAITING       2
+#define JLOS_TASK_READY             0
+#define JLOS_TASK_RUNNING           1
+#define JLOS_TASK_BLOCKED           2
+#define JLOS_TASK_TERMINATED        3
+#define JLOS_TASK_WAITING           4
 
-#define JLOS_TASK_STACK_SIZE    16384
-#define JLOS_TASK_NAME_SIZE     32
+#define JLOS_TASK_STACK_SIZE        16384
+#define JLOS_TASK_NAME_SIZE         32
+
+#define JLOS_TASK_MLFQ_LEVELS       4
+#define JLOS_TASK_MLFQ_AGING_TICKS  200
 
 typedef struct {
     volatile uint32_t m_status;
@@ -31,6 +36,11 @@ typedef struct {
     bool m_yield;
     int32_t m_errno;
     uint32_t m_waiting_pid;
+    uint32_t m_priority;
+    uint32_t m_remain_slice;
+    uint32_t m_default_slice;
+    uint32_t m_last_ready_tick;
+    struct jlos_task_t *m_next_waiter;
 } jlos_task_t;
 
 typedef struct {
@@ -49,7 +59,7 @@ void jlos_task_manager_init(jlos_task_manager_t* self);
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
 jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu_state_t *cpustate);
-
+jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent);
 int jlos_process_exec(jlos_task_manager_t *self, jlos_task_t *task, void (*entrypoint)(void));
 void jlos_process_exit(jlos_task_manager_t *self, jlos_task_t *task, uint32_t exit_code);

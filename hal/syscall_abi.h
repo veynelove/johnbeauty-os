@@ -6,16 +6,16 @@
 #define JLOS_SYSCALL_MAX        256
 
 enum jlos_syscall_num {
-    JLOS_SYSCALL_WRITE          = 1,
-    JLOS_SYSCALL_READ           = 2,
-    JLOS_SYSCALL_EXIT           = 3,
-    JLOS_SYSCALL_YIELD          = 4,
-    JLOS_SYSCALL_GET_PID        = 5,
-    JLOS_SYSCALL_SLEEP          = 6,
-    JLOS_SYSCALL_GET_ERRNO      = 7,
-    JLOS_SYSCALL_GET_TICKS      = 8,
-    JLOS_SYSCALL_DEBUG_TASKS    = 9,
-    JLOS_SYSCALL_WAIT_PID      = 10
+    JLOS_SYSCALL_WRITE              = 1,
+    JLOS_SYSCALL_READ               = 2,
+    JLOS_SYSCALL_EXIT               = 3,
+    JLOS_SYSCALL_YIELD              = 4,
+    JLOS_SYSCALL_GET_PID            = 5,
+    JLOS_SYSCALL_SLEEP              = 6,
+    JLOS_SYSCALL_GET_ERRNO          = 7,
+    JLOS_SYSCALL_GET_TICKS          = 8,
+    JLOS_SYSCALL_GET_TASKS_INFO     = 9,
+    JLOS_SYSCALL_WAIT_PID           = 10
 };
 
 enum jlos_syscall_misscode {

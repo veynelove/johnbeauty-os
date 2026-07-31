@@ -48,9 +48,9 @@ static inline uint32_t jlos_user_get_ticks(void)
     return (uint32_t)jlos_user_syscall(JLOS_SYSCALL_GET_TICKS, 0, 0, 0);
 }
 
-static inline int32_t jlos_user_debug_tasks(void)
+static inline int32_t jlos_user_get_tasks_info(void)
 {
-    return jlos_user_syscall(JLOS_SYSCALL_DEBUG_TASKS, 0, 0, 0);
+    return jlos_user_syscall(JLOS_SYSCALL_GET_TASKS_INFO, 0, 0, 0);
 }
 
 static inline int32_t jlos_user_wait_pid(uint32_t pid, int32_t *exit_code)

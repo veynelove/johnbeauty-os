@@ -80,7 +80,7 @@ static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)jlos_hal_timer_get_ticks();
 }
 
-static int32_t syscall_debug_tasks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     if (!g_task_manager_ptr) {
         return - SYSCALL_ENULL;
@@ -154,7 +154,7 @@ void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t 
     jlos_syscall_register(JLOS_SYSCALL_SLEEP, syscall_sleep);
     jlos_syscall_register(JLOS_SYSCALL_GET_ERRNO, syscall_get_errno);
     jlos_syscall_register(JLOS_SYSCALL_GET_TICKS, syscall_get_ticks);
-    jlos_syscall_register(JLOS_SYSCALL_DEBUG_TASKS, syscall_debug_tasks);
+    jlos_syscall_register(JLOS_SYSCALL_GET_TASKS_INFO, syscall_get_tasks_info);
     jlos_syscall_register(JLOS_SYSCALL_WAIT_PID, syscall_wait_pid);
 }
 
