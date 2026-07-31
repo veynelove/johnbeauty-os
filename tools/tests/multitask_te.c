@@ -23,8 +23,10 @@ void task_b()
 
 void task_user_fn()
 {
-    const char msg[] = "Hello from ring3!\n";
-    jlos_user_write(msg, sizeof(msg) - 1);
+    uint32_t pid = jlos_user_getpid();
+    jlos_user_printf("Hello from ring3! PID=%u\n", pid);
+    jlos_user_sleep(100);
+    jlos_user_puts("Wake up!\n");
     jlos_user_exit(0);
 }
 

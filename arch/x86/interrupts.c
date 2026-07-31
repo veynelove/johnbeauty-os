@@ -1,11 +1,9 @@
 #include <arch/x86/interrupts.h>
+#include <arch/x86/cpu_state.h>
 #include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);
 
@@ -265,18 +263,9 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         m_esp = handler->handle_interrupt(handler, m_esp);
     }
     else if (m_interrupt >= 16) {
-        jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)m_esp;
-        printf("UNHANDLED INTERUPT 0x");
-        printf_hex(m_interrupt);
-        printf(" err=0x");
-        printf_hex32(cpu->m_error);
-        printf(" @ EIP=0x");
-        printf_hex32(cpu->m_eip);
-        printf(" CS=0x");
-        printf_hex32(cpu->m_cs);
-        printf(" EFLAGS=0x");
-        printf_hex32(cpu->m_eflags);
-        printf("\n");
+        jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)m_esp;
+        printk("unhandled interrupt 0x%x, err = 0x%x, eip = %x, cs = %x, eflags = %x\n",
+            m_interrupt, cpu->m_error, cpu->m_eip, cpu->m_cs, cpu->m_eflags);
     }
 
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
@@ -302,7 +291,7 @@ void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uin
 
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
 {
-    jlos_cpu_state_t *cpu = (jlos_cpu_state_t *)arch_state_ptr;
+    jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)arch_state_ptr;
     context->m_error = cpu->m_error;
     context->m_instruction_pointer = cpu->m_eip;
     context->m_code_segment = cpu->m_cs;

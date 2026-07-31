@@ -1,6 +1,7 @@
 #include <hal/context.h>
 #include <kernel/multitask.h>
 #include <arch/x86/tss.h>
+#include <arch/x86/cpu_state.h>
 
 jlos_task_t *g_current_task_ptr = NULL;
 uint32_t jlos_arch_tss_base_addr = 0;
@@ -41,23 +42,24 @@ __attribute__((naked)) void jlos_task_entry_stub(void)
 void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate,
     jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack, uint32_t stack_size)
 {
-    cpustate->m_user_esp = (uint32_t)(stack + stack_size);
-    cpustate->m_user_ss = 0;
-    cpustate->m_ebx = (uint32_t)entrypoint;
-    cpustate->m_edx = (uint32_t)(stack + stack_size);
-    cpustate->m_eip = (uint32_t)jlos_task_entry_stub;
-    cpustate->m_cs = jlos_mmu_code_selector(mmu);
-    cpustate->m_eflags = 0x000;
+
+    ((jlos_x86_regs_t *)cpustate)->m_user_esp = (uint32_t)(stack + stack_size);
+    ((jlos_x86_regs_t *)cpustate)->m_user_ss = 0;
+    ((jlos_x86_regs_t *)cpustate)->m_ebx = (uint32_t)entrypoint;
+    ((jlos_x86_regs_t *)cpustate)->m_edx = (uint32_t)(stack + stack_size);
+    ((jlos_x86_regs_t *)cpustate)->m_eip = (uint32_t)jlos_task_entry_stub;
+    ((jlos_x86_regs_t *)cpustate)->m_cs = jlos_mmu_code_selector(mmu);
+    ((jlos_x86_regs_t *)cpustate)->m_eflags = 0x000;
 }
 
 void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
     uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top, uint16_t user_ss)
 {
-    cpustate->m_user_esp = user_stack_top;
-    cpustate->m_user_ss = user_ss;
-    cpustate->m_eip = (uint32_t)entrypoint;
-    cpustate->m_cs = 0x23;
-    cpustate->m_eflags = 0x200;
+    ((jlos_x86_regs_t *)cpustate)->m_user_esp = user_stack_top;
+    ((jlos_x86_regs_t *)cpustate)->m_user_ss = user_ss;
+    ((jlos_x86_regs_t *)cpustate)->m_eip = (uint32_t)entrypoint;
+    ((jlos_x86_regs_t *)cpustate)->m_cs = 0x23;
+    ((jlos_x86_regs_t *)cpustate)->m_eflags = 0x200;
 }
 
 void jlos_arch_tss_init(uint16_t kernel_data_selector)

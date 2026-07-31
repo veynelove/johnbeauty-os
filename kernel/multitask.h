@@ -3,29 +3,12 @@
 
 #include <common/types.h>
 #include <hal/mmu.h>
+#include <hal/cpu_state.h>
 #include <kernel/paging.h>
 
 #define JLOS_TASK_RUNNING    0
 #define JLOS_TASK_TERMINATED 1
 #define JLOS_TASK_STACK_SIZE 16384
-
-typedef struct
-{
-    uint32_t m_ebp;
-    uint32_t m_edi;
-    uint32_t m_esi;
-    uint32_t m_edx;
-    uint32_t m_ecx;
-    uint32_t m_ebx;
-    uint32_t m_eax;
-    uint32_t m_error;
-    uint32_t m_padding;
-    uint32_t m_eip;
-    uint32_t m_cs;
-    uint32_t m_eflags;
-    uint32_t m_user_esp;
-    uint32_t m_user_ss;
-} __attribute__((packed)) jlos_cpu_state_t;
 
 typedef struct {
     volatile uint32_t m_status;
@@ -39,6 +22,10 @@ typedef struct {
     uint32_t m_exit_code;
     bool m_is_user_process;
     jlos_paging_context_t *m_mm;
+    uint32_t m_wake_tick;
+    bool m_sleeping;
+    bool m_yield;
+    int32_t m_errno;
 } jlos_task_t;
 
 typedef struct {

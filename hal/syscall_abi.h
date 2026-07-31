@@ -4,9 +4,25 @@
 #include <common/types.h>
 
 #define JLOS_SYSCALL_MAX        256
-#define JLOS_SYSCALL_WRITE      4
-#define JLOS_SYSCALL_READ       58
-#define JLOS_SYSCALL_EXIT       57
-#define JLOS_SYSCALL_YIELD      61
+
+enum jlos_syscall_num {
+    JLOS_SYSCALL_WRITE     = 1,
+    JLOS_SYSCALL_READ      = 2,
+    JLOS_SYSCALL_EXIT      = 3,
+    JLOS_SYSCALL_YIELD     = 4,
+    JLOS_SYSCALL_GET_PID   = 5,
+    JLOS_SYSCALL_SLEEP     = 6,
+    JLOS_SYSCALL_GET_ERRNO = 7,
+    JLOS_SYSCALL_GET_TICKS = 8
+};
+
+enum jlos_syscall_misscode {
+    SYSCALL_ENINVAL     = 1,
+    SYSCALL_ENOSYS      = 2,
+    SYSCALL_EFAULT      = 3,
+    SYSCALL_EPERM       = 4,
+    SYSCALL_ENOMEM      = 5,
+    SYSCALL_ENULL       = 6
+};
 
 #endif

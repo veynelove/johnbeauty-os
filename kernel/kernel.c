@@ -2,7 +2,6 @@
 #include <hal/io.h>
 #include <hal/pci.h>
 #include <hal/mmu.h>
-#include <hal/kernel_syscall.h>
 #include <hal/timer.h>
 #include <hal/hal.h>
 #include <hal/context.h>
@@ -20,6 +19,7 @@
 #include <kernel/printk.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/syscall.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -76,8 +76,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_irq_manager_init(&irq_mgr, 0x20, mmu, &task_manager_);
     printf("interrupt manager initialized\n");
 
-    jlos_syscall_t syscalls;
-    jlos_syscall_init(&syscalls, &irq_mgr, 0x80);
+    jlos_syscall_handler_t syscalls;
+    jlos_syscall_handler_init(&syscalls, &irq_mgr, 0x80);
 
     printf("initializing hardware, stage 1 start\n");
     jlos_driver_manager_t driver_manager_;

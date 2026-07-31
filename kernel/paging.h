@@ -64,6 +64,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     uint32_t flags);
 
 void jlos_paging_initialize_kernel_paging(void);
+bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len);
 
 static inline uint32_t jlos_paging_get_page_dir_index(uint32_t virtual_addr)
 {
