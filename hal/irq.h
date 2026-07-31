@@ -41,6 +41,8 @@
   extern void jlos_irq_ignore_request(void);
 #endif
 
+#define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
+
 typedef struct {
     uint32_t m_error;
     uint32_t m_instruction_pointer;

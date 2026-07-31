@@ -6,12 +6,16 @@
 #include <hal/cpu_state.h>
 #include <kernel/paging.h>
 
-#define JLOS_TASK_RUNNING    0
-#define JLOS_TASK_TERMINATED 1
-#define JLOS_TASK_STACK_SIZE 16384
+#define JLOS_TASK_RUNNING       0
+#define JLOS_TASK_TERMINATED    1
+#define JLOS_TASK_WAITING       2
+
+#define JLOS_TASK_STACK_SIZE    16384
+#define JLOS_TASK_NAME_SIZE     32
 
 typedef struct {
     volatile uint32_t m_status;
+    char m_name[JLOS_TASK_NAME_SIZE];
     uint8_t *m_stack;
     uint32_t m_stack_size;
     uint8_t *m_user_stack;
@@ -26,6 +30,7 @@ typedef struct {
     bool m_sleeping;
     bool m_yield;
     int32_t m_errno;
+    uint32_t m_waiting_pid;
 } jlos_task_t;
 
 typedef struct {
@@ -36,8 +41,8 @@ typedef struct {
     bool main_thread_saved;
 } jlos_task_manager_t;
 
-void jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void));
-void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void));
+void jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
+void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 void jlos_task_destroy(jlos_task_t* self);
 
 void jlos_task_manager_init(jlos_task_manager_t* self);

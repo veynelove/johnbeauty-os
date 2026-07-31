@@ -28,7 +28,7 @@ static inline int32_t jlos_user_yield(void)
     return jlos_user_syscall(JLOS_SYSCALL_YIELD, 0, 0, 0);
 }
 
-static inline int32_t jlos_user_getpid(void)
+static inline int32_t jlos_user_get_pid(void)
 {
     return jlos_user_syscall(JLOS_SYSCALL_GET_PID, 0, 0, 0);
 }
@@ -46,6 +46,16 @@ static inline int32_t jlos_user_get_errno(void)
 static inline uint32_t jlos_user_get_ticks(void)
 {
     return (uint32_t)jlos_user_syscall(JLOS_SYSCALL_GET_TICKS, 0, 0, 0);
+}
+
+static inline int32_t jlos_user_debug_tasks(void)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_DEBUG_TASKS, 0, 0, 0);
+}
+
+static inline int32_t jlos_user_wait_pid(uint32_t pid, int32_t *exit_code)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_WAIT_PID, pid, (uint32_t)exit_code, 0);
 }
 
 void jlos_user_printf(const char *fmt, ...);

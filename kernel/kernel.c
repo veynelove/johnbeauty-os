@@ -67,13 +67,13 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
     jlos_page_frame_free(first_free_frame_ptr);
     uint8_t* heap_start = (uint8_t*)(first_free_frame_ptr);
     jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init(&memory_manager_, heap_start, 16 * 1024 * 1024);
+    jlos_memory_manager_init(&memory_manager_, heap_start, KERNEL_MAIN_MEMORY_SIZE);
     
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);
     
     jlos_irq_manager_t irq_mgr;
-    jlos_irq_manager_init(&irq_mgr, 0x20, mmu, &task_manager_);
+    jlos_irq_manager_init(&irq_mgr, KERNEL_FIRST_INTERRUPT_VECTOR, mmu, &task_manager_);
     printf("interrupt manager initialized\n");
 
     jlos_syscall_handler_t syscalls;
@@ -102,8 +102,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_ma
 
     printf("initializing hardware, stage 3 start\n");
 
-    jlos_hal_timer_start_periodic(100);
-    printf("PIT timer initialized (100Hz)\n");
+    jlos_hal_timer_start_periodic(JLOS_HAL_TIME_FREQ_HZ);
+    printf("PIT timer initialized\n");
 
     jlos_irq_manager_activate(&irq_mgr);
     printf("interrupts activated\n");
