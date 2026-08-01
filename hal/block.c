@@ -6,9 +6,9 @@
 static void ata_pio28_init(jlos_hal_block_dev_t *self)
 {
     /* create 时已经填好 priv.ata 里 port_base + master，这里做硬件 init */
-    jlos_ata_init(&self->dev_priv.ata, self->dev_priv.ata.m_data_port.m_portnumber,
-                  self->dev_priv.ata.m_master);
-    self->bytes_per_sector = self->dev_priv.ata.m_bytes_per_sector;
+    jlos_ata_init(&self->dev_priv.ata, self->dev_priv.ata.data_port.portnumber,
+                  self->dev_priv.ata.master);
+    self->bytes_per_sector = self->dev_priv.ata.bytes_per_sector;
     self->inited = 1;
 }
 
@@ -36,11 +36,11 @@ static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba,
     if (count == 0) return 0;
     /* PIO-28 只支持 28-bit LBA（最大 2^28-1 sectors ≈ 128GB） */
     if (lba > 0x0FFFFFFFull || (lba + (uint64_t)count - 1) > 0x0FFFFFFFull) return -2;
-    /* ATA read28 API: m_size = bytes，所以 count * bytes_per_sector */
+    /* ATA read28 API: size = bytes，所以 count * bytes_per_sector */
     uint32_t total_bytes = count * self->bytes_per_sector;
     /* 连续跨扇区的正确性依赖 ATA 驱动本身，这里只做字节上限
      * jlos_ata_read28 一次只读 count=1？还是支持多扇区？查 ata.h 签名是：
-     *   void jlos_ata_read28(..., sector, *data, m_size)
+     *   void jlos_ata_read28(..., sector, *data, size)
      * 不管怎样我们按扇区循环，保守策略。 */
     for (uint32_t i = 0; i < count; i++) {
         jlos_ata_read28(&self->dev_priv.ata,
@@ -89,7 +89,7 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self,
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;
     jlos_ata_init(&self->dev_priv.ata, port_base, master);
-    self->bytes_per_sector = self->dev_priv.ata.m_bytes_per_sector;
+    self->bytes_per_sector = self->dev_priv.ata.bytes_per_sector;
     self->inited = 1;
 }
 

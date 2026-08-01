@@ -28,22 +28,22 @@ void printf(const char *str)
     uint32_t flags = jlos_spin_lock_irqsave(&s_printf_lock);
     jlos_hal_serial_default_puts(str);
     static uint16_t *video_memory = (uint16_t *)0xb8000;
-    static uint8_t m_x = 0, m_y = 0;
+    static uint8_t x = 0, y = 0;
     for (int i = 0; str[i] != '\0'; i++) {
         switch (str[i]) {
-            case '\n': m_y++; m_x = 0; break;
+            case '\n': y++; x = 0; break;
             default:
-                video_memory[80 * m_y + m_x] = (video_memory[80 * m_y + m_x] & 0xFF00) | str[i];
-                m_x++;
+                video_memory[80 * y + x] = (video_memory[80 * y + x] & 0xFF00) | str[i];
+                x++;
         }
-        if (m_x >= 80) {
-            m_y++;
-            m_x = 0;
+        if (x >= 80) {
+            y++;
+            x = 0;
         }
-        if (m_y >= 25) {
+        if (y >= 25) {
             printf_scroll_screen();
-            m_y = 24;
-            m_x = 0;
+            y = 24;
+            x = 0;
         }
     }
     jlos_spin_unlock_irqrestore(&s_printf_lock, flags);
@@ -101,22 +101,22 @@ void printf_char(char c)
 static void printk_putchar(char c)
 {
     static uint16_t *video_memory = (uint16_t *)0xb8000;
-    static uint8_t m_x = 0, m_y = 0;
+    static uint8_t x = 0, y = 0;
     
     switch (c) {
-        case '\n': m_y++; m_x = 0; break;
+        case '\n': y++; x = 0; break;
         default:
-            video_memory[80 * m_y + m_x] = (video_memory[80 * m_y + m_x] & 0xFF00) | c;
-            m_x++;
+            video_memory[80 * y + x] = (video_memory[80 * y + x] & 0xFF00) | c;
+            x++;
     }
-    if (m_x >= 80) {
-        m_y++;
-        m_x = 0;
+    if (x >= 80) {
+        y++;
+        x = 0;
     }
-    if (m_y >= 25) {
+    if (y >= 25) {
         printf_scroll_screen();
-        m_y = 24;
-        m_x = 0;
+        y = 24;
+        x = 0;
     }
     jlos_hal_serial_default_putc(c);
 }

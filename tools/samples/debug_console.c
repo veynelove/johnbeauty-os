@@ -19,8 +19,8 @@ static void printf_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c
 
 typedef struct {
     jlos_mouse_event_handler_t base;
-    int8_t m_x;
-    int8_t m_y;
+    int8_t x;
+    int8_t y;
 } mouse_console_t;
 
 static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)
@@ -28,31 +28,31 @@ static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t x
     static uint16_t *video_memory = (uint16_t *)0xb8000;
     mouse_console_t* console = (mouse_console_t*)((char*)self - offsetof(mouse_console_t, base));
 
-    video_memory[80 * console->m_y + console->m_x] = ((video_memory[80 * console->m_y + console->m_x] & 0xF000) >> 4)
-        | ((video_memory[80 * console->m_y + console->m_x] & 0x0F00) << 4)
-        | ((video_memory[80 * console->m_y + console->m_x] & 0x00FF));
+    video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
+        | ((video_memory[80 * console->y + console->x] & 0x0F00) << 4)
+        | ((video_memory[80 * console->y + console->x] & 0x00FF));
 
-    console->m_x += xoffset;
-    if (console->m_x < 0) console->m_x = 0;
-    if (console->m_x >= 80) console->m_x = 79;
-    console->m_y += yoffset;
-    if (console->m_y < 0) console->m_y = 0;
-    if (console->m_y >= 25) console->m_y = 24;
+    console->x += xoffset;
+    if (console->x < 0) console->x = 0;
+    if (console->x >= 80) console->x = 79;
+    console->y += yoffset;
+    if (console->y < 0) console->y = 0;
+    if (console->y >= 25) console->y = 24;
 
-    video_memory[80 * console->m_y + console->m_x] = ((video_memory[80 * console->m_y + console->m_x] & 0xF000) >> 4)
-        | ((video_memory[80 * console->m_y + console->m_x] & 0x0F00) << 4)
-        | ((video_memory[80 * console->m_y + console->m_x] & 0x00FF));
+    video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
+        | ((video_memory[80 * console->y + console->x] & 0x0F00) << 4)
+        | ((video_memory[80 * console->y + console->x] & 0x00FF));
 }
 
 void mouse_console_init(mouse_console_t *mouse_handler)
 {
     mouse_handler->base.mouse_move = mouse_console_mouse_move;
-    mouse_handler->m_x = 40;
-    mouse_handler->m_y = 12;
+    mouse_handler->x = 40;
+    mouse_handler->y = 12;
     uint16_t *video_memory = (uint16_t *)0xb8000;
-    video_memory[80 * mouse_handler->m_y + mouse_handler->m_x] = ((video_memory[80 * mouse_handler->m_y + mouse_handler->m_x] & 0xF000) >> 4)
-        | ((video_memory[80 * mouse_handler->m_y + mouse_handler->m_x] & 0x0F00) << 4)
-        | ((video_memory[80 * mouse_handler->m_y + mouse_handler->m_x] & 0x00FF));
+    video_memory[80 * mouse_handler->y + mouse_handler->x] = ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0xF000) >> 4)
+        | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x0F00) << 4)
+        | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x00FF));
 }
 
 void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)

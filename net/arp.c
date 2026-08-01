@@ -25,7 +25,7 @@ void jlos_arp_init(jlos_arp_t* self, jlos_ether_frame_provider_t *backend)
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ARP: Initializing ARP protocol...\n");
 #endif
-    self->m_num_cache_entries = 0;
+    self->num_cache_entries = 0;
     jlos_ether_frame_handler_init(&self->base_handler, backend, 0x806);
     self->base_handler.on_ether_frame_received = (bool (*)(jlos_ether_frame_handler_t*, uint8_t*, uint32_t))jlos_arp_on_ether_frame_received;
 #if KERNEL_CONFIG_DEBUG_NETWORK
@@ -38,33 +38,29 @@ void jlos_arp_destroy(jlos_arp_t* self)
     jlos_ether_frame_handler_destroy(&self->base_handler);
 }
 
-bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payload, uint32_t m_size)
-{
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("ARP: Received ARP packet\n");
-#endif
-    
-    if (m_size < sizeof(jlos_arp_message_t)) {
+bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payload, uint32_t size)
+{   
+    if (size < sizeof(jlos_arp_message_t)) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ARP: Packet too small\n");
 #endif
         return false;
     }
     jlos_arp_message_t *arp = (jlos_arp_message_t *)etherframe_payload;
-    if (arp->m_hardware_type == 0x0100) {
-        if (arp->m_protocol == 0x0008 && arp->m_hardware_address_size == 6
-            && arp->m_protocol_address_size == 4 && arp->m_dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
-            switch (arp->m_command) {
+    if (arp->hardware_type == 0x0100) {
+        if (arp->protocol == 0x0008 && arp->hardware_address_size == 6
+            && arp->protocol_address_size == 4 && arp->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
+            switch (arp->command) {
                 case 0x0100: // ARP Request
 #if KERNEL_CONFIG_DEBUG_NETWORK
                     printf("ARP: Received ARP REQUEST\n");
 #endif
-                    arp->m_command = 0x0200;
-                    arp->m_dst_ip = arp->m_src_ip;
+                    arp->command = 0x0200;
+                    arp->dst_ip = arp->src_ip;
                     for (int i = 0; i < 6; i++) {
                         arp->dst_mac[i] = arp->src_mac[i];
                     }
-                    arp->m_src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+                    arp->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
                     uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp->src_mac);
 #if KERNEL_CONFIG_DEBUG_NETWORK
                     printf("ARP: Sending ARP REPLY\n");
@@ -74,10 +70,10 @@ bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payl
 #if KERNEL_CONFIG_DEBUG_NETWORK
                     printf("ARP: Received ARP REPLY\n");
 #endif
-                    if (self->m_num_cache_entries < 128) {
-                        self->ip_cache[self->m_num_cache_entries] = arp->m_src_ip;
-                        self->mac_cache[self->m_num_cache_entries] = mac_to_uint64(arp->src_mac);
-                        self->m_num_cache_entries++;
+                    if (self->num_cache_entries < 128) {
+                        self->ip_cache[self->num_cache_entries] = arp->src_ip;
+                        self->mac_cache[self->num_cache_entries] = mac_to_uint64(arp->src_mac);
+                        self->num_cache_entries++;
 #if KERNEL_CONFIG_DEBUG_NETWORK
                         printf("ARP: Cache updated\n");
 #endif
@@ -96,18 +92,18 @@ void jlos_arp_broadcast_mac_address(jlos_arp_t* self, uint32_t IP_BE)
 #endif
     
     jlos_arp_message_t arp;
-    arp.m_hardware_type = 0x0100;
-    arp.m_protocol = 0x0008;
-    arp.m_hardware_address_size = 6;
-    arp.m_protocol_address_size = 4;
-    arp.m_command = 0x0200;
+    arp.hardware_type = 0x0100;
+    arp.protocol = 0x0008;
+    arp.hardware_address_size = 6;
+    arp.protocol_address_size = 4;
+    arp.command = 0x0200;
 
     uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp.src_mac);
-    arp.m_src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+    arp.src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
     uint64_t dst_mac_be = jlos_arp_resolve(self, IP_BE);
     uint64_to_mac(dst_mac_be, arp.dst_mac);
-    arp.m_dst_ip = IP_BE;
-    jlos_ether_frame_handler_send(&self->base_handler, dst_mac_be, self->base_handler.m_etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
+    arp.dst_ip = IP_BE;
+    jlos_ether_frame_handler_send(&self->base_handler, dst_mac_be, self->base_handler.etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
     
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ARP: Broadcast complete\n");
@@ -121,19 +117,19 @@ void jlos_arp_request_mac_address(jlos_arp_t* self, uint32_t IP_BE)
 #endif
     
     jlos_arp_message_t arp;
-    arp.m_hardware_type = 0x0100;
-    arp.m_protocol = 0x0008;
-    arp.m_hardware_address_size = 6;
-    arp.m_protocol_address_size = 4;
-    arp.m_command = 0x0100;
+    arp.hardware_type = 0x0100;
+    arp.protocol = 0x0008;
+    arp.hardware_address_size = 6;
+    arp.protocol_address_size = 4;
+    arp.command = 0x0100;
 
     uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp.src_mac);
-    arp.m_src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+    arp.src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
     for (int i = 0; i < 6; i++) {
         arp.dst_mac[i] = 0xFF;
     }
-    arp.m_dst_ip = IP_BE;
-    jlos_ether_frame_handler_send(&self->base_handler, 0xFFFFFFFFFFFF, self->base_handler.m_etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
+    arp.dst_ip = IP_BE;
+    jlos_ether_frame_handler_send(&self->base_handler, 0xFFFFFFFFFFFF, self->base_handler.etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
     
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ARP: Request sent\n");
@@ -142,7 +138,7 @@ void jlos_arp_request_mac_address(jlos_arp_t* self, uint32_t IP_BE)
 
 uint64_t jlos_arp_get_mac_from_cache(jlos_arp_t* self, uint32_t IP_BE)
 {
-    for (int i = 0; i < self->m_num_cache_entries; i++) {
+    for (int i = 0; i < self->num_cache_entries; i++) {
         if (self->ip_cache[i] == IP_BE) {
             return self->mac_cache[i];
         }

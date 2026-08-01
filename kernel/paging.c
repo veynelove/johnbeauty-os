@@ -254,7 +254,8 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     uint32_t flags)
 {
     uint32_t fl = jlos_spin_lock_irqsave(&s_paging_lock);
-    for (uint32_t addr = virtual_addr_start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
+    uint32_t start = virtual_addr_start & ~0xFFFUL;
+    for (uint32_t addr = start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
         uint32_t pd_idx = jlos_paging_get_page_dir_index(addr);
         uint32_t pt_idx = jlos_paging_get_page_table_index(addr);
 
@@ -271,6 +272,9 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
         if (!(*pte & JLOS_PTE_PRESENT)) continue;
         uint32_t phys = *pte & ~0xFFF;
         *pte = phys | flags;
+        if (flags & JLOS_PTE_USER) {
+            *pde |= JLOS_PDE_USER;
+        }
         jlos_hal_paging_flush_tlb(addr);
     }
     jlos_spin_unlock_irqrestore(&s_paging_lock, fl);
@@ -287,20 +291,56 @@ void jlos_paging_initialize_kernel_paging(void)
     const jlos_hal_kernel_segments_t *segments = jlos_hal_get_kernel_segments();
     if (segments->text_start != 0) {
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->text_start, segments->text_end, 
-            JLOS_PTE_PRESENT);
+            JLOS_PTE_PRESENT | JLOS_PTE_USER);
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->data_start, segments->data_end,
-            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
+            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->bss_start, segments->bss_end,
-            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
+            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
     }
 
     jlos_paging_enable(&s_kernel_paging_context);
 }
 
+bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len)
+{
+    if (!s_kernel_paging_context.page_dir) {
+        return false;
+    }
+    uint32_t flag = jlos_spin_lock_irqsave(&s_paging_lock);
+    uint32_t addr = virtual_addr & ~0xFFF;
+    uint32_t end = (virtual_addr + len - 1) & ~0xFFF;
+    for (; addr <= end; addr += JLOS_PAGE_SIZE) {
+        uint32_t pd_idx = jlos_paging_get_page_dir_index(addr);
+        jlos_page_dir_entry_t *pde = &s_kernel_paging_context.page_dir->entries[pd_idx];
+        if (!(*pde & JLOS_PDE_PRESENT)) {
+            continue;
+        }
+        if (*pde & JLOS_PDE_4MB) {
+            if (!(*pde & JLOS_PDE_USER)) {
+                jlos_spin_unlock_irqrestore(&s_paging_lock, flag);
+                return false;
+            }
+            continue;
+        }
+        uint32_t pt_idx = jlos_paging_get_page_table_index(addr);
+        jlos_page_table_t *pt = (jlos_page_table_t *)(*pde & ~0xFFF);
+        jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
+        if (!(*pte & JLOS_PTE_PRESENT)) {
+            continue;
+        }
+        if (!(*pte & JLOS_PTE_USER)) {
+            jlos_spin_unlock_irqrestore(&s_paging_lock, flag);
+            return false;
+        }
+    }
+    jlos_spin_unlock_irqrestore(&s_paging_lock, flag);
+    return true;
+}
+
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
 {
     uint32_t fault_addr = jlos_hal_paging_get_fault_addr();
-    uint32_t error_code = context->m_error;
+    uint32_t error_code = context->error;
     bool present = error_code & 0x01;
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
@@ -315,8 +355,8 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         }
     }
     printk("page fault handler: unrecoverable error!\n");
-    printk("instruction pointer: 0x%x, code segment: 0x%x\n", context->m_instruction_pointer, context->m_code_segment);
-    printk("EFLAGS: 0x%x\n", context->m_flags);
+    printk("instruction pointer: 0x%x, code segment: 0x%x\n", context->instruction_pointer, context->code_segment);
+    printk("EFLAGS: 0x%x\n", context->flags);
     
     for (;;) {
         jlos_hal_halt();

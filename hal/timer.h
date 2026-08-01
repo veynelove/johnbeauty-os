@@ -4,6 +4,8 @@
 #include <tools/config.h>
 #include <common/types.h>
 
+#define JLOS_HAL_TIME_FREQ_HZ 100
+
 /* 统一 timer 驱动：x86 8253 PIT / x86 HPET / ARM Generic Timer 上层透明 */
 void jlos_hal_timer_start_periodic(uint16_t freq_hz);
 

@@ -7,18 +7,18 @@ typedef struct {
     jlos_udp_handler_t base;
 } printf_udp_handler_t;
 
-static void printf_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *m_data, uint16_t m_size)
+static void printf_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *data, uint16_t size)
 {
     printf("UDP received: ");
     char foo[2] = " ";
-    for (int i = 0; i < m_size; i++) {
-        foo[0] = m_data[i];
+    for (int i = 0; i < size; i++) {
+        foo[0] = data[i];
         printf(foo);
     }
     printf("\n");
 
     // Echo back the received data
-    socket->send(socket, m_data, m_size);
+    socket->send(socket, data, size);
 }
 
 void udp_server_test(jlos_udp_provider_t *udp)

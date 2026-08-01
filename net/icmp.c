@@ -14,7 +14,7 @@ void jlos_icmp_destroy(jlos_icmp_t* self)
     jlos_internet_protocol_handler_destroy(&self->base_handler);
 }
 
-bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t m_size)
+bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size)
 {
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ICMP: Received packet from ");
@@ -28,14 +28,14 @@ bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_B
     printf("\n");
 #endif
     
-    if (m_size < sizeof(jlos_icmp_message_t)) {
+    if (size < sizeof(jlos_icmp_message_t)) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ICMP: Packet too small\n");
 #endif
         return false;
     }
     jlos_icmp_message_t *msg = (jlos_icmp_message_t *)internet_protocol_payload;
-    switch (msg->m_type) {
+    switch (msg->type) {
         case 0: // Echo Reply
 #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ICMP: Echo Reply received\n");
@@ -45,9 +45,9 @@ bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_B
 #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ICMP: Echo Request received, sending reply...\n");
 #endif
-            msg->m_type = 0;
-            msg->m_check_sum = 0;
-            msg->m_check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)msg, m_size);
+            msg->type = 0;
+            msg->check_sum = 0;
+            msg->check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)msg, size);
 #if KERNEL_CONFIG_DEBUG_NETWORK
             printf("ICMP: Reply prepared, returning true to send\n");
 #endif
@@ -59,10 +59,10 @@ bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_B
 void jlos_icmp_request_echo_reply(jlos_icmp_t* self, uint32_t ip_be)
 {
     jlos_icmp_message_t icmp;
-    icmp.m_type = 8;
-    icmp.m_code = 0;
-    icmp.m_data = 0x3713;
-    icmp.m_check_sum = 0;
-    icmp.m_check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)&icmp, sizeof(jlos_icmp_message_t));
+    icmp.type = 8;
+    icmp.code = 0;
+    icmp.data = 0x3713;
+    icmp.check_sum = 0;
+    icmp.check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)&icmp, sizeof(jlos_icmp_message_t));
     jlos_internet_protocol_handler_send(&self->base_handler, ip_be, (uint8_t *)&icmp, sizeof(jlos_icmp_message_t));
 }

@@ -12,37 +12,37 @@ typedef struct jlos_interrupt_handler jlos_interrupt_handler_t;
 typedef uint32_t (*jlos_interrupt_handler_func_t)(jlos_interrupt_handler_t*, uint32_t);
 
 struct jlos_interrupt_handler {
-    uint8_t m_interrupt_number;
-    jlos_interrupt_manager_t *m_interrupt_manager;
+    uint8_t interrupt_number;
+    jlos_interrupt_manager_t *interrupt_manager;
     jlos_interrupt_handler_func_t handle_interrupt;
 };
 
 struct jlos_interrupt_manager {
-    uint16_t m_hardware_interrupt_offset;
+    uint16_t hardware_interrupt_offset;
     void *handles[256];
     jlos_task_manager_t *task_manager;
 
-    jlos_port8_bit_slow_t m_pic_master_command;
-    jlos_port8_bit_slow_t m_pic_master_data;
-    jlos_port8_bit_slow_t m_pic_slave_command;
-    jlos_port8_bit_slow_t m_pic_slave_data;
+    jlos_port8_bit_slow_t pic_master_command;
+    jlos_port8_bit_slow_t pic_master_data;
+    jlos_port8_bit_slow_t pic_slave_command;
+    jlos_port8_bit_slow_t pic_slave_data;
 };
 
 extern jlos_interrupt_manager_t *jlos_active_interrupt_manager;
 
 void jlos_interrupt_handler_init(jlos_interrupt_handler_t* self, jlos_interrupt_manager_t *interrupt_manager, uint8_t interrupt_number);
 void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self);
-uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t m_esp);
+uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t esp);
 
 void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset, jlos_gdt_t* gdt, jlos_task_manager_t *task_manager);
 void jlos_interrupt_manager_destroy(jlos_interrupt_manager_t* self);
 
 void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self);
 void jlos_interrupt_manager_deactivate(jlos_interrupt_manager_t* self);
-uint32_t jlos_interrupt_manager_handle_interrupt(uint8_t m_interrupt, uint32_t m_esp);
+uint32_t jlos_interrupt_manager_handle_interrupt(uint8_t interrupt, uint32_t esp);
 uint16_t jlos_interrupt_manager_hardware_interrupt_offset(jlos_interrupt_manager_t* self);
-uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* self, uint8_t m_interrupt, uint32_t m_esp);
-void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uint8_t m_interrupt, jlos_interrupt_handler_t* handler);
+uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* self, uint8_t interrupt, uint32_t esp);
+void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uint8_t interrupt, jlos_interrupt_handler_t* handler);
 
 void jlos_ignore_interrupt_request();
 
