@@ -6,20 +6,20 @@
 
 typedef struct
 {
-    uint32_t m_ebp;
-    uint32_t m_edi;
-    uint32_t m_esi;
-    uint32_t m_edx;
-    uint32_t m_ecx;
-    uint32_t m_ebx;
-    uint32_t m_eax;
-    uint32_t m_error;
-    uint32_t m_padding;
-    uint32_t m_eip;
-    uint32_t m_cs;
-    uint32_t m_eflags;
-    uint32_t m_user_esp;
-    uint32_t m_user_ss;
+    uint32_t ebp;
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t edx;
+    uint32_t ecx;
+    uint32_t ebx;
+    uint32_t eax;
+    uint32_t error;
+    uint32_t padding;
+    uint32_t eip;
+    uint32_t cs;
+    uint32_t eflags;
+    uint32_t user_esp;
+    uint32_t user_ss;
 } __attribute__((packed)) jlos_x86_regs_t;
 
 _Static_assert(sizeof(jlos_cpu_state_t) >= sizeof(jlos_x86_regs_t), "cpu_state opaque too small for x86\n");

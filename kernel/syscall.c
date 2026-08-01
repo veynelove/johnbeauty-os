@@ -35,8 +35,8 @@ static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENULL;
     }
-    g_current_task_ptr->m_status = JLOS_TASK_TERMINATED;
-    g_current_task_ptr->m_exit_code = arg1;
+    g_current_task_ptr->status = JLOS_TASK_TERMINATED;
+    g_current_task_ptr->exit_code = arg1;
     return 0;
 }
 
@@ -45,7 +45,7 @@ static int32_t syscall_yield(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENULL;
     }
-    g_current_task_ptr->m_yield = true;
+    g_current_task_ptr->yield = true;
     return 0;
 }
 
@@ -54,7 +54,7 @@ static int32_t syscall_get_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENULL;
     }
-    return g_current_task_ptr->m_pid;
+    return g_current_task_ptr->pid;
 }
 
 static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
@@ -62,8 +62,8 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENULL;
     }
-    g_current_task_ptr->m_wake_tick = jlos_hal_timer_get_ticks() + arg1;
-    g_current_task_ptr->m_sleeping = true;
+    g_current_task_ptr->wake_tick = jlos_hal_timer_get_ticks() + arg1;
+    g_current_task_ptr->sleeping = true;
     return 0;
 }
 
@@ -72,7 +72,7 @@ static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENULL;
     }
-    return g_current_task_ptr->m_errno;
+    return g_current_task_ptr->errno;
 }
 
 static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
@@ -86,11 +86,11 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
         return - SYSCALL_ENULL;
     }
     printf("=== task list ===\n");
-    for (int i = 0; i < g_task_manager_ptr->m_num_tasks; i++) {
+    for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
         if (t) {
-            printk("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->m_name,
-                t->m_pid, t->m_status, t->m_is_user_process ? "user" : "kernel");
+            printk("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->name,
+                t->pid, t->status, t->is_user_process ? "user" : "kernel");
         }
     }
     printf("================\n");
@@ -106,9 +106,9 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENULL;
     }
     jlos_task_t *target = NULL;
-    for (int i = 0; i < g_task_manager_ptr->m_num_tasks; i++) {
+    for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
-        if (t && t->m_pid == target_pid && t->m_parent_pid == g_current_task_ptr->m_pid) {
+        if (t && t->pid == target_pid && t->parent_pid == g_current_task_ptr->pid) {
             target = t;
             break;
         }
@@ -116,16 +116,16 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!target) {
         return -SYSCALL_ENINVAL;
     }
-    if (target->m_status == JLOS_TASK_TERMINATED) {
+    if (target->status == JLOS_TASK_TERMINATED) {
         if (exit_code) {
-            if (!jlos_copy_to_user(exit_code, &target->m_exit_code, sizeof(int32_t))) {
+            if (!jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
                 return -SYSCALL_EFAULT;
             }
         }
-        return (int32_t)target->m_pid;
+        return (int32_t)target->pid;
     }
-    g_current_task_ptr->m_waiting_pid = target_pid;
-    g_current_task_ptr->m_status = JLOS_TASK_WAITING;
+    g_current_task_ptr->waiting_pid = target_pid;
+    g_current_task_ptr->status = JLOS_TASK_WAITING;
     return 0;
 }
 
@@ -134,18 +134,18 @@ void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
     if (!s_syscall_handler) {
         return;
     }
-    s_syscall_handler->m_dispatch[num] = handler;
+    s_syscall_handler->dispatch[num] = handler;
 }
 
-void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t m_interrupt_number)
+void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number)
 {
     s_syscall_handler = self;
-    self->m_interrupt_manager = interrupt_manager;
-    self->m_interrupt_number = m_interrupt_number;
-    jlos_irq_handler_init((jlos_irq_handler_t *)self, interrupt_manager, m_interrupt_number);
+    self->interrupt_manager = interrupt_manager;
+    self->interrupt_number = interrupt_number;
+    jlos_irq_handler_init((jlos_irq_handler_t *)self, interrupt_manager, interrupt_number);
     self->handle_interrupt = jlos_syscall_handler_handle_interrupt;
     for (int i = 0; i < JLOS_SYSCALL_MAX; i++) {
-        self->m_dispatch[i] = 0;
+        self->dispatch[i] = 0;
     }
     jlos_syscall_register(JLOS_SYSCALL_WRITE, syscall_write);
     jlos_syscall_register(JLOS_SYSCALL_YIELD, syscall_yield);
@@ -166,11 +166,11 @@ int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_
     uint32_t arg3)
 {
     int32_t result = - SYSCALL_ENOSYS;
-    if (syscall_num < JLOS_SYSCALL_MAX && self->m_dispatch[syscall_num]) {
-        result = self->m_dispatch[syscall_num](arg1, arg2, arg3);
+    if (syscall_num < JLOS_SYSCALL_MAX && self->dispatch[syscall_num]) {
+        result = self->dispatch[syscall_num](arg1, arg2, arg3);
     }
     if (g_current_task_ptr) {
-        g_current_task_ptr->m_errno = (result < 0) ? -result : 0;
+        g_current_task_ptr->errno = (result < 0) ? -result : 0;
         return (result < 0) ? -1 : result;
     }
     return result;
@@ -181,8 +181,8 @@ bool jlos_syscall_need_resched()
     if (!g_current_task_ptr) {
         return false;
     }
-    if (g_current_task_ptr->m_status == JLOS_TASK_TERMINATED || g_current_task_ptr->m_status == JLOS_TASK_WAITING
-    || g_current_task_ptr->m_sleeping || g_current_task_ptr->m_yield) {
+    if (g_current_task_ptr->status == JLOS_TASK_TERMINATED || g_current_task_ptr->status == JLOS_TASK_WAITING
+    || g_current_task_ptr->sleeping || g_current_task_ptr->yield) {
         return true;
     }
     return false;

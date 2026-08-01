@@ -142,7 +142,7 @@ loader:
 > ```c
 > void john_beauty_main(
 >     const multiboot_info_t *multiboot_structure,  // ← push %ebx, 参数1
->     uint32_t m_magicnumber                         // ← push %eax, 参数2
+>     uint32_t magicnumber                         // ← push %eax, 参数2
 > );
 > ```
 

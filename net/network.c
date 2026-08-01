@@ -11,7 +11,7 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     /* 遍历所有驱动查找 AMD am79c973 网卡驱动（硬编码 index[2] 容易出问题） */
     extern void jlos_amd_am79c973_activate(jlos_amd_am79c973_t*);
     jlos_amd_am79c973_t *eth0 = NULL;
-    for (int i = 0; i < driver_manager_->m_num_drivers; i++) {
+    for (int i = 0; i < driver_manager_->num_drivers; i++) {
         jlos_driver_t *drv = driver_manager_->drivers[i];
         if (drv != NULL && drv->activate == (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate) {
             eth0 = (jlos_amd_am79c973_t *)drv;
@@ -71,11 +71,11 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("ARP: [FAIL] backend is NULL!\n");
         arp_ok = false;
     }
-    if (stack->arp.base_handler.m_etherType_BE != arp_etype) {
+    if (stack->arp.base_handler.etherType_BE != arp_etype) {
         printf("ARP: [FAIL] EtherType mismatch! expected=0x");
         printf_hex16(arp_etype);
         printf(" actual=0x");
-        printf_hex16(stack->arp.base_handler.m_etherType_BE);
+        printf_hex16(stack->arp.base_handler.etherType_BE);
         printf("\n");
         arp_ok = false;
     }
@@ -83,9 +83,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("ARP: [FAIL] frame handler is NULL!\n");
         arp_ok = false;
     }
-    if (stack->arp.m_num_cache_entries != 0) {
+    if (stack->arp.num_cache_entries != 0) {
         printf("ARP: [FAIL] cache entries should be 0, actual=");
-        printf_hex32(stack->arp.m_num_cache_entries);
+        printf_hex32(stack->arp.num_cache_entries);
         printf("\n");
         arp_ok = false;
     }
@@ -112,11 +112,11 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("IP4: [FAIL] backend is NULL!\n");
         ipv4_ok = false;
     }
-    if (stack->ipv4.base_handler.m_etherType_BE != ip_etype) {
+    if (stack->ipv4.base_handler.etherType_BE != ip_etype) {
         printf("IP4: [FAIL] EtherType mismatch! expected=0x");
         printf_hex16(ip_etype);
         printf(" actual=0x");
-        printf_hex16(stack->ipv4.base_handler.m_etherType_BE);
+        printf_hex16(stack->ipv4.base_handler.etherType_BE);
         printf("\n");
         ipv4_ok = false;
     }
@@ -128,11 +128,11 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("IP4: [FAIL] ARP reference is NULL!\n");
         ipv4_ok = false;
     }
-    if (stack->ipv4.m_gateway_ip != gateway_ip_be) {
+    if (stack->ipv4.gateway_ip != gateway_ip_be) {
         printf("IP4: [FAIL] gateway IP mismatch!\n");
         ipv4_ok = false;
     }
-    if (stack->ipv4.m_subnet_mask != subnet_be) {
+    if (stack->ipv4.subnet_mask != subnet_be) {
         printf("IP4: [FAIL] subnet mask mismatch!\n");
         ipv4_ok = false;
     }
@@ -144,9 +144,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
     }
     if (ipv4_ok) {
         printf("IP4: [ OK ] initialized (type=0x0800, gw=0x");
-        printf_hex32(stack->ipv4.m_gateway_ip);
+        printf_hex32(stack->ipv4.gateway_ip);
         printf(" mask=0x");
-        printf_hex32(stack->ipv4.m_subnet_mask);
+        printf_hex32(stack->ipv4.subnet_mask);
         printf(")\n");
     }
 #endif
@@ -162,9 +162,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("ICMP: [FAIL] backend is NULL!\n");
         icmp_ok = false;
     }
-    if (stack->icmp.base_handler.m_ip_protocol != 0x01) {
+    if (stack->icmp.base_handler.ip_protocol != 0x01) {
         printf("ICMP: [FAIL] protocol mismatch! expected=0x01 actual=0x");
-        printf_hex(stack->icmp.base_handler.m_ip_protocol);
+        printf_hex(stack->icmp.base_handler.ip_protocol);
         printf("\n");
         icmp_ok = false;
     }
@@ -192,9 +192,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("UDP: [FAIL] backend is NULL!\n");
         udp_ok = false;
     }
-    if (stack->udp.base_handler.m_ip_protocol != 0x11) {
+    if (stack->udp.base_handler.ip_protocol != 0x11) {
         printf("UDP: [FAIL] protocol mismatch! expected=0x11 actual=0x");
-        printf_hex(stack->udp.base_handler.m_ip_protocol);
+        printf_hex(stack->udp.base_handler.ip_protocol);
         printf("\n");
         udp_ok = false;
     }
@@ -206,15 +206,15 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("UDP: [FAIL] sockets array allocation failed!\n");
         udp_ok = false;
     }
-    if (stack->udp.m_num_sockets != 0) {
+    if (stack->udp.num_sockets != 0) {
         printf("UDP: [FAIL] num_sockets should be 0, actual=");
-        printf_hex16(stack->udp.m_num_sockets);
+        printf_hex16(stack->udp.num_sockets);
         printf("\n");
         udp_ok = false;
     }
-    if (stack->udp.m_free_port != 1024) {
+    if (stack->udp.free_port != 1024) {
         printf("UDP: [FAIL] free_port should be 1024, actual=");
-        printf_hex16(stack->udp.m_free_port);
+        printf_hex16(stack->udp.free_port);
         printf("\n");
         udp_ok = false;
     }
@@ -240,9 +240,9 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("TCP: [FAIL] backend is NULL!\n");
         tcp_ok = false;
     }
-    if (stack->tcp.base_handler.m_ip_protocol != 0x06) {
+    if (stack->tcp.base_handler.ip_protocol != 0x06) {
         printf("TCP: [FAIL] protocol mismatch! expected=0x06 actual=0x");
-        printf_hex(stack->tcp.base_handler.m_ip_protocol);
+        printf_hex(stack->tcp.base_handler.ip_protocol);
         printf("\n");
         tcp_ok = false;
     }
@@ -254,15 +254,15 @@ void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_
         printf("TCP: [FAIL] sockets array allocation failed!\n");
         tcp_ok = false;
     }
-    if (stack->tcp.m_num_sockets != 0) {
+    if (stack->tcp.num_sockets != 0) {
         printf("TCP: [FAIL] num_sockets should be 0, actual=");
-        printf_hex16(stack->tcp.m_num_sockets);
+        printf_hex16(stack->tcp.num_sockets);
         printf("\n");
         tcp_ok = false;
     }
-    if (stack->tcp.m_free_port != 1024) {
+    if (stack->tcp.free_port != 1024) {
         printf("TCP: [FAIL] free_port should be 1024, actual=");
-        printf_hex16(stack->tcp.m_free_port);
+        printf_hex16(stack->tcp.free_port);
         printf("\n");
         tcp_ok = false;
     }

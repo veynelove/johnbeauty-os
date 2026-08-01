@@ -21,25 +21,25 @@ static inline int mm_size_to_class(size_t size, int max_class)
 
 static void mm_class_add(jlos_memory_manager_t *self, int cls, jlos_memory_chunk_t *chunk)
 {
-    chunk->free_next = self->m_class_head[cls];
+    chunk->free_next = self->class_head[cls];
     chunk->free_prev = NULL;
-    if (self->m_class_head[cls]) {
-        self->m_class_head[cls]->free_prev = chunk;
+    if (self->class_head[cls]) {
+        self->class_head[cls]->free_prev = chunk;
     }
-    self->m_class_head[cls] = chunk;
-    self->m_size_bitmap |= (1U << cls);
+    self->class_head[cls] = chunk;
+    self->size_bitmap |= (1U << cls);
 }
 
 static jlos_memory_chunk_t *mm_class_remove_head(jlos_memory_manager_t *self, int cls)
 {
-    jlos_memory_chunk_t *chunk = self->m_class_head[cls];
+    jlos_memory_chunk_t *chunk = self->class_head[cls];
     if (chunk) {
-        self->m_class_head[cls] = chunk->free_next;
+        self->class_head[cls] = chunk->free_next;
         if (chunk->free_next) {
             chunk->free_next->free_prev = NULL;
         }
-        if (!self->m_class_head[cls]) {
-            self->m_size_bitmap &= ~(1U << cls);
+        if (!self->class_head[cls]) {
+            self->size_bitmap &= ~(1U << cls);
         }
         chunk->free_next = NULL;
         chunk->free_prev = NULL;
@@ -52,13 +52,13 @@ static void mm_class_remove_chunk(jlos_memory_manager_t *self, int cls, jlos_mem
     if (chunk->free_prev) {
         chunk->free_prev->free_next = chunk->free_next;
     } else {
-        self->m_class_head[cls] = chunk->free_next;
+        self->class_head[cls] = chunk->free_next;
     }
     if (chunk->free_next) {
         chunk->free_next->free_prev = chunk->free_prev;
     }
-    if (!self->m_class_head[cls]) {
-        self->m_size_bitmap &= ~(1U << cls);
+    if (!self->class_head[cls]) {
+        self->size_bitmap &= ~(1U << cls);
     }
     chunk->free_next = NULL;
     chunk->free_prev = NULL;
@@ -67,46 +67,46 @@ static void mm_class_remove_chunk(jlos_memory_manager_t *self, int cls, jlos_mem
 static inline int mm_bitmap_find(jlos_memory_manager_t *self, uint32_t min_class)
 {
     uint32_t mask = (min_class >= 32) ? 0xFFFFFFFF : (~0U << min_class);
-    uint32_t masked = self->m_size_bitmap & mask;
+    uint32_t masked = self->size_bitmap & mask;
     if (!masked) return -1;
     return __builtin_ctz(masked);
 }
 
-void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t m_size)
+void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t size)
 {
     jlos_active_memory_manager = self;
-    self->m_heap_start = start;
-    self->m_heap_end = start + m_size;
-    self->m_heap_current = self->m_heap_end;
-    self->m_size_bitmap = 0;
-    self->m_tail = NULL;
+    self->heap_start = start;
+    self->heap_end = start + size;
+    self->heap_current = self->heap_end;
+    self->size_bitmap = 0;
+    self->tail = NULL;
 
-    size_t max_alloc = m_size - sizeof(jlos_memory_chunk_t);
+    size_t max_alloc = size - sizeof(jlos_memory_chunk_t);
     int max_cls = 0;
     size_t s = JLOS_MM_MIN_ALLOC;
     while (s < max_alloc && max_cls < JLOS_MM_CLASS_COUNT - 1) {
         s <<= 1;
         max_cls++;
     }
-    self->m_max_class = max_cls;
+    self->max_class = max_cls;
 
     for (int i = 0; i < JLOS_MM_CLASS_COUNT; i++) {
-        self->m_class_head[i] = NULL;
+        self->class_head[i] = NULL;
     }
 
     uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
-    if (m_size < sizeof(jlos_memory_chunk_t)) {
+    if (size < sizeof(jlos_memory_chunk_t)) {
         self->first = NULL;
     } else {
         self->first = (jlos_memory_chunk_t *)start;
-        self->first->m_allocated = false;
+        self->first->allocated = false;
         self->first->prev = NULL;
         self->first->next = NULL;
         self->first->free_next = NULL;
         self->first->free_prev = NULL;
-        self->first->m_size = m_size - sizeof(jlos_memory_chunk_t);
-        self->m_tail = self->first;
-        int cls = mm_size_to_class(self->first->m_size, self->m_max_class);
+        self->first->size = size - sizeof(jlos_memory_chunk_t);
+        self->tail = self->first;
+        int cls = mm_size_to_class(self->first->size, self->max_class);
         mm_class_add(self, cls, self->first);
     }
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
@@ -119,13 +119,13 @@ void jlos_memory_manager_destroy(jlos_memory_manager_t* self)
     }
 }
 
-static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_t *self, size_t m_size)
+static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_t *self, size_t size)
 {
     if (!jlos_active_paging_context) {
         return NULL;
     }
-    size_t pages_needed = JLOS_EXCEPT_CEIL(m_size, JLOS_PAGE_SIZE);
-    uint8_t *new_heap_start = self->m_heap_current;
+    size_t pages_needed = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
+    uint8_t *new_heap_start = self->heap_current;
     uint32_t pages_done = 0;
 
     for (size_t i = 0; i < pages_needed; i++) {
@@ -150,36 +150,36 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     }
     size_t new_chunk_size = pages_needed * JLOS_PAGE_SIZE;
     jlos_memory_chunk_t *new_chunk = (jlos_memory_chunk_t *)new_heap_start;
-    new_chunk->m_allocated = false;
-    new_chunk->m_size = new_chunk_size - sizeof(jlos_memory_chunk_t);
+    new_chunk->allocated = false;
+    new_chunk->size = new_chunk_size - sizeof(jlos_memory_chunk_t);
     new_chunk->prev = NULL;
     new_chunk->next = NULL;
     new_chunk->free_next = NULL;
     new_chunk->free_prev = NULL;
 
     uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
-    if (self->m_tail) {
-        self->m_tail->next = new_chunk;
-        new_chunk->prev = self->m_tail;
+    if (self->tail) {
+        self->tail->next = new_chunk;
+        new_chunk->prev = self->tail;
     } else {
         self->first = new_chunk;
     }
-    self->m_tail = new_chunk;
-    int cls = mm_size_to_class(new_chunk->m_size, self->m_max_class);
+    self->tail = new_chunk;
+    int cls = mm_size_to_class(new_chunk->size, self->max_class);
     mm_class_add(self, cls, new_chunk);
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
-    self->m_heap_current += new_chunk_size;
+    self->heap_current += new_chunk_size;
     return new_chunk;
 }
 
-void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t m_size)
+void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size)
 {
-    if (m_size < JLOS_MM_MIN_ALLOC) {
-        m_size = JLOS_MM_MIN_ALLOC;
+    if (size < JLOS_MM_MIN_ALLOC) {
+        size = JLOS_MM_MIN_ALLOC;
     }
 
     uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
-    int target_cls = mm_size_to_class(m_size, self->m_max_class);
+    int target_cls = mm_size_to_class(size, self->max_class);
     int found_cls = mm_bitmap_find(self, (uint32_t)target_cls);
 
     jlos_memory_chunk_t *result = NULL;
@@ -190,19 +190,19 @@ void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t m_size)
 
     if (!result) {
         jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
-        result = jlos_memory_manager_expand_heap(self, m_size);
+        result = jlos_memory_manager_expand_heap(self, size);
         if (!result) {
             return NULL;
         }
         fl = jlos_spin_lock_irqsave(&s_mm_lock);
-        int cls = mm_size_to_class(result->m_size, self->m_max_class);
+        int cls = mm_size_to_class(result->size, self->max_class);
         mm_class_remove_chunk(self, cls, result);
     }
 
-    if (result->m_size >= m_size + sizeof(jlos_memory_chunk_t) + JLOS_MM_MIN_ALLOC) {
-        jlos_memory_chunk_t *temp = (jlos_memory_chunk_t *)((size_t)result + sizeof(jlos_memory_chunk_t) + m_size);
-        temp->m_allocated = false;
-        temp->m_size = result->m_size - m_size - sizeof(jlos_memory_chunk_t);
+    if (result->size >= size + sizeof(jlos_memory_chunk_t) + JLOS_MM_MIN_ALLOC) {
+        jlos_memory_chunk_t *temp = (jlos_memory_chunk_t *)((size_t)result + sizeof(jlos_memory_chunk_t) + size);
+        temp->allocated = false;
+        temp->size = result->size - size - sizeof(jlos_memory_chunk_t);
         temp->prev = result;
         temp->next = result->next;
         temp->free_next = NULL;
@@ -210,15 +210,15 @@ void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t m_size)
         if (temp->next) {
             temp->next->prev = temp;
         }
-        result->m_size = m_size;
+        result->size = size;
         result->next = temp;
-        if (self->m_tail == result) {
-            self->m_tail = temp;
+        if (self->tail == result) {
+            self->tail = temp;
         }
-        int tcls = mm_size_to_class(temp->m_size, self->m_max_class);
+        int tcls = mm_size_to_class(temp->size, self->max_class);
         mm_class_add(self, tcls, temp);
     }
-    result->m_allocated = true;
+    result->allocated = true;
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
     return (void *)(((size_t)result) + sizeof(jlos_memory_chunk_t));
 }
@@ -230,49 +230,49 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
         jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
         return;
     }
-    if ((uint8_t *)ptr < self->m_heap_start || (uint8_t *)ptr >= self->m_heap_current) {
+    if ((uint8_t *)ptr < self->heap_start || (uint8_t *)ptr >= self->heap_current) {
         jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
         return;
     }
     jlos_memory_chunk_t *chunk = (jlos_memory_chunk_t *)((size_t)ptr - sizeof(jlos_memory_chunk_t));
-    chunk->m_allocated = false;
+    chunk->allocated = false;
 
-    if (chunk->prev && !chunk->prev->m_allocated) {
+    if (chunk->prev && !chunk->prev->allocated) {
         jlos_memory_chunk_t *prev = chunk->prev;
-        int pcls = mm_size_to_class(prev->m_size, self->m_max_class);
+        int pcls = mm_size_to_class(prev->size, self->max_class);
         mm_class_remove_chunk(self, pcls, prev);
-        chunk->m_size += prev->m_size + sizeof(jlos_memory_chunk_t);
+        chunk->size += prev->size + sizeof(jlos_memory_chunk_t);
         chunk->prev = prev->prev;
         if (chunk->prev) {
             chunk->prev->next = chunk;
         } else {
             self->first = chunk;
         }
-        if (self->m_tail == chunk) {
-            self->m_tail = prev;
+        if (self->tail == chunk) {
+            self->tail = prev;
         }
     }
-    if (chunk->next && !chunk->next->m_allocated) {
+    if (chunk->next && !chunk->next->allocated) {
         jlos_memory_chunk_t *next = chunk->next;
-        int ncls = mm_size_to_class(next->m_size, self->m_max_class);
+        int ncls = mm_size_to_class(next->size, self->max_class);
         mm_class_remove_chunk(self, ncls, next);
-        chunk->m_size += next->m_size + sizeof(jlos_memory_chunk_t);
+        chunk->size += next->size + sizeof(jlos_memory_chunk_t);
         chunk->next = next->next;
         if (chunk->next) {
             chunk->next->prev = chunk;
         }
     }
-    int cls = mm_size_to_class(chunk->m_size, self->m_max_class);
+    int cls = mm_size_to_class(chunk->size, self->max_class);
     mm_class_add(self, cls, chunk);
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
 }
 
-void *jlos_malloc(size_t m_size)
+void *jlos_malloc(size_t size)
 {
     if (!jlos_active_memory_manager) {
         return NULL;
     }
-    return jlos_memory_manager_malloc(jlos_active_memory_manager, m_size);
+    return jlos_memory_manager_malloc(jlos_active_memory_manager, size);
 }
 
 void jlos_free(void *ptr)
@@ -336,12 +336,12 @@ void jlos_malloc_stats(jlos_memory_manager_t *self)
 
     for (jlos_memory_chunk_t *c = self->first; c; c = c->next) {
         total++;
-        if (c->m_allocated) {
+        if (c->allocated) {
             alloc++;
-            alloc_bytes += c->m_size;
+            alloc_bytes += c->size;
         } else {
             free++;
-            free_bytes += c->m_size;
+            free_bytes += c->size;
         }
     }
 
@@ -349,11 +349,11 @@ void jlos_malloc_stats(jlos_memory_manager_t *self)
     printk("  Total chunks: %u\n", total);
     printk("  Allocated: %u chunks, %u bytes\n", alloc, alloc_bytes);
     printk("  Free: %u chunks, %u bytes\n", free, free_bytes);
-    printk("  Free bitmap: 0x%x\n", self->m_size_bitmap);
+    printk("  Free bitmap: 0x%x\n", self->size_bitmap);
 
-    for (int i = 0; i <= self->m_max_class; i++) {
+    for (int i = 0; i <= self->max_class; i++) {
         uint32_t count = 0;
-        for (jlos_memory_chunk_t *c = self->m_class_head[i]; c; c = c->free_next) {
+        for (jlos_memory_chunk_t *c = self->class_head[i]; c; c = c->free_next) {
             count++;
         }
         if (count > 0) {

@@ -4,19 +4,19 @@
 #include <common/types.h>
 
 typedef struct {
-    uint16_t m_portnumber;
+    uint16_t portnumber;
 } jlos_port8_bit_t;
 
 typedef struct {
-    uint16_t m_portnumber;
+    uint16_t portnumber;
 } jlos_port8_bit_slow_t;
 
 typedef struct {
-    uint16_t m_portnumber;
+    uint16_t portnumber;
 } jlos_port16_bit_t;
 
 typedef struct {
-    uint16_t m_portnumber;
+    uint16_t portnumber;
 } jlos_port32_bit_t;
 
 void jlos_port8_bit_init(jlos_port8_bit_t* self, uint16_t portnumber);

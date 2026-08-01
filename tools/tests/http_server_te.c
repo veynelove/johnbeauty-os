@@ -7,19 +7,19 @@ typedef struct {
     jlos_tcp_handler_t base;
 } printf_tcp_handler_t;
 
-static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *m_data, uint16_t m_size)
+static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
 {
     char foo[2] = " ";
-    for (int i = 0; i < m_size; i++) {
-        foo[0] = m_data[i];
+    for (int i = 0; i < size; i++) {
+        foo[0] = data[i];
         printf(foo);
     }
-    if (m_size > 9
-        && m_data[0] == 'G' && m_data[1] == 'E'
-        && m_data[2] == 'T' && m_data[3] == ' '
-        && m_data[4] == '/' && m_data[5] == ' '
-        && m_data[6] == 'H' && m_data[7] == 'T'
-        && m_data[8] == 'T' && m_data[9] == 'P') {
+    if (size > 9
+        && data[0] == 'G' && data[1] == 'E'
+        && data[2] == 'T' && data[3] == ' '
+        && data[4] == '/' && data[5] == ' '
+        && data[6] == 'H' && data[7] == 'T'
+        && data[8] == 'T' && data[9] == 'P') {
         const char *body = "<html><head><title>john beauty</title></head><body><b>johnbeauty</b> - john_love operating system</body></html>\r\n";
         uint16_t body_len = 0;
         while (body[body_len] != '\0') body_len++;

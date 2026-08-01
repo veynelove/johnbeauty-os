@@ -44,7 +44,7 @@ void call_constructors()
     }
 }
 
-void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t m_magicnumber, uint32_t kernel_end)
+void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t magicnumber, uint32_t kernel_end)
 {
     jlos_printk_init();
     jlos_hal_arch_init();

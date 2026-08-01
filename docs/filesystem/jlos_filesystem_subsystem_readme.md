@@ -122,17 +122,17 @@ typedef struct {
     /* FAT12/16/32 通用开头 */
     uint8_t  jump[3];                         /* EB xx 90 跳转 */
     uint8_t  soft_name[8];                    /* "MSWIN4.1" 等 */
-    uint16_t m_bytes_per_sector;              /* 通常 512，与 HAL 扇区大小交叉校验 */
-    uint8_t  m_sectors_per_cluster;
-    uint16_t m_reserved_sectors;              /* FAT32 通常 32 */
-    uint8_t  m_fat_copies;                    /* 通常 2，FAT1 = 主 FAT2 = 备份 */
-    uint16_t m_root_dir_entries;              /* FAT16 有，FAT32 = 0 */
-    uint16_t m_total_sectors;                 /* FAT16 总数；FAT32 = 0 */
-    uint16_t m_fat_sector_count;              /* FAT16 每 FAT 扇区数；FAT32 = 0 */
+    uint16_t bytes_per_sector;              /* 通常 512，与 HAL 扇区大小交叉校验 */
+    uint8_t  sectors_per_cluster;
+    uint16_t reserved_sectors;              /* FAT32 通常 32 */
+    uint8_t  fat_copies;                    /* 通常 2，FAT1 = 主 FAT2 = 备份 */
+    uint16_t root_dir_entries;              /* FAT16 有，FAT32 = 0 */
+    uint16_t total_sectors;                 /* FAT16 总数；FAT32 = 0 */
+    uint16_t fat_sector_count;              /* FAT16 每 FAT 扇区数；FAT32 = 0 */
     /* FAT32 扩展字段 */
-    uint32_t m_total_sector_count;            /* FAT32 总扇区数 */
-    uint32_t m_table_size;                    /* FAT32 每 FAT 扇区数 */
-    uint32_t m_root_cluster;                  /* FAT32 根目录起始簇号（通常 2）*/
+    uint32_t total_sector_count;            /* FAT32 总扇区数 */
+    uint32_t table_size;                    /* FAT32 每 FAT 扇区数 */
+    uint32_t root_cluster;                  /* FAT32 根目录起始簇号（通常 2）*/
     /* …… FAT 信息扇区号、备份 BPB 扇区、卷标、FAT 类型标签 */
 } __attribute__((packed)) jlos_bios_parameter_block32_t;
 
@@ -144,11 +144,11 @@ void jlos_read_bios_block(jlos_ata_t *hd, uint32_t partition_offset_lba);
 ```c
 typedef struct {
     uint8_t  name[8], ext[3];                 /* 8.3 文件名，首字节 0xE5=已删除 */
-    uint8_t  m_attributes;                    /* 0x10=目录 0x20=归档 … */
-    uint16_t m_first_cluster_hi;              /* FAT32 高 16 位簇号 */
-    uint16_t m_w_time, m_w_date;              /* 修改时间/日期（FAT 压缩格式）*/
-    uint16_t m_first_cluster_low;             /* 低 16 位簇号 */
-    uint32_t m_size;                          /* 文件大小，目录 = 0 */
+    uint8_t  attributes;                    /* 0x10=目录 0x20=归档 … */
+    uint16_t first_cluster_hi;              /* FAT32 高 16 位簇号 */
+    uint16_t w_time, w_date;              /* 修改时间/日期（FAT 压缩格式）*/
+    uint16_t first_cluster_low;             /* 低 16 位簇号 */
+    uint32_t size;                          /* 文件大小，目录 = 0 */
 } __attribute__((packed)) jlos_directory_entry_fat32_t;
 ```
 

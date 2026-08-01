@@ -23,7 +23,7 @@ const jlos_hal_kernel_segments_t *jlos_hal_get_kernel_segments(void)
     return &s_kernel_segments;
 }
 
-void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t m_base, uint32_t limit, uint8_t m_flags)
+void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint32_t base, uint32_t limit, uint8_t flags)
 {
     uint8_t* target = (uint8_t *)self;
     if (limit <= 65536) {
@@ -42,12 +42,12 @@ void jlos_gdt_segment_descriptor_init(jlos_gdt_segment_descriptor_t* self, uint3
     target[1] = (limit >> 8) & 0xFF;
     target[6] |= (limit >> 16) & 0xF;
     
-    target[2] = m_base & 0xFF;
-    target[3] = (m_base >> 8) & 0xFF;
-    target[4] = (m_base >> 16) & 0xFF;
-    target[7] = (m_base >> 24) & 0xFF;
+    target[2] = base & 0xFF;
+    target[3] = (base >> 8) & 0xFF;
+    target[4] = (base >> 16) & 0xFF;
+    target[7] = (base >> 24) & 0xFF;
     
-    target[5] = m_flags;
+    target[5] = flags;
 }
 
 uint32_t jlos_gdt_segment_descriptor_base(jlos_gdt_segment_descriptor_t* self)
@@ -76,14 +76,14 @@ uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self)
 void jlos_gdt_init()
 {
     jlos_gdt_t *gdt = &s_kernel_gdt;
-    jlos_gdt_segment_descriptor_init(&gdt->m_null_segment_selector, 0, 0, 0);
-    jlos_gdt_segment_descriptor_init(&gdt->m_unused_segment_selector, 0, 0, 0);
-    jlos_gdt_segment_descriptor_init(&gdt->m_code_segment_selector, 0, 64*1024*1024, 0x9A);
-    jlos_gdt_segment_descriptor_init(&gdt->m_data_segment_selector, 0, 64*1024*1024, 0x92);
+    jlos_gdt_segment_descriptor_init(&gdt->null_segment_selector, 0, 0, 0);
+    jlos_gdt_segment_descriptor_init(&gdt->unused_segment_selector, 0, 0, 0);
+    jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 64*1024*1024, 0x9A);
+    jlos_gdt_segment_descriptor_init(&gdt->data_segment_selector, 0, 64*1024*1024, 0x92);
     
-    jlos_gdt_segment_descriptor_init(&gdt->m_user_code_segment_selector, 0, 64 * 1024 * 1024, 0xFA);
-    jlos_gdt_segment_descriptor_init(&gdt->m_user_data_segment_selector, 0, 64 * 1024 * 1024, 0xF2);
-    jlos_gdt_segment_descriptor_init(&gdt->m_tss_segment_selector, 0, 0, 0x89);
+    jlos_gdt_segment_descriptor_init(&gdt->user_code_segment_selector, 0, 64 * 1024 * 1024, 0xFA);
+    jlos_gdt_segment_descriptor_init(&gdt->user_data_segment_selector, 0, 64 * 1024 * 1024, 0xF2);
+    jlos_gdt_segment_descriptor_init(&gdt->tss_segment_selector, 0, 0, 0x89);
     uint32_t i[2];
     i[1] = (uint32_t)gdt;
     i[0] = sizeof(jlos_gdt_t) << 16;
@@ -97,32 +97,32 @@ void jlos_gdt_destroy(jlos_gdt_t* self)
 
 uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self)
 {
-    return (uint8_t *)&self->m_data_segment_selector - (uint8_t *)self;
+    return (uint8_t *)&self->data_segment_selector - (uint8_t *)self;
 }
 
 uint16_t jlos_gdt_code_segment_selector(jlos_gdt_t* self)
 {
-    return (uint8_t *)&self->m_code_segment_selector - (uint8_t *)self;
+    return (uint8_t *)&self->code_segment_selector - (uint8_t *)self;
 }
 
 uint16_t jlos_gdt_user_code_segment_selector(jlos_gdt_t *self)
 {
-    return (uint16_t)((uint8_t *)&self->m_user_code_segment_selector - (uint8_t *)self) | 3;
+    return (uint16_t)((uint8_t *)&self->user_code_segment_selector - (uint8_t *)self) | 3;
 }
 
 uint16_t jlos_gdt_user_data_segment_selector(jlos_gdt_t *self)
 {
-    return (uint16_t)((uint8_t *)&self->m_user_data_segment_selector - (uint8_t *)self) | 3;
+    return (uint16_t)((uint8_t *)&self->user_data_segment_selector - (uint8_t *)self) | 3;
 }
 
 uint16_t jlos_gdt_tss_selector(jlos_gdt_t *self)
 {
-    return (uint16_t)((uint8_t *)&self->m_tss_segment_selector - (uint8_t *)self);
+    return (uint16_t)((uint8_t *)&self->tss_segment_selector - (uint8_t *)self);
 }
 
 void jlos_gdt_set_tss(jlos_gdt_t *self, uint32_t base, uint32_t limit)
 {
-    jlos_gdt_segment_descriptor_init(&self->m_tss_segment_selector, base, limit, 0x89);
+    jlos_gdt_segment_descriptor_init(&self->tss_segment_selector, base, limit, 0x89);
     uint32_t i[2];
     i[1] = (uint32_t)self;
     i[0] = sizeof(jlos_gdt_t) << 16;

@@ -340,7 +340,7 @@ bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len)
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
 {
     uint32_t fault_addr = jlos_hal_paging_get_fault_addr();
-    uint32_t error_code = context->m_error;
+    uint32_t error_code = context->error;
     bool present = error_code & 0x01;
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
@@ -355,8 +355,8 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         }
     }
     printk("page fault handler: unrecoverable error!\n");
-    printk("instruction pointer: 0x%x, code segment: 0x%x\n", context->m_instruction_pointer, context->m_code_segment);
-    printk("EFLAGS: 0x%x\n", context->m_flags);
+    printk("instruction pointer: 0x%x, code segment: 0x%x\n", context->instruction_pointer, context->code_segment);
+    printk("EFLAGS: 0x%x\n", context->flags);
     
     for (;;) {
         jlos_hal_halt();

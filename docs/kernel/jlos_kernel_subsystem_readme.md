@@ -149,30 +149,30 @@ struct jlos_memory_chunk {
     jlos_memory_chunk_t *prev;
     jlos_memory_chunk_t *free_next;  /* per-class 空闲链表（双向） */
     jlos_memory_chunk_t *free_prev;
-    bool m_allocated;
-    size_t m_size;                   /*  usable size（不含 header） */
+    bool allocated;
+    size_t size;                   /*  usable size（不含 header） */
 };
 
 typedef struct {
     jlos_memory_chunk_t *first;
-    jlos_memory_chunk_t *m_tail;     /* O(1) 堆扩展 */
-    uint8_t *m_heap_start;
-    uint8_t *m_heap_end;
-    uint8_t *m_heap_current;         /* 当前堆边界 */
-    uint32_t m_size_bitmap;          /* bit N = class N 有空闲 chunk */
-    int m_max_class;
-    jlos_memory_chunk_t *m_class_head[JLOS_MM_CLASS_COUNT];
+    jlos_memory_chunk_t *tail;     /* O(1) 堆扩展 */
+    uint8_t *heap_start;
+    uint8_t *heap_end;
+    uint8_t *heap_current;         /* 当前堆边界 */
+    uint32_t size_bitmap;          /* bit N = class N 有空闲 chunk */
+    int max_class;
+    jlos_memory_chunk_t *class_head[JLOS_MM_CLASS_COUNT];
 } jlos_memory_manager_t;
 ```
 
 ### 3.3 分配算法（O(1) 级别）
 | 操作 | 复杂度 | 关键机制 |
 | --- | --- | --- |
-| malloc 查找空闲 class | O(1) | `__builtin_ctz(m_size_bitmap >> target_cls)` |
-| malloc 取空闲 chunk | O(1) | `m_class_head[cls]` 头部弹出 |
+| malloc 查找空闲 class | O(1) | `__builtin_ctz(size_bitmap >> target_cls)` |
+| malloc 取空闲 chunk | O(1) | `class_head[cls]` 头部弹出 |
 | malloc split | O(1) | 指针算术直接切分 + 尾部加入对应 class |
 | free 合并邻居 | O(1) | `free_prev` / `free_next` 双向删除 |
-| expand_heap 追加 | O(1) | `m_tail` 直接追加，无需遍历 |
+| expand_heap 追加 | O(1) | `tail` 直接追加，无需遍历 |
 
 ### 3.4 页帧分配器（32-bit word 级扫描）
 ```text
@@ -199,21 +199,21 @@ typedef struct {
 ```c
 /* multitask.h — 严格顺序对应 interruptstubs.s pusha/popa */
 typedef struct {
-    uint32_t m_eax, m_ebx, m_ecx, m_edx, m_esi, m_edi, m_ebp;
-    uint32_t m_error;                    /* 有 error code 的异常会 push */
-    uint32_t m_eip, m_cs, m_eflags;      /* 中断/异常帧末尾 3 项 */
+    uint32_t eax, ebx, ecx, edx, esi, edi, ebp;
+    uint32_t error;                    /* 有 error code 的异常会 push */
+    uint32_t eip, cs, eflags;      /* 中断/异常帧末尾 3 项 */
 } __attribute__((packed)) jlos_cpu_state_t;
 
 typedef struct {
-    volatile uint32_t m_status;          /* RUNNING / TERMINATED */
+    volatile uint32_t status;          /* RUNNING / TERMINATED */
     uint8_t stack[4096];                 /* 4KB 独立栈，从顶向下生长 */
     jlos_cpu_state_t cpustate;           /* ⚠️ 嵌入 struct，不能放在 stack 上 */
-    uint32_t m_saved_esp;                /* 第一次调度前 = &cpustate */
+    uint32_t saved_esp;                /* 第一次调度前 = &cpustate */
 } jlos_task_t;
 
 typedef struct {
     jlos_task_t *tasks[256];
-    int m_num_tasks, m_current_task;
+    int num_tasks, current_task;
 } jlos_task_manager_t;
 ```
 
@@ -232,11 +232,11 @@ typedef struct {
                         │  ④ 硬件已 push eip/cs/eflags       │
                         └──────────────────▶│                   │
                                            │ old_cpustate = task_A 栈│
-                                           │ task_A.m_saved_esp = &old│
-                                           │ m_current_task++ 找下一个│
+                                           │ task_A.saved_esp = &old│
+                                           │ current_task++ 找下一个│
                                            │ 跳过 TERMINATED task    │
                         ┌───────────────────┘                   │
-                        │ 返回 task_B.m_saved_esp 指针       │
+                        │ 返回 task_B.saved_esp 指针       │
                         ▼                                     │
         RESTORE 恢复：                                          │
           ① popl int# / popl error                           │
@@ -257,8 +257,8 @@ sequenceDiagram
 
     HW->>STUB: IRQ0 触发 → int 0x20
     STUB->>SCH: 传 jlos_cpu_state_t*（当前 task 的 eax..eflags）
-    SCH->>SCH: 记录当前 cpustate 到 task_A.m_saved_esp
-    SCH->>SCH: m_current_task++ 跳过 TERMINATED
+    SCH->>SCH: 记录当前 cpustate 到 task_A.saved_esp
+    SCH->>SCH: current_task++ 跳过 TERMINATED
     SCH->>T:   返回 task_B.cpustate*
     REST->>T:   popa → iret 切到 task_B
 ```
@@ -267,7 +267,7 @@ sequenceDiagram
 
 ### 4.3 硬约束（教训总结）
 1. `cpustate` **必须嵌入 jlos_task_t**，放栈上会被下一次中断 pusha 覆盖
-2. 初始化时 `m_eflags = 0x002`（IF=0），entry stub 切完 ESP 后再开中断
+2. 初始化时 `eflags = 0x002`（IF=0），entry stub 切完 ESP 后再开中断
 3. 任务退出必须走 `jlos_task_exit_stub` → 设 `TERMINATED` → 调度器跳过
 4. jlos_cpu_state_t 成员顺序 **必须 100% 匹配 interruptstubs.s push 顺序**（否则 EIP=0x00000003 触发 0x06 异常）
 

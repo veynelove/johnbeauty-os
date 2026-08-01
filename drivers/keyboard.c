@@ -19,8 +19,8 @@ void jlos_keyboard_event_handler_on_key_up(jlos_keyboard_event_handler_t* self, 
 
 void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_irq_manager_t *manager, jlos_keyboard_event_handler_t *handler)
 {
-    jlos_io8_init(&self->m_dataport, 0x60);
-    jlos_io8_init(&self->m_commandport, 0x64);
+    jlos_io8_init(&self->dataport, 0x60);
+    jlos_io8_init(&self->commandport, 0x64);
     
     self->handler = handler;
     
@@ -39,29 +39,29 @@ void jlos_keyboard_driver_destroy(jlos_keyboard_driver_t* self)
 
 void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self)
 {
-    while (jlos_io8_read(&self->m_commandport) & 0x1) {
-        jlos_io8_read(&self->m_dataport);
+    while (jlos_io8_read(&self->commandport) & 0x1) {
+        jlos_io8_read(&self->dataport);
     }
-    jlos_io8_write(&self->m_commandport, 0xAE);
-    jlos_io8_write(&self->m_commandport, 0x20);
-    uint8_t status = (jlos_io8_read(&self->m_dataport) | 1) & ~0x10;
-    jlos_io8_write(&self->m_commandport, 0x60);
-    jlos_io8_write(&self->m_dataport, status);
+    jlos_io8_write(&self->commandport, 0xAE);
+    jlos_io8_write(&self->commandport, 0x20);
+    uint8_t status = (jlos_io8_read(&self->dataport) | 1) & ~0x10;
+    jlos_io8_write(&self->commandport, 0x60);
+    jlos_io8_write(&self->dataport, status);
 
-    jlos_io8_write(&self->m_dataport, 0xF4);
+    jlos_io8_write(&self->dataport, 0xF4);
 }
 
-uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t m_esp)
+uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t esp)
 {
 #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
     jlos_keyboard_driver_t* keyboard = (jlos_keyboard_driver_t*)((char*)self - offsetof(jlos_keyboard_driver_t, base_handler));
 
-    uint8_t status = jlos_io8_read(&keyboard->m_commandport);
+    uint8_t status = jlos_io8_read(&keyboard->commandport);
     if (!(status & 0x01)) {
-        return m_esp;
+        return esp;
     }
-    uint8_t key = jlos_io8_read(&keyboard->m_dataport);
-    if (keyboard->handler == NULL) return m_esp;
+    uint8_t key = jlos_io8_read(&keyboard->dataport);
+    if (keyboard->handler == NULL) return esp;
     static bool shift = false;
     switch (key) {
         case 0x29: if(shift) keyboard->handler->key_down(keyboard->handler, '~'); else keyboard->handler->key_down(keyboard->handler, '`'); break;
@@ -124,5 +124,5 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
         default:
             break;
     }
-    return m_esp;
+    return esp;
 }

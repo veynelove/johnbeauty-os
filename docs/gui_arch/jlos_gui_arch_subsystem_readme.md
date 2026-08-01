@@ -99,25 +99,25 @@ int 0x80        → syscall 软中断（预留）
 interruptstubs.s 汇编 SAVE 宏（按序 push）
   ① pusha（按 PUSHA 顺序: EAX, ECX, EDX, EBX, ESP(old), EBP, ESI, EDI）
     但是！我们自己的 push 顺序严格写成:
-       pushl %eax    → [0] m_eax
-       pushl %ebx    → [1] m_ebx
-       pushl %ecx    → [2] m_ecx
-       pushl %edx    → [3] m_edx
-       pushl %esi    → [4] m_esi
-       pushl %edi    → [5] m_edi
-       pushl %ebp    → [6] m_ebp
-  ② pushl $error_code_or_0  → [7] m_error（无 error code 的异常手动 push 0）
+       pushl %eax    → [0] eax
+       pushl %ebx    → [1] ebx
+       pushl %ecx    → [2] ecx
+       pushl %edx    → [3] edx
+       pushl %esi    → [4] esi
+       pushl %edi    → [5] edi
+       pushl %ebp    → [6] ebp
+  ② pushl $error_code_or_0  → [7] error（无 error code 的异常手动 push 0）
   ③ pushl $int_number (4-byte!! movl 不能 movb/pushb) → 防止栈错位/EIP=0x00000003
   ↓ 异常/中断硬件自动 push:
-  ④ m_eip → m_cs → m_eflags (用户态还会 push ss/esp，当前 ring0 内核态无)
+  ④ eip → cs → eflags (用户态还会 push ss/esp，当前 ring0 内核态无)
 ```
 
 **对应 jlos_cpu_state_t（ multitask.h ）**：
 ```c
 typedef struct {
-    uint32_t m_eax, m_ebx, m_ecx, m_edx, m_esi, m_edi, m_ebp;
-    uint32_t m_error;                  /* 第 8 成员，对应 pushl error code */
-    uint32_t m_eip, m_cs, m_eflags;    /* 最后 3，硬件 push */
+    uint32_t eax, ebx, ecx, edx, esi, edi, ebp;
+    uint32_t error;                  /* 第 8 成员，对应 pushl error code */
+    uint32_t eip, cs, eflags;    /* 最后 3，硬件 push */
 } __attribute__((packed)) jlos_cpu_state_t;  /* packed = 44 字节正好 */
 ```
 
@@ -145,11 +145,11 @@ typedef struct {
                   ⑩ 硬件自动 push eip/cs/eflags              │              │
                     └────────────────────▶│                  │              │
                                          ▼ old = task_A      │              │
-                                   old_task.m_saved_esp = &old_cpustate     │
-                                   RR 轮转 m_current_task++ 找下一个          │
+                                   old_task.saved_esp = &old_cpustate     │
+                                   RR 轮转 current_task++ 找下一个          │
                                    跳过 status=TERMINATED 的任务             │
                     ┌─────────────────────┘                  │              │
-                    │ 返回 task_B.m_saved_esp 指针            │              │
+                    │ 返回 task_B.saved_esp 指针            │              │
                     ▼                                        │              │
                                           mov ESP, task_B.cpustate*         │
                     ┌────────────────────────────────────────┘              │
@@ -175,9 +175,9 @@ sequenceDiagram
 
     IRQ0->>STUB: 压入 cpustate（44 字节）
     STUB->>SCH: 传 &old_cpustate（当前 task_A）
-    SCH->>SCH: old_task.m_saved_esp = &old_cpustate
+    SCH->>SCH: old_task.saved_esp = &old_cpustate
     SCH->>SCH: round-robin 下一 task_B（跳过 TERMINATED）
-    SCH-->>CS: 返回 task_B.m_saved_esp
+    SCH-->>CS: 返回 task_B.saved_esp
     CS->>CS: 切换 esp 到 task_B cpustate 指针
     CS-->>STUB2: ret 到 RESTORE
     STUB2->>STUB2: popl error/int# → popa → iret
@@ -188,8 +188,8 @@ sequenceDiagram
 
 **关键规则**（切任务稳定性）：
 - task->cpustate 必须 **嵌入 jlos_task_t**，不能放在 task stack 上（否则中断 push 会被下次调度覆盖）
-- task_init 时 `m_eflags = 0x002`（IF=0，关中断切完再开）
-- task_init 时 `m_esp = stack_top`；m_ss = data selector
+- task_init 时 `eflags = 0x002`（IF=0，关中断切完再开）
+- task_init 时 `esp = stack_top`；ss = data selector
 
 ---
 
@@ -203,7 +203,7 @@ sequenceDiagram
 ║  · Paint() 自顶向下递归绘制                                                   ║
 ╠═══════════════════════════════════════╤══════════════════════════════════════╣
 ║  🪟  Window 1 (可拖动)                │  🪟  Window 2 (可拖动)               ║
-║  · m_dragging = true/false            │  · m_dragging = false                ║
+║  · dragging = true/false            │  · dragging = false                ║
 ║  · 标题栏 hit → 拖动坐标 dx/dy        │  · 客户区放控件                       ║
 ╠══════════════════╤════════════════════╬══════════════════╤═══════════════════╣
 ║  📦 Button       │  📦 Label          ║  📦 Label        │  📦 EditBox       ║
@@ -253,8 +253,8 @@ flowchart TB
 /* widget.h — 基类，所有 widget 首成员同布局 → (jlos_widget_t*) 强制转换安全 */
 typedef struct jlos_widget {
     struct jlos_widget *parent;
-    int32_t m_x, m_y, m_w, m_h;
-    uint8_t m_r, m_g, m_b;
+    int32_t x, y, w, h;
+    uint8_t r, g, b;
     void (*paint)(struct jlos_widget* self);
     /* 事件虚函数 */
     void (*on_mouse_down)(struct jlos_widget*, int32_t x, int32_t y, uint8_t btn);
@@ -269,18 +269,18 @@ typedef struct {
     int children_count;
 } jlos_composite_widget_t;
 
-/* window 派生自 composite_widget：多一个 m_dragging 拖动态 */
+/* window 派生自 composite_widget：多一个 dragging 拖动态 */
 typedef struct jlos_window {
     jlos_composite_widget_t base_widget;
-    bool m_dragging;
+    bool dragging;
 } jlos_window_t;
 ```
 
 ### 3.2 窗口拖动流程
 1. 鼠标 down → desktop hit_test → 命中某 window 标题栏
-2. window.on_mouse_down → m_dragging = true，记录基准坐标
-3. 鼠标 move → 若 m_dragging → window.x += dx, window.y += dy → 局部重绘
-4. 鼠标 up → m_dragging = false
+2. window.on_mouse_down → dragging = true，记录基准坐标
+3. 鼠标 move → 若 dragging → window.x += dx, window.y += dy → 局部重绘
+4. 鼠标 up → dragging = false
 
 ### 3.3 渲染
 - 所有绘制走 `common/graphics.h`：`draw_pixel` / `draw_hline` / `fill_rect` / `draw_text`

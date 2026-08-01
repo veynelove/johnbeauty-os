@@ -20,30 +20,30 @@ struct jlos_memory_chunk {
     jlos_memory_chunk_t *prev;
     jlos_memory_chunk_t *free_next;
     jlos_memory_chunk_t *free_prev;
-    bool m_allocated;
-    size_t m_size;
+    bool allocated;
+    size_t size;
 };
 
 typedef struct {
     jlos_memory_chunk_t *first;
-    jlos_memory_chunk_t *m_tail;
-    uint8_t *m_heap_start;
-    uint8_t *m_heap_end;
-    uint8_t *m_heap_current;
-    uint32_t m_size_bitmap;
-    int m_max_class;
-    jlos_memory_chunk_t *m_class_head[JLOS_MM_CLASS_COUNT];
+    jlos_memory_chunk_t *tail;
+    uint8_t *heap_start;
+    uint8_t *heap_end;
+    uint8_t *heap_current;
+    uint32_t size_bitmap;
+    int max_class;
+    jlos_memory_chunk_t *class_head[JLOS_MM_CLASS_COUNT];
 } jlos_memory_manager_t;
 
 extern jlos_memory_manager_t *jlos_active_memory_manager;
 
-void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t m_size);
+void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t size);
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self);
 
-void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t m_size);
+void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size);
 void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr);
 
-void *jlos_malloc(size_t m_size);
+void *jlos_malloc(size_t size);
 void jlos_free(void *ptr);
 void jlos_memset(void *ptr, uint8_t value, size_t size);
 void *jlos_memcpy(void *dst, const void *src, size_t size);

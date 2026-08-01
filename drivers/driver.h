@@ -13,7 +13,7 @@ struct jlos_driver {
 };
 
 struct jlos_driver_manager {
-    int m_num_drivers;
+    int num_drivers;
     jlos_driver_t *drivers[255];
 };
 

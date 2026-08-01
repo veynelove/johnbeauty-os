@@ -43,23 +43,23 @@ void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate,
     jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack, uint32_t stack_size)
 {
 
-    ((jlos_x86_regs_t *)cpustate)->m_user_esp = (uint32_t)(stack + stack_size);
-    ((jlos_x86_regs_t *)cpustate)->m_user_ss = 0;
-    ((jlos_x86_regs_t *)cpustate)->m_ebx = (uint32_t)entrypoint;
-    ((jlos_x86_regs_t *)cpustate)->m_edx = (uint32_t)(stack + stack_size);
-    ((jlos_x86_regs_t *)cpustate)->m_eip = (uint32_t)jlos_task_entry_stub;
-    ((jlos_x86_regs_t *)cpustate)->m_cs = jlos_mmu_code_selector(mmu);
-    ((jlos_x86_regs_t *)cpustate)->m_eflags = 0x000;
+    ((jlos_x86_regs_t *)cpustate)->user_esp = (uint32_t)(stack + stack_size);
+    ((jlos_x86_regs_t *)cpustate)->user_ss = 0;
+    ((jlos_x86_regs_t *)cpustate)->ebx = (uint32_t)entrypoint;
+    ((jlos_x86_regs_t *)cpustate)->edx = (uint32_t)(stack + stack_size);
+    ((jlos_x86_regs_t *)cpustate)->eip = (uint32_t)jlos_task_entry_stub;
+    ((jlos_x86_regs_t *)cpustate)->cs = jlos_mmu_code_selector(mmu);
+    ((jlos_x86_regs_t *)cpustate)->eflags = 0x000;
 }
 
 void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
     uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top, uint16_t user_ss)
 {
-    ((jlos_x86_regs_t *)cpustate)->m_user_esp = user_stack_top;
-    ((jlos_x86_regs_t *)cpustate)->m_user_ss = user_ss;
-    ((jlos_x86_regs_t *)cpustate)->m_eip = (uint32_t)entrypoint;
-    ((jlos_x86_regs_t *)cpustate)->m_cs = 0x23;
-    ((jlos_x86_regs_t *)cpustate)->m_eflags = 0x200;
+    ((jlos_x86_regs_t *)cpustate)->user_esp = user_stack_top;
+    ((jlos_x86_regs_t *)cpustate)->user_ss = user_ss;
+    ((jlos_x86_regs_t *)cpustate)->eip = (uint32_t)entrypoint;
+    ((jlos_x86_regs_t *)cpustate)->cs = 0x23;
+    ((jlos_x86_regs_t *)cpustate)->eflags = 0x200;
 }
 
 void jlos_arch_tss_init(uint16_t kernel_data_selector)
@@ -73,12 +73,12 @@ void jlos_arch_tss_init(uint16_t kernel_data_selector)
 
 void jlos_arch_tss_set_ctx(uint32_t ctx)
 {
-    s_tss.m_esp0 = ctx;
+    s_tss.esp0 = ctx;
 }
 
 uint32_t jlos_arch_tss_get_esp0(void)
 {
-    return s_tss.m_esp0;
+    return s_tss.esp0;
 }
 
 void jlos_arch_tss_init_for_asm(void)
