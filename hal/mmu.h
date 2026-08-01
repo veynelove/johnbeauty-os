@@ -16,18 +16,23 @@
 
 /* MMU 统一命名：x86 GDT / ARM TTBR0+MAIR / RISC-V satp 上层透明 */
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
-  typedef jlos_gdt_t                    jlos_mmu_t;
-  typedef jlos_gdt_segment_descriptor_t jlos_mmu_segment_t;
+typedef jlos_gdt_t                    jlos_mmu_t;
+typedef jlos_gdt_segment_descriptor_t jlos_mmu_segment_t;
 
-  extern void jlos_mmu_init(jlos_mmu_t *self);
-  extern void jlos_mmu_destroy(jlos_mmu_t *self);
-  extern uint16_t jlos_mmu_code_selector(jlos_mmu_t *self);
-  extern uint16_t jlos_mmu_data_selector(jlos_mmu_t *self);
+extern void jlos_mmu_init();
+extern void jlos_mmu_destroy(jlos_mmu_t *self);
+extern uint16_t jlos_mmu_code_selector(jlos_mmu_t *self);
+extern uint16_t jlos_mmu_data_selector(jlos_mmu_t *self);
 
-  extern void jlos_mmu_segment_init(jlos_mmu_segment_t *self, uint32_t m_base,
-                                    uint32_t limit, uint8_t m_flags);
-  extern uint32_t jlos_mmu_segment_base(jlos_mmu_segment_t *self);
-  extern uint32_t jlos_mmu_segment_limit(jlos_mmu_segment_t *self);
+extern uint16_t jlos_mmu_user_code_selector(jlos_mmu_t *self);
+extern uint16_t jlos_mmu_user_data_selector(jlos_mmu_t *self);
+
+extern void jlos_mmu_segment_init(jlos_mmu_segment_t *self, uint32_t m_base,
+                                  uint32_t limit, uint8_t m_flags);
+extern uint32_t jlos_mmu_segment_base(jlos_mmu_segment_t *self);
+extern uint32_t jlos_mmu_segment_limit(jlos_mmu_segment_t *self);
+
+extern jlos_mmu_t *jlos_mmu_get_kernel(void);
 #endif
 
 typedef struct {

@@ -20,11 +20,11 @@ typedef struct jlos_mouse_driver jlos_mouse_driver_t;
 struct jlos_mouse_driver {
     jlos_driver_t base_driver;
     jlos_irq_handler_t base_handler;
-    jlos_io8_t m_dataport;
-    jlos_io8_t m_commandport;
+    jlos_io8_t dataport;
+    jlos_io8_t commandport;
     uint8_t buffer[3];
-    uint8_t m_offset;
-    uint8_t m_buttons;
+    uint8_t offset;
+    uint8_t buttons;
     jlos_mouse_event_handler_t *handler;
 };
 
@@ -36,7 +36,7 @@ void jlos_mouse_event_handler_mouse_move(jlos_mouse_event_handler_t* self, int32
 
 void jlos_mouse_driver_init(jlos_mouse_driver_t* self, jlos_irq_manager_t *manager, jlos_mouse_event_handler_t *handler);
 void jlos_mouse_driver_destroy(jlos_mouse_driver_t* self);
-uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t m_esp);
+uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t esp);
 void jlos_mouse_driver_activate(jlos_mouse_driver_t* self);
 
 #endif

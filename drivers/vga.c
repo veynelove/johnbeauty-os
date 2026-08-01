@@ -2,21 +2,21 @@
 
 static void jlos_vga_write_registers(jlos_vga_t* self, uint8_t *registers);
 static uint8_t *jlos_vga_get_frame_buffer_segment(jlos_vga_t* self);
-static uint8_t jlos_vga_get_color_index(uint32_t m_r, uint32_t m_g, uint8_t m_b);
+static uint8_t jlos_vga_get_color_index(uint32_t r, uint32_t g, uint8_t b);
 
 void jlos_vga_init(jlos_vga_t* self)
 {
-    jlos_io8_init(&self->m_misc_port, 0x3c2);
-    jlos_io8_init(&self->m_crtc_index_port, 0x3d4);
-    jlos_io8_init(&self->m_crtc_data_port, 0x3d5);
-    jlos_io8_init(&self->m_sequencer_index_port, 0x3c4);
-    jlos_io8_init(&self->m_sequencer_data_port, 0x3c5);
-    jlos_io8_init(&self->m_graphics_controller_index_port, 0x3ce);
-    jlos_io8_init(&self->m_graphics_controller_data_port, 0x3cf);
-    jlos_io8_init(&self->m_attribute_controller_index_port, 0x3c0);
-    jlos_io8_init(&self->m_attribute_controller_read_port, 0x3c1);
-    jlos_io8_init(&self->m_attribite_controller_write_port, 0x3c0);
-    jlos_io8_init(&self->m_attribite_controller_reset_port, 0x3da);
+    jlos_io8_init(&self->misc_port, 0x3c2);
+    jlos_io8_init(&self->crtc_index_port, 0x3d4);
+    jlos_io8_init(&self->crtc_data_port, 0x3d5);
+    jlos_io8_init(&self->sequencer_index_port, 0x3c4);
+    jlos_io8_init(&self->sequencer_data_port, 0x3c5);
+    jlos_io8_init(&self->graphics_controller_index_port, 0x3ce);
+    jlos_io8_init(&self->graphics_controller_data_port, 0x3cf);
+    jlos_io8_init(&self->attribute_controller_index_port, 0x3c0);
+    jlos_io8_init(&self->attribute_controller_read_port, 0x3c1);
+    jlos_io8_init(&self->attribite_controller_write_port, 0x3c0);
+    jlos_io8_init(&self->attribite_controller_reset_port, 0x3da);
 }
 
 void jlos_vga_destroy(jlos_vga_t* self)
@@ -25,34 +25,34 @@ void jlos_vga_destroy(jlos_vga_t* self)
 
 static void jlos_vga_write_registers(jlos_vga_t* self, uint8_t *registers)
 {
-    jlos_io8_write(&self->m_misc_port, *(registers++));
+    jlos_io8_write(&self->misc_port, *(registers++));
     for (uint8_t i = 0; i < 5; i++) {
-        jlos_io8_write(&self->m_sequencer_index_port, i);
-        jlos_io8_write(&self->m_sequencer_data_port, *(registers++));
+        jlos_io8_write(&self->sequencer_index_port, i);
+        jlos_io8_write(&self->sequencer_data_port, *(registers++));
     }
-    jlos_io8_write(&self->m_crtc_index_port, 0x03);
-    jlos_io8_write(&self->m_crtc_data_port, jlos_io8_read(&self->m_crtc_data_port) | 0x80);
-    jlos_io8_write(&self->m_crtc_index_port, 0x11);
-    jlos_io8_write(&self->m_crtc_data_port, jlos_io8_read(&self->m_crtc_data_port) & ~0x80);
+    jlos_io8_write(&self->crtc_index_port, 0x03);
+    jlos_io8_write(&self->crtc_data_port, jlos_io8_read(&self->crtc_data_port) | 0x80);
+    jlos_io8_write(&self->crtc_index_port, 0x11);
+    jlos_io8_write(&self->crtc_data_port, jlos_io8_read(&self->crtc_data_port) & ~0x80);
 
     registers[0x03] = registers[0x03] | 0x80;
     registers[0x11] = registers[0x11] & ~0x80;
 
     for (uint8_t i = 0; i < 25; i++) {
-        jlos_io8_write(&self->m_crtc_index_port, i);
-        jlos_io8_write(&self->m_crtc_data_port, *(registers++));
+        jlos_io8_write(&self->crtc_index_port, i);
+        jlos_io8_write(&self->crtc_data_port, *(registers++));
     }
     for (uint8_t i = 0; i < 9; i++) {
-        jlos_io8_write(&self->m_graphics_controller_index_port, i);
-        jlos_io8_write(&self->m_graphics_controller_data_port, *(registers++));
+        jlos_io8_write(&self->graphics_controller_index_port, i);
+        jlos_io8_write(&self->graphics_controller_data_port, *(registers++));
     }
     for (uint8_t i = 0; i < 21; i++) {
-        jlos_io8_read(&self->m_attribite_controller_reset_port);
-        jlos_io8_write(&self->m_attribute_controller_index_port, i);
-        jlos_io8_write(&self->m_attribite_controller_write_port, *(registers++));
+        jlos_io8_read(&self->attribite_controller_reset_port);
+        jlos_io8_write(&self->attribute_controller_index_port, i);
+        jlos_io8_write(&self->attribite_controller_write_port, *(registers++));
     }
-    jlos_io8_read(&self->m_attribite_controller_reset_port);
-    jlos_io8_write(&self->m_attribute_controller_index_port, 0x20);
+    jlos_io8_read(&self->attribite_controller_reset_port);
+    jlos_io8_write(&self->attribute_controller_index_port, 0x20);
 }
 
 bool jlos_vga_support_mode(jlos_vga_t* self, uint32_t width, uint32_t height, uint32_t colordepth)
@@ -84,8 +84,8 @@ bool jlos_vga_set_mode(jlos_vga_t* self, uint32_t width, uint32_t height, uint32
 
 static uint8_t *jlos_vga_get_frame_buffer_segment(jlos_vga_t* self)
 {
-    jlos_io8_write(&self->m_graphics_controller_index_port, 0x06);
-    uint8_t segment_number = ((jlos_io8_read(&self->m_graphics_controller_data_port) >> 2) & 0x03);
+    jlos_io8_write(&self->graphics_controller_index_port, 0x06);
+    uint8_t segment_number = ((jlos_io8_read(&self->graphics_controller_data_port) >> 2) & 0x03);
     switch (segment_number) {
         default:
         case 0: return (uint8_t*)0x00000;
@@ -95,36 +95,36 @@ static uint8_t *jlos_vga_get_frame_buffer_segment(jlos_vga_t* self)
     }
 }
 
-static uint8_t jlos_vga_get_color_index(uint32_t m_r, uint32_t m_g, uint8_t m_b)
+static uint8_t jlos_vga_get_color_index(uint32_t r, uint32_t g, uint8_t b)
 {
-    if (m_r == 0x00 && m_g == 0x00 && m_b == 0x00) return 0x00;
-    if (m_r == 0x00 && m_g == 0x00 && m_b == 0xA8) return 0x01;
-    if (m_r == 0x00 && m_g == 0xA8 && m_b == 0x00) return 0x02;
-    if (m_r == 0xA8 && m_g == 0x00 && m_b == 0x00) return 0x04;
-    if (m_r == 0xFF && m_g == 0xFF && m_b == 0xFF) return 0x3F;
+    if (r == 0x00 && g == 0x00 && b == 0x00) return 0x00;
+    if (r == 0x00 && g == 0x00 && b == 0xA8) return 0x01;
+    if (r == 0x00 && g == 0xA8 && b == 0x00) return 0x02;
+    if (r == 0xA8 && g == 0x00 && b == 0x00) return 0x04;
+    if (r == 0xFF && g == 0xFF && b == 0xFF) return 0x3F;
     return 0x00;
 }
 
-void jlos_vga_put_pixel_color(jlos_vga_t* self, int32_t m_x, int32_t m_y, uint8_t color_index)
+void jlos_vga_put_pixel_color(jlos_vga_t* self, int32_t x, int32_t y, uint8_t color_index)
 {
-    if (m_x < 0 || m_x >= 320 || m_y < 0 || m_y >= 200) {
+    if (x < 0 || x >= 320 || y < 0 || y >= 200) {
         return;
     }
-    uint8_t *pixel_address = jlos_vga_get_frame_buffer_segment(self) + 320 * m_y + m_x;
+    uint8_t *pixel_address = jlos_vga_get_frame_buffer_segment(self) + 320 * y + x;
     *pixel_address = color_index;
 }
 
-void jlos_vga_put_pixel(jlos_vga_t* self, int32_t m_x, int32_t m_y, uint8_t m_r, uint8_t m_g, uint8_t m_b)
+void jlos_vga_put_pixel(jlos_vga_t* self, int32_t x, int32_t y, uint8_t r, uint8_t g, uint8_t b)
 {
-    jlos_vga_put_pixel_color(self, m_x, m_y, jlos_vga_get_color_index(m_r, m_g, m_b));
+    jlos_vga_put_pixel_color(self, x, y, jlos_vga_get_color_index(r, g, b));
 }
 
-void jlos_vga_fill_rectangle(jlos_vga_t* self, uint32_t m_x, uint32_t m_y, uint32_t m_w, uint32_t m_h,
-    uint8_t m_r, uint8_t m_g, uint8_t m_b)
+void jlos_vga_fill_rectangle(jlos_vga_t* self, uint32_t x, uint32_t y, uint32_t w, uint32_t h,
+    uint8_t r, uint8_t g, uint8_t b)
 {
-    for (int32_t Y = m_y; Y < (int32_t)(m_y + m_h); Y++) {
-        for (int32_t X = m_x; X < (int32_t)(m_x + m_w); X++) {
-            jlos_vga_put_pixel(self, X, Y, m_r, m_g, m_b);
+    for (int32_t Y = y; Y < (int32_t)(y + h); Y++) {
+        for (int32_t X = x; X < (int32_t)(x + w); X++) {
+            jlos_vga_put_pixel(self, X, Y, r, g, b);
         }
     }
 }

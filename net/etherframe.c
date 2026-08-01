@@ -3,12 +3,12 @@
 #include <tools/config.h>
 #include <kernel/printk.h>
 
-void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t m_etherType_BE)
+void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t etherType_BE)
 {
-    self->m_etherType_BE = JLOS_SWAP_ENDIAN_16(m_etherType_BE);
+    self->etherType_BE = JLOS_SWAP_ENDIAN_16(etherType_BE);
     self->backend = backend;
     self->on_ether_frame_received = jlos_ether_frame_handler_on_ether_frame_received;
-    jlos_hash_chain_insert(&backend->handlers, &self->m_etherType_BE, &self->hash_node);
+    jlos_hash_chain_insert(&backend->handlers, &self->etherType_BE, &self->hash_node);
 }
 
 void jlos_ether_frame_handler_destroy(jlos_ether_frame_handler_t* self)
@@ -16,14 +16,14 @@ void jlos_ether_frame_handler_destroy(jlos_ether_frame_handler_t* self)
     jlos_hash_chain_remove(&self->backend->handlers, &self->hash_node);
 }
 
-bool jlos_ether_frame_handler_on_ether_frame_received(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t m_size)
+bool jlos_ether_frame_handler_on_ether_frame_received(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t size)
 {
     return false;
 }
 
-void jlos_ether_frame_handler_send(jlos_ether_frame_handler_t* self, uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size)
+void jlos_ether_frame_handler_send(jlos_ether_frame_handler_t* self, uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size)
 {
-    jlos_ether_frame_provider_send(self->backend, dstMAC_BE, m_etherType_BE, buffer, m_size);
+    jlos_ether_frame_provider_send(self->backend, dstMAC_BE, etherType_BE, buffer, size);
 }
 
 uint32_t jlos_ether_frame_handler_get_ip_address(jlos_ether_frame_handler_t* self)
@@ -35,7 +35,7 @@ static int ether_frame_cmp(const void *key, const void *node)
 {
     uint16_t be = *(uint16_t *)key;
     jlos_ether_frame_handler_t *handler = container_of(node, jlos_ether_frame_handler_t, hash_node);
-    return be - handler->m_etherType_BE;
+    return be - handler->etherType_BE;
 }
 
 void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_amd_am79c973_t *backend)
@@ -75,16 +75,9 @@ static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
     }
 }
 
-bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, uint8_t *buffer, uint32_t m_size)
-{
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("ETHER: Received frame, size=");
-    printf_hex((m_size >> 0) & 0xFF);
-    printf_hex((m_size >> 8) & 0xFF);
-    printf("\n");
-#endif
-    
-    if (m_size < sizeof(jlos_ether_frame_header_t)) {
+bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, uint8_t *buffer, uint32_t size)
+{    
+    if (size < sizeof(jlos_ether_frame_header_t)) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
         printf("ETHER: Frame too small\n");
 #endif
@@ -95,38 +88,20 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
     
     uint8_t my_mac[6];
     uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), my_mac);
-    
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("ETHER: Frame type=");
-    printf_hex(frame->m_etherType_BE & 0xFF);
-    printf_hex((frame->m_etherType_BE >> 8) & 0xFF);
-    printf("\n");
-#endif
-    
     if (mac_address_is_broadcast(frame->dstMAC) || mac_address_eq(frame->dstMAC, my_mac)) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("ETHER: Frame is for us, looking for handler\n");
-#endif
-        jlos_hash_node_t *node = jlos_hash_chain_see(&self->handlers, &frame->m_etherType_BE);
+        jlos_hash_node_t *node = jlos_hash_chain_see(&self->handlers, &frame->etherType_BE);
         if (node) {
             jlos_ether_frame_handler_t *handler = container_of(node, jlos_ether_frame_handler_t, hash_node);
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("ETHER: Handler found, calling it\n");
-#endif
             send_back = handler->on_ether_frame_received(
-                handler, buffer + sizeof(jlos_ether_frame_header_t), m_size - sizeof(jlos_ether_frame_header_t));
+                handler, buffer + sizeof(jlos_ether_frame_header_t), size - sizeof(jlos_ether_frame_header_t));
         }
-#if KERNEL_CONFIG_DEBUG_NETWORK
         else {
             printf("ETHER: No handler for this type\n");
         }
-#endif
     }
-#if KERNEL_CONFIG_DEBUG_NETWORK
     else {
         printf("ETHER: Frame not for us\n");
     }
-#endif
     
     if (send_back) {
         uint8_t temp[6];
@@ -139,21 +114,21 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
     return send_back;
 }
 
-void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t m_etherType_BE, uint8_t *buffer, uint32_t m_size)
+void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size)
 {
-    uint8_t *buffer2 = (uint8_t *)jlos_malloc(sizeof(jlos_ether_frame_header_t) + m_size);
+    uint8_t *buffer2 = (uint8_t *)jlos_malloc(sizeof(jlos_ether_frame_header_t) + size);
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)buffer2;
     
     uint64_to_mac(dstMAC_BE, frame->dstMAC);
     uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), frame->srcMAC);
-    frame->m_etherType_BE = m_etherType_BE;
+    frame->etherType_BE = etherType_BE;
 
     uint8_t *src = buffer;
     uint8_t *dst = buffer2 + sizeof(jlos_ether_frame_header_t);
-    for (uint32_t i = 0; i < m_size; i++) {
+    for (uint32_t i = 0; i < size; i++) {
         dst[i] = src[i];
     }
-    jlos_amd_am79c973_send(self->base_handler.backend, buffer2, m_size + sizeof(jlos_ether_frame_header_t));
+    jlos_amd_am79c973_send(self->base_handler.backend, buffer2, size + sizeof(jlos_ether_frame_header_t));
     jlos_free(buffer2);
 }
 

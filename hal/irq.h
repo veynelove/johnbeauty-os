@@ -41,11 +41,13 @@
   extern void jlos_irq_ignore_request(void);
 #endif
 
+#define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
+
 typedef struct {
-    uint32_t m_error;
-    uint32_t m_instruction_pointer;
-    uint32_t m_code_segment;
-    uint32_t m_flags;
+    uint32_t error;
+    uint32_t instruction_pointer;
+    uint32_t code_segment;
+    uint32_t flags;
 } jlos_irq_context_t;
 
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr);

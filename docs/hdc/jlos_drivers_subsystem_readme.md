@@ -29,7 +29,7 @@ typedef struct jlos_driver {
 } jlos_driver_t;
 
 typedef struct jlos_driver_manager {
-    int m_num_drivers;
+    int num_drivers;
     jlos_driver_t *drivers[255];                /* 255 槽，够用 */
 } jlos_driver_manager_t;
 ```
@@ -98,9 +98,9 @@ flowchart LR
 
 ```text
 am79c973 driver 对象 (heap 上分配 jlos_malloc)
-├── m_port_base    = 0xC000 (PCI BAR0)
-├── m_interrupt    = 0x0B (IRQ 11 → int 0x2B)
-├── m_mac[6]       = 00:0C:29:xx:xx:xx
+├── port_base    = 0xC000 (PCI BAR0)
+├── interrupt    = 0x0B (IRQ 11 → int 0x2B)
+├── mac[6]       = 00:0C:29:xx:xx:xx
 ├── INIT block[]   (28 bytes + pad=32B 对齐!)
 │   ├── Mode(CSR0 相关)
 │   ├── MAC[0-3]/[4-5]

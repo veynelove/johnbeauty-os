@@ -21,7 +21,7 @@ void memory_manager_test(const void *multiboot_structure)
         printf("MEMORY test: failed to allocate test heap\n");
         return;
     }
-    size_t m_size = test_heap_size;
+    size_t size = test_heap_size;
     
 #if KERNEL_CONFIG_DEBUG_MEMORY
     printf("heap: 0x");
@@ -31,12 +31,12 @@ void memory_manager_test(const void *multiboot_structure)
     printf_hex((size_t)heap & 0xFF);
     printf(" ");
     printf("size: 0x");
-    printf_hex32(m_size);
+    printf_hex32(size);
     printf("\n");
 #endif
 
     jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init(&memory_manager_, heap, m_size);
+    jlos_memory_manager_init(&memory_manager_, heap, size);
 
 #if KERNEL_CONFIG_DEBUG_MEMORY
     printf("heap: 0x");
@@ -46,18 +46,18 @@ void memory_manager_test(const void *multiboot_structure)
     printf_hex((size_t)heap & 0xFF);
 #endif
 
-    void *m_allocated = jlos_malloc(1024);
+    void *allocated = jlos_malloc(1024);
 
 #if KERNEL_CONFIG_DEBUG_MEMORY
     printf("\nallocated: 0x");
-    printf_hex(((size_t)m_allocated >> 24) & 0xFF);
-    printf_hex(((size_t)m_allocated >> 16) & 0xFF);
-    printf_hex(((size_t)m_allocated >> 8) & 0xFF);
-    printf_hex((size_t)m_allocated & 0xFF);
+    printf_hex(((size_t)allocated >> 24) & 0xFF);
+    printf_hex(((size_t)allocated >> 16) & 0xFF);
+    printf_hex(((size_t)allocated >> 8) & 0xFF);
+    printf_hex((size_t)allocated & 0xFF);
     printf("\n");
 #endif
 
-    jlos_free(m_allocated);
+    jlos_free(allocated);
     jlos_memory_manager_destroy(&memory_manager_);
     jlos_active_memory_manager = old_manager;
     jlos_free(heap);
