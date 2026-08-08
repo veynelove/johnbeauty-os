@@ -41,6 +41,7 @@ void jlos_pipe_destroy(jlos_pipe_t *pipe)
         jlos_free(pipe->buffer);
         pipe->buffer = NULL;
     }
+    jlos_free(pipe);
 }
 
 uint32_t jlos_pipe_write(jlos_pipe_t *pipe, const void *buf, uint32_t len)
@@ -93,4 +94,83 @@ uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len)
         read++;
     }
     return read;
+}
+
+void jlos_mq_init(jlos_mq_t *mq)
+{
+    mq->head = NULL;
+    mq->tail = NULL;
+    mq->count = 0;
+    jlos_semaphore_init(&mq->sem_read_items, 0);
+    jlos_mutex_init(&mq->mutex);
+}
+
+void jlos_mq_destroy(jlos_mq_t *mq)
+{
+    jlos_mutex_lock(&mq->mutex);
+    jlos_msg_node_t *node = mq->head;
+    while (node) {
+        jlos_msg_node_t *next = node->next;
+        jlos_free(node);
+        node = next;
+    }
+    mq->head = NULL;
+    mq->tail = NULL;
+    mq->count = 0;
+    jlos_mutex_unlock(&mq->mutex);
+}
+
+uint32_t jlos_mq_send(jlos_mq_t *mq, const void *buf, uint32_t len)
+{
+    if (!mq || !buf || len == 0) {
+        return 0;
+    }
+    if (len > JLOS_KERNEL_MQ_MSG_MAX_SIZE) {
+        len = JLOS_KERNEL_MQ_MSG_MAX_SIZE;
+    }
+    jlos_msg_node_t *node = (jlos_msg_node_t *)jlos_malloc(sizeof(jlos_msg_node_t) + len);
+    if (!node) {
+        return 0;
+    }
+    jlos_memcpy(node->data, buf, len);
+    node->len = len;
+    node->next = NULL;
+    jlos_mutex_lock(&mq->mutex);
+    if (mq->tail) {
+        mq->tail->next = node;
+    } else {
+        mq->head = node;
+    }
+    mq->tail = node;
+    mq->count++;
+    jlos_mutex_unlock(&mq->mutex);
+
+    jlos_semaphore_post(&mq->sem_read_items);
+    return len;
+}
+
+uint32_t jlos_mq_recv(jlos_mq_t *mq, void *buf, uint32_t max_len)
+{
+    if (!mq || !buf || max_len == 0) {
+        return 0;
+    }
+    jlos_semaphore_wait(&mq->sem_read_items);
+
+    jlos_mutex_lock(&mq->mutex);
+    jlos_msg_node_t *node = mq->head;
+    if (!node) {
+        jlos_mutex_unlock(&mq->mutex);
+        return 0;
+    }
+    mq->head = node->next;
+    if (!mq->head) {
+        mq->tail = NULL;
+    }
+    mq->count--;
+    jlos_mutex_unlock(&mq->mutex);
+
+    uint32_t copy_len = (node->len < max_len) ? node->len : max_len;
+    jlos_memcpy(buf, node->data, copy_len);
+    jlos_free(node);
+    return copy_len;
 }

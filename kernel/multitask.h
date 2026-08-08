@@ -18,6 +18,43 @@
 #define JLOS_TASK_MLFQ_LEVELS       4
 #define JLOS_TASK_MLFQ_AGING_TICKS  200
 
+#define JLOS_TASK_FDS_NUM           16
+
+#define JLOS_TASK_FD_READ_ONLY      1
+#define JLOS_TASK_FD_WRITE_ONLY     2
+#define JLOS_TASK_FD_READ_WRITE     3
+
+#define JLOS_TASK_FD_STD_IN         0
+#define JLOS_TASK_FD_STD_OUT        1
+#define JLOS_TASK_FD_STD_ERR        2
+
+#define JLOS_TASK_USER_SPACE_START  (KERNEL_MEMORY_ADDR_END + 0x10000000)
+
+#define JLOS_TASK_USER_BRK_START    JLOS_TASK_USER_SPACE_START
+#define JLOS_TASK_USER_BRK_SIZE     0x01000000
+#define JLOS_TASK_USER_BRK_LIMIT    (JLOS_TASK_USER_BRK_START + JLOS_TASK_USER_BRK_SIZE)
+
+#define JLOS_TASK_USER_STACK_TOP    (JLOS_TASK_USER_SPACE_START + 0x10000000)
+#define JLOS_TASK_USER_STACK_SIZE   0x00010000
+
+typedef enum {
+    TASK_EXIT_DEAUFT = 0,
+    TASK_EXIT_PAGE_FAULT
+} jlos_task_exit_code;
+
+typedef enum {
+    JLOS_TASK_FD_UNUSED = 0,
+    JLOS_TASK_FD_PIPE,
+    JLOS_TASK_FD_CONSOLE,
+    JLOS_TASK_FD_FILE
+} jlos_task_fd_type_t;
+
+typedef struct {
+    jlos_task_fd_type_t type;
+    void *obj;
+    uint8_t flags;
+} jlos_task_fd_t;
+
 typedef struct jlos_task_t {
     volatile uint32_t status;
     char name[JLOS_TASK_NAME_SIZE];
@@ -28,7 +65,7 @@ typedef struct jlos_task_t {
     jlos_cpu_state_t cpustate;
     uint32_t pid;
     uint32_t parent_pid;
-    uint32_t exit_code;
+    jlos_task_exit_code exit_code;
     bool is_user_process;
     jlos_paging_context_t *mm;
     uint32_t wake_tick;
@@ -41,6 +78,11 @@ typedef struct jlos_task_t {
     uint32_t default_slice;
     uint32_t last_ready_tick;
     struct jlos_task_t *next_wait;
+    jlos_task_fd_t *fds;
+    uint32_t fds_size;
+    uint32_t brk_start;
+    uint32_t brk_end;
+    uint32_t brk_limit;
 } jlos_task_t;
 
 typedef struct {
@@ -53,7 +95,11 @@ typedef struct {
 
 void jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
-void jlos_task_destroy(jlos_task_t* self);
+void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task);
+
+int32_t jlos_task_fd_malloc(jlos_task_t *task);
+jlos_task_fd_t *jlos_task_fd_get(jlos_task_t *task, int32_t fd);
+void jlos_task_fd_free(jlos_task_t *task, int32_t fd);
 
 void jlos_task_set_ready(jlos_task_t *t);
 void jlos_task_set_running(jlos_task_t *t);
@@ -76,4 +122,5 @@ jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent);
 int jlos_process_exec(jlos_task_manager_t *self, jlos_task_t *task, void (*entrypoint)(void));
 void jlos_process_exit(jlos_task_manager_t *self, jlos_task_t *task, uint32_t exit_code);
+
 #endif

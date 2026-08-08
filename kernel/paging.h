@@ -7,8 +7,8 @@
 #define JLOS_PAGE_TABLE_ENTRIES                     1024
 #define JLOS_PAGE_DIR_ENTRIES                       1024
 #define JLOS_PAGING_VIRTUAL_ADDR_MASK               0xFFFFF000
-#define JLOS_PAGING_PAGE_TABLE_INDEX_MASK           0x000FF000
-#define JLOS_PAGING_PAGE_DIR_INDEX_MASK             0xFFC00000
+#define JLOS_PAGING_PT_INDEX_MASK                   0x000FF000
+#define JLOS_PAGING_PD_INDEX_MASK                   0xFFC00000
 
 #define JLOS_PTE_PRESENT        0x001
 #define JLOS_PTE_WRITABLE       0x002
@@ -29,6 +29,12 @@
 #define JLOS_PDE_DIRTY          0x040
 #define JLOS_PDE_4MB            0x080
 #define JLOS_PDE_GLOBAL         0x100
+
+#define JLOS_PAGE_ALIGN_DOWN(addr)  ((addr) & ~(JLOS_PAGE_SIZE - 1))
+#define JLOS_PAGE_ALIGN_UP(addr)    JLOS_PAGE_ALIGN_DOWN((addr) + JLOS_PAGE_SIZE - 1)
+#define JLOS_PAGE_IS_ALIGNED(addr)  (((addr) & (JLOS_PAGE_SIZE - 1)) == 0)
+#define JLOS_PAGE_ADDR_MASK         (~(JLOS_PAGE_SIZE - 1))
+#define JLOS_PDE_4MB_ADDR_MASK      (~(JLOS_PAGE_SIZE * JLOS_PAGE_TABLE_ENTRIES - 1))
 
 typedef uint32_t jlos_page_table_entry_t;
 typedef uint32_t jlos_page_dir_entry_t;

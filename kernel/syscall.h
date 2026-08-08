@@ -5,8 +5,10 @@
 #include <hal/irq.h>
 #include <hal/syscall_abi.h>
 
-#define JLOS_USER_SPACE_START   0x00000000
-#define JLOS_USER_SPACE_END     0xBFFEFFFF
+#define JLOS_USER_SPACE_START           0x00000000
+#define JLOS_USER_SPACE_END             0xBFFEFFFF
+
+#define JLOS_SYSCALL_WRITE_BUF_SIZE_MAX 4096
 
 typedef struct jlos_syscall_handler jlos_syscall_handler_t;
 
