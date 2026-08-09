@@ -4,7 +4,12 @@ ARCH := x86
 
 all: $(JLOS).iso
 
-GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions -fno-leading-underscore -std=c99 -Wno-address-of-packed-member
+GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
+            -fno-leading-underscore -std=gnu11 \
+            -ffreestanding -fno-stack-protector \
+			-fno-pic -fno-pie \
+            -Wall -Wextra -Wno-address-of-packed-member \
+            -O2 -g
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 

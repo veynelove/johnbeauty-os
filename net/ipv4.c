@@ -23,6 +23,11 @@ void jlos_internet_protocol_handler_destroy(jlos_internet_protocol_handler_t* se
 
 bool jlos_internet_protocol_handler_on_internet_protocol_received(jlos_internet_protocol_handler_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size)
 {
+    (void)self;
+    (void)srcIP_BE;
+    (void)dstIP_BE;
+    (void)internet_protocol_payload;
+    (void)size;
     return false;
 }
 

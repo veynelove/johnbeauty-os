@@ -15,10 +15,14 @@ void jlos_udp_handler_init(jlos_udp_handler_t* self)
 
 void jlos_udp_handler_destroy(jlos_udp_handler_t* self)
 {
+    (void)self;
 }
 
 void jlos_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_socket_t* socket, uint8_t *data, uint16_t size)
 {
+    (void)self;
+    (void)socket;
+    (void)data;
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("UDP: Handler received data, size=");
     printf_hex(size & 0xFF);
@@ -42,6 +46,7 @@ void jlos_udp_socket_init(jlos_udp_socket_t* self, jlos_udp_provider_t *backend)
 
 void jlos_udp_socket_destroy(jlos_udp_socket_t* self)
 {
+    (void)self;
 }
 
 void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *data, uint16_t size)
@@ -174,7 +179,8 @@ jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t
         jlos_udp_socket_init(socket, self);
         socket->remote_port = JLOS_SWAP_ENDIAN_16(port);
         socket->remote_ip = ip;
-        socket->local_port = JLOS_SWAP_ENDIAN_16(self->free_port++);
+        uint16_t free_port = self->free_port++;
+        socket->local_port = JLOS_SWAP_ENDIAN_16(free_port);
         socket->local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
         jlos_udp_key_t key = {socket->local_ip, socket->local_port};
         jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
@@ -224,5 +230,6 @@ void jlos_udp_provider_send(jlos_udp_provider_t* self, jlos_udp_socket_t *socket
 
 void jlos_udp_provider_bind(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, jlos_udp_handler_t *handler)
 {
+    (void)self;
     socket->handler = handler;
 }

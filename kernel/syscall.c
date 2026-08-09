@@ -100,7 +100,7 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         jlos_pipe_destroy(pipe);
         return -SYSCALL_ENOMEM;
     }
-    uint32_t fd_write = jlos_task_fd_malloc(g_current_task_ptr);
+    int32_t fd_write = jlos_task_fd_malloc(g_current_task_ptr);
     if (fd_write < 0) {
         jlos_task_fd_free(g_current_task_ptr, fd_read);
         jlos_pipe_destroy(pipe);
@@ -121,6 +121,8 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         jlos_pipe_destroy(pipe);
         return -SYSCALL_EFAULT;
     }
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -136,9 +138,12 @@ static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3
     }
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
+        (void)pipe;
         //todo
     }
     jlos_task_fd_free(g_current_task_ptr, fd);
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -164,7 +169,7 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
             if (!frame) {
                 return (int32_t)g_current_task_ptr->brk_end;
             }
-            jlos_paging_map(ctx, addr, (uint32_t)frame,
+            jlos_paging_map(ctx, addr, VIRT_TO_PHYS((uint32_t)frame),
                 JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
         }
     } else if (new_brk < old_brk) {
@@ -174,11 +179,13 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
             uint32_t phys = jlos_paging_get_physical_addr(ctx, addr);
             jlos_paging_unmap(ctx, addr);
             if (phys) {
-                jlos_page_frame_free((void *)phys);
+                jlos_page_frame_free((void *)(PHYS_TO_VIRT(phys)));
             }
         }
     }
     g_current_task_ptr->brk_end = new_brk;
+    (void)arg2;
+    (void)arg3;
     return (int32_t)new_brk;
 }
 
@@ -188,6 +195,8 @@ static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENOMEM;
     }
     JLOS_TASK_SET_TERMINATED(g_current_task_ptr, arg1);
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -197,6 +206,9 @@ static int32_t syscall_yield(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENOMEM;
     }
     g_current_task_ptr->yield = true;
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -205,6 +217,9 @@ static int32_t syscall_get_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
     return g_current_task_ptr->pid;
 }
 
@@ -215,6 +230,8 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     }
     g_current_task_ptr->wake_tick = jlos_hal_timer_get_ticks() + arg1;
     g_current_task_ptr->sleeping = true;
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -223,11 +240,17 @@ static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
     return g_current_task_ptr->errno;
 }
 
 static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
     return (int32_t)jlos_hal_timer_get_ticks();
 }
 
@@ -245,6 +268,9 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
         }
     }
     printf("================\n");
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
     return 0;
 }
 
@@ -278,6 +304,7 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return (int32_t)pid;
     }
     JLOS_TASK_SET_WAITING(g_current_task_ptr, target_pid);
+    (void)arg3;
     return 0;
 }
 
@@ -316,6 +343,7 @@ void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t 
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
 {
+    (void)self;
 }
 
 int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uint32_t arg1, uint32_t arg2,

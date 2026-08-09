@@ -31,7 +31,7 @@ void jlos_x86_tss_init(jlos_x86_tss_t *self, uint32_t esp0, uint16_t ss0)
     self->io_map_base = 104;
 }
 
-void jlos_x86_tss_load(jlos_x86_tss_t *self, uint16_t selector)
+void jlos_x86_tss_load(uint16_t selector)
 {
     __asm__ __volatile__("ltr %0" : : "r"(selector));
 }

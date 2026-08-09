@@ -10,25 +10,30 @@
 #define JLOS_PAGING_PT_INDEX_MASK                   0x000FF000
 #define JLOS_PAGING_PD_INDEX_MASK                   0xFFC00000
 
-#define JLOS_PTE_PRESENT        0x001
-#define JLOS_PTE_WRITABLE       0x002
-#define JLOS_PTE_USER           0x004
-#define JLOS_PTE_WRITE_THROUGH  0x008
-#define JLOS_PTE_CACHE_DISABLE  0x010
-#define JLOS_PTE_ACCESSED       0x020
-#define JLOS_PTE_DIRTY          0x040
-#define JLOS_PTE_PAT            0x080
-#define JLOS_PTE_GLOBAL         0x100
+#define JLOS_PTE_PRESENT                0x001
+#define JLOS_PTE_WRITABLE               0x002
+#define JLOS_PTE_USER                   0x004
+#define JLOS_PTE_WRITE_THROUGH          0x008
+#define JLOS_PTE_CACHE_DISABLE          0x010
+#define JLOS_PTE_ACCESSED               0x020
+#define JLOS_PTE_DIRTY                  0x040
+#define JLOS_PTE_PAT                    0x080
+#define JLOS_PTE_GLOBAL                 0x100
 
-#define JLOS_PDE_PRESENT        0x001
-#define JLOS_PDE_WRITABLE       0x002
-#define JLOS_PDE_USER           0x004
-#define JLOS_PDE_WRITE_THROUGH  0x008
-#define JLOS_PDE_CACHE_DISABLE  0x010
-#define JLOS_PDE_ACCESSED       0x020
-#define JLOS_PDE_DIRTY          0x040
-#define JLOS_PDE_4MB            0x080
-#define JLOS_PDE_GLOBAL         0x100
+#define JLOS_PDE_PRESENT                0x001
+#define JLOS_PDE_WRITABLE               0x002
+#define JLOS_PDE_USER                   0x004
+#define JLOS_PDE_WRITE_THROUGH          0x008
+#define JLOS_PDE_CACHE_DISABLE          0x010
+#define JLOS_PDE_ACCESSED               0x020
+#define JLOS_PDE_DIRTY                  0x040
+#define JLOS_PDE_4MB                    0x080
+#define JLOS_PDE_GLOBAL                 0x100
+
+#define KERNEL_VIRTUAL_BASE             0xC0000000
+
+#define VIRT_TO_PHYS(addr)          ((uint32_t)(addr) - KERNEL_VIRTUAL_BASE)
+#define PHYS_TO_VIRT(addr)          ((uint32_t)(addr) + KERNEL_VIRTUAL_BASE)
 
 #define JLOS_PAGE_ALIGN_DOWN(addr)  ((addr) & ~(JLOS_PAGE_SIZE - 1))
 #define JLOS_PAGE_ALIGN_UP(addr)    JLOS_PAGE_ALIGN_DOWN((addr) + JLOS_PAGE_SIZE - 1)

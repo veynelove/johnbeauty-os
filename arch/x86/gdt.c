@@ -2,6 +2,7 @@
 #include <hal/mmu.h>
 
 extern uint32_t _text_start, _text_end;
+extern uint32_t _rodata_start, _rodata_end;
 extern uint32_t _data_start, _data_end;
 extern uint32_t _bss_start, _bss_end;
 
@@ -12,6 +13,8 @@ void jlos_hal_kernel_segments_init(void)
 {
     s_kernel_segments.text_start = (uint32_t)&_text_start;
     s_kernel_segments.text_end = (uint32_t)&_text_end;
+    s_kernel_segments.rodata_start = (uint32_t)&_rodata_start;
+    s_kernel_segments.rodata_end = (uint32_t)&_rodata_end;
     s_kernel_segments.data_start = (uint32_t)&_data_start;
     s_kernel_segments.data_end = (uint32_t)&_data_end;
     s_kernel_segments.bss_start = (uint32_t)&_bss_start;
@@ -78,21 +81,32 @@ void jlos_gdt_init()
     jlos_gdt_t *gdt = &s_kernel_gdt;
     jlos_gdt_segment_descriptor_init(&gdt->null_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->unused_segment_selector, 0, 0, 0);
-    jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 64*1024*1024, 0x9A);
-    jlos_gdt_segment_descriptor_init(&gdt->data_segment_selector, 0, 64*1024*1024, 0x92);
+    jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 0xFFFFFFFF, 0x9A);
+    jlos_gdt_segment_descriptor_init(&gdt->data_segment_selector, 0, 0xFFFFFFFF, 0x92);
     
-    jlos_gdt_segment_descriptor_init(&gdt->user_code_segment_selector, 0, 64 * 1024 * 1024, 0xFA);
-    jlos_gdt_segment_descriptor_init(&gdt->user_data_segment_selector, 0, 64 * 1024 * 1024, 0xF2);
+    jlos_gdt_segment_descriptor_init(&gdt->user_code_segment_selector, 0, 0xFFFFFFFF, 0xFA);
+    jlos_gdt_segment_descriptor_init(&gdt->user_data_segment_selector, 0, 0xFFFFFFFF, 0xF2);
     jlos_gdt_segment_descriptor_init(&gdt->tss_segment_selector, 0, 0, 0x89);
     uint32_t i[2];
     i[1] = (uint32_t)gdt;
     i[0] = sizeof(jlos_gdt_t) << 16;
     
-    __asm__ __volatile__("lgdt (%0)" : : "p" (((uint8_t *) i)+2));
-}
-
-void jlos_gdt_destroy(jlos_gdt_t* self)
-{
+    __asm__ __volatile__(
+        "lgdt %0                           \n\t"
+        /* 强制重载所有数据段描述符缓存 */
+        "movw   $0x18, %%ax                \n\t"   /* DATA_SEL = 0x18 (RPL0, GDT) */
+        "movw   %%ax,   %%ds               \n\t"
+        "movw   %%ax,   %%es               \n\t"
+        "movw   %%ax,   %%fs               \n\t"
+        "movw   %%ax,   %%gs               \n\t"
+        "movw   %%ax,   %%ss               \n\t"
+        /* 远跳强制重载 CS 描述符缓存（否则CS selector仍=GRUB 0x08 → 指向我们unused=0描述符，
+         * 下次任何触发描述符重查就会 #GP → triple fault）
+         */
+        "ljmp   $0x10, $1f                 \n\t"   /* CODE_SEL = 0x10 */
+        "1:                                 \n\t"
+        : : "m" (*(((uint8_t *) i)+2)) : "eax", "memory"
+    );
 }
 
 uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self)
@@ -122,11 +136,11 @@ uint16_t jlos_gdt_tss_selector(jlos_gdt_t *self)
 
 void jlos_gdt_set_tss(jlos_gdt_t *self, uint32_t base, uint32_t limit)
 {
+    /* 只改内存中的 descriptor，不需要再次 lgdt（GDTR base/limit 没变）。
+     * 多余 lgdt 会让一些 CPU 误以为要重刷 descriptor 缓存，
+     * 而我们此时 CS/DS 还没加载新 selector，会触发 #GP。
+     */
     jlos_gdt_segment_descriptor_init(&self->tss_segment_selector, base, limit, 0x89);
-    uint32_t i[2];
-    i[1] = (uint32_t)self;
-    i[0] = sizeof(jlos_gdt_t) << 16;
-    __asm__ __volatile__("lgdt (%0)" : : "p" (((uint8_t *) i)+2));
 }
 
 jlos_gdt_t *jlos_gdt_get_kernel(void)

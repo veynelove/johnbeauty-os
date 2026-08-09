@@ -1,6 +1,7 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
+#include <kernel/page_frame_allocator.h>
 #include <hal/context.h>
 #include <hal/timer.h>
 #include <kernel/printk.h>
@@ -96,8 +97,6 @@ void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(
     jlos_task_init_1(self, name);
     self->stack = (uint8_t *)jlos_malloc(JLOS_TASK_STACK_SIZE);
     self->stack_size = JLOS_TASK_STACK_SIZE;
-    self->user_stack = (uint8_t *)jlos_malloc(JLOS_TASK_STACK_SIZE);
-    self->user_stack_size = JLOS_TASK_STACK_SIZE;
     self->fds = (jlos_task_fd_t *)jlos_malloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
     self->fds_size = 0;
     if (self->fds) {
@@ -108,7 +107,7 @@ void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(
         }
         self->fds_size = JLOS_TASK_FDS_NUM;
     }
-    for (int i = 0; i < 3 && i < self->fds_size; i++) {
+    for (uint32_t i = 0; i < 3 && i < self->fds_size; i++) {
         self->fds[i].type = JLOS_TASK_FD_CONSOLE;
         self->fds[i].obj = NULL;
         self->fds[i].flags = i ? JLOS_TASK_FD_WRITE_ONLY : JLOS_TASK_FD_READ_ONLY;
@@ -120,25 +119,36 @@ void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(
     if (self->stack) {
         jlos_memset(self->stack, 0, JLOS_TASK_STACK_SIZE);
     }
-    if (self->user_stack) {
-        jlos_memset(self->user_stack, 0, JLOS_TASK_STACK_SIZE);
-        jlos_paging_change_flags_range(jlos_active_paging_context,
-            (uint32_t)self->user_stack,
-            (uint32_t)(self->user_stack + JLOS_TASK_STACK_SIZE),
+
+    /* 用户栈映射到用户地址空间 (经典 3:1 分离) */
+    uint32_t stack_base = JLOS_TASK_USER_STACK_TOP - JLOS_TASK_USER_STACK_SIZE;
+    self->user_stack = (uint8_t *)stack_base;
+    self->user_stack_size = JLOS_TASK_USER_STACK_SIZE;
+    for (uint32_t addr = stack_base; addr < JLOS_TASK_USER_STACK_TOP; addr += JLOS_PAGE_FRAME_SIZE) {
+        void *frame = jlos_page_frame_malloc();
+        if (!frame) { break; }
+        jlos_paging_map(jlos_active_paging_context, addr, VIRT_TO_PHYS((uint32_t)frame),
             JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
     }
-    uint32_t entry_start = JLOS_PAGE_ALIGN_DOWN((uint32_t)entrypoint);
-    uint32_t entry_end = entry_start + 4096;
-    jlos_paging_change_flags_range(jlos_active_paging_context,
-        entry_start, entry_end,
-        JLOS_PTE_PRESENT | JLOS_PTE_USER);
+
+    /* .text/.rodata 加 PTE_USER：ring3 syscall wrapper 需取指和读常量 */
+    const jlos_hal_kernel_segments_t *seg = jlos_hal_get_kernel_segments();
+    if (seg && seg->text_start != 0) {
+        jlos_paging_change_flags_range(jlos_active_paging_context,
+            JLOS_PAGE_ALIGN_DOWN(seg->text_start),
+            JLOS_PAGE_ALIGN_DOWN(seg->text_end + JLOS_PAGE_SIZE - 1),
+            JLOS_PTE_PRESENT | JLOS_PTE_USER);
+        if (seg->rodata_start != 0) {
+            jlos_paging_change_flags_range(jlos_active_paging_context,
+                JLOS_PAGE_ALIGN_DOWN(seg->rodata_start),
+                JLOS_PAGE_ALIGN_DOWN(seg->rodata_end + JLOS_PAGE_SIZE - 1),
+                JLOS_PTE_PRESENT | JLOS_PTE_USER);
+        }
+    }
 
     jlos_cpu_state_init(&self->cpustate);
-
-    uint32_t user_stack_top = self->user_stack ? (uint32_t)(self->user_stack + JLOS_TASK_STACK_SIZE) : 0;
-    uint16_t user_ss = 0x2B;
     jlos_arch_task_init_arch_user(&self->cpustate, mmu, entrypoint,
-        self->stack, self->stack_size, user_stack_top, user_ss);
+        self->stack, self->stack_size, JLOS_TASK_USER_STACK_TOP, 0x2B);
 }
 
 void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
@@ -151,7 +161,11 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
         task->stack = NULL;
     }
     if (task->user_stack) {
-        jlos_free(task->user_stack);
+        uint32_t base = JLOS_PAGE_ALIGN_DOWN((uint32_t)task->user_stack);
+        uint32_t top = base + task->user_stack_size;
+        for (uint32_t addr = base; addr < top; addr += JLOS_PAGE_FRAME_SIZE) {
+            jlos_paging_unmap(jlos_active_paging_context, addr);
+        }
         task->user_stack = NULL;
     }
     if (task->is_user_process && task->mm) {
@@ -298,7 +312,7 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
         }
     }
 
-    for (int le = 0; le < JLOS_TASK_MLFQ_LEVELS; le++) {
+    for (uint32_t le = 0; le < JLOS_TASK_MLFQ_LEVELS; le++) {
         for (int i = 0; i < self->num_tasks; i++) {
             int idx = (self->current_task + 1 + i) % self->num_tasks;
             jlos_task_t *next = self->tasks[idx];
@@ -393,14 +407,18 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent)
     return child;
 }
 
-int jlos_process_exec(jlos_task_manager_t *self, jlos_task_t *task, void (*entrypoint)(void))
+int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
 {
     if (task->stack) {
         jlos_free(task->stack);
         task->stack = NULL;
     }
     if (task->user_stack) {
-        jlos_free(task->user_stack);
+        uint32_t base = JLOS_PAGE_ALIGN_DOWN((uint32_t)task->user_stack);
+        uint32_t top = base + task->user_stack_size;
+        for (uint32_t addr = base; addr < top; addr += JLOS_PAGE_FRAME_SIZE) {
+            jlos_paging_unmap(jlos_active_paging_context, addr);
+        }
         task->user_stack = NULL;
     }
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
@@ -411,7 +429,7 @@ int jlos_process_exec(jlos_task_manager_t *self, jlos_task_t *task, void (*entry
     return 0;
 }
 
-void jlos_process_exit(jlos_task_manager_t *self, jlos_task_t *task, uint32_t exit_code)
+void jlos_process_exit(jlos_task_t *task, uint32_t exit_code)
 {
     JLOS_TASK_SET_TERMINATED(task, exit_code);
 }

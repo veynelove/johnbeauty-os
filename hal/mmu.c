@@ -7,11 +7,6 @@ void jlos_mmu_init()
     jlos_gdt_init();
 }
 
-void jlos_mmu_destroy(jlos_mmu_t *self)
-{
-    jlos_gdt_destroy(self);
-}
-
 uint16_t jlos_mmu_code_selector(jlos_mmu_t *self)
 {
     return jlos_gdt_code_segment_selector(self);

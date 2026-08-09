@@ -1,6 +1,9 @@
 #include <kernel/printk.h>
+#include <kernel/paging.h>
 #include <hal/spinlock.h>
 #include <hal/serial.h>
+
+#define JLOS_VGA_TEXT_BUFFER_VA  ((uint16_t *)PHYS_TO_VIRT(0xB8000))
 
 static jlos_spinlock_t s_printf_lock = JLOS_SPINLOCK_INIT;
 
@@ -12,7 +15,7 @@ void jlos_printk_init(void)
 
 static void printf_scroll_screen(void)
 {
-    static uint16_t *video_memory = (uint16_t *)0xb8000;
+    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     for (int y = 0; y < 24; y++) {
         for (int x = 0; x < 80; x++) {
             video_memory[80 * y + x] = video_memory[80 * (y + 1) + x];
@@ -27,7 +30,7 @@ void printf(const char *str)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&s_printf_lock);
     jlos_hal_serial_default_puts(str);
-    static uint16_t *video_memory = (uint16_t *)0xb8000;
+    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     static uint8_t x = 0, y = 0;
     for (int i = 0; str[i] != '\0'; i++) {
         switch (str[i]) {
@@ -100,7 +103,7 @@ void printf_char(char c)
 
 static void printk_putchar(char c)
 {
-    static uint16_t *video_memory = (uint16_t *)0xb8000;
+    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     static uint8_t x = 0, y = 0;
     
     switch (c) {

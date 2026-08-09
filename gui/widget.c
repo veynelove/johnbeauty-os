@@ -22,6 +22,7 @@ void jlos_widget_init(jlos_widget_t* self, jlos_widget_t *parent, int32_t x, int
 
 void jlos_widget_destroy(jlos_widget_t* self)
 {
+    (void)self;
 }
 
 void jlos_widget_get_focus(jlos_widget_t* self, jlos_widget_t *widget)
@@ -50,6 +51,9 @@ void jlos_widget_draw(jlos_widget_t* self, jlos_graphics_context_t *gc)
 
 void jlos_widget_on_mouse_down(jlos_widget_t* self, int32_t x, int32_t y, uint8_t button)
 {
+    (void)x;
+    (void)y;
+    (void)button;
     if (self->focussable) {
         self->get_focus(self, self);
     }
@@ -57,10 +61,19 @@ void jlos_widget_on_mouse_down(jlos_widget_t* self, int32_t x, int32_t y, uint8_
 
 void jlos_widget_on_mouse_up(jlos_widget_t* self, int32_t x, int32_t y, uint8_t button)
 {
+    (void)self;
+    (void)x;
+    (void)y;
+    (void)button;
 }
 
 void jlos_widget_mouse_move(jlos_widget_t* self, int32_t oldx, int32_t oldy, int32_t newx, int32_t newy)
 {
+    (void)self;
+    (void)oldx;
+    (void)oldy;
+    (void)newx;
+    (void)newy;
 }
 
 bool jlos_widget_contains_coordinate(jlos_widget_t* self, int32_t x, int32_t y)

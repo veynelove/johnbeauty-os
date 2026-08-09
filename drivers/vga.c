@@ -1,4 +1,7 @@
 #include <drivers/vga.h>
+#include <kernel/paging.h>
+
+#define VGA_FB_VA(pa)  PHYS_TO_VIRT(pa)
 
 static void jlos_vga_write_registers(jlos_vga_t* self, uint8_t *registers);
 static uint8_t *jlos_vga_get_frame_buffer_segment(jlos_vga_t* self);
@@ -21,6 +24,7 @@ void jlos_vga_init(jlos_vga_t* self)
 
 void jlos_vga_destroy(jlos_vga_t* self)
 {
+    (void)self;
 }
 
 static void jlos_vga_write_registers(jlos_vga_t* self, uint8_t *registers)
@@ -57,6 +61,7 @@ static void jlos_vga_write_registers(jlos_vga_t* self, uint8_t *registers)
 
 bool jlos_vga_support_mode(jlos_vga_t* self, uint32_t width, uint32_t height, uint32_t colordepth)
 {
+    (void)self;
     return width == 320 && height == 200 && colordepth == 8;
 }
 
@@ -88,10 +93,10 @@ static uint8_t *jlos_vga_get_frame_buffer_segment(jlos_vga_t* self)
     uint8_t segment_number = ((jlos_io8_read(&self->graphics_controller_data_port) >> 2) & 0x03);
     switch (segment_number) {
         default:
-        case 0: return (uint8_t*)0x00000;
-        case 1: return (uint8_t*)0xA0000;
-        case 2: return (uint8_t*)0xB0000;
-        case 3: return (uint8_t*)0xB8000;
+        case 0: return (uint8_t*)VGA_FB_VA(0x00000);
+        case 1: return (uint8_t*)VGA_FB_VA(0xA0000);
+        case 2: return (uint8_t*)VGA_FB_VA(0xB0000);
+        case 3: return (uint8_t*)VGA_FB_VA(0xB8000);
     }
 }
 

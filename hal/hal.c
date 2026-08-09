@@ -193,14 +193,6 @@ static void hal_print_u32_dec(uint32_t v)
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
 {
     (void)is_write;
-    if (port > 0xFFFF) {
-        printf("[HAL] io_sanity: port 0x");
-        printf_hex16(port);
-        printf(" out of range (owner=");
-        printf(owner ? owner : "(null)");
-        printf(")\n");
-        return -1;
-    }
     if ((port >= 0xCF8 && port <= 0xCFF)) {
         int found = 0;
         for (int i = 0; i < JLOS_HAL_IO_RANGES_MAX; i++) {

@@ -21,7 +21,6 @@ typedef jlos_driver_manager_t         jlos_hal_pci_drv_mgr_t;
 
 /* ---------------- 控制器生命周期 ---------------- */
 void jlos_hal_pci_init(jlos_hal_pci_controller_t *self);
-void jlos_hal_pci_destroy(jlos_hal_pci_controller_t *self);
 
 /* ---------------- Config 空间读写（任意宽度） ---------------- */
 uint32_t jlos_hal_pci_config_read32(jlos_hal_pci_controller_t *self,

@@ -28,13 +28,11 @@
 #define JLOS_TASK_FD_STD_OUT        1
 #define JLOS_TASK_FD_STD_ERR        2
 
-#define JLOS_TASK_USER_SPACE_START  (KERNEL_MEMORY_ADDR_END + 0x10000000)
-
-#define JLOS_TASK_USER_BRK_START    JLOS_TASK_USER_SPACE_START
+#define JLOS_TASK_USER_BRK_START    0x08000000
 #define JLOS_TASK_USER_BRK_SIZE     0x01000000
 #define JLOS_TASK_USER_BRK_LIMIT    (JLOS_TASK_USER_BRK_START + JLOS_TASK_USER_BRK_SIZE)
 
-#define JLOS_TASK_USER_STACK_TOP    (JLOS_TASK_USER_SPACE_START + 0x10000000)
+#define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
 typedef enum {
@@ -120,7 +118,7 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 
 jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent);
-int jlos_process_exec(jlos_task_manager_t *self, jlos_task_t *task, void (*entrypoint)(void));
-void jlos_process_exit(jlos_task_manager_t *self, jlos_task_t *task, uint32_t exit_code);
+int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
+void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
 #endif

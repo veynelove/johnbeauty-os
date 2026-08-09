@@ -86,6 +86,7 @@ void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self)
 uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t esp)
 {
     return esp;
+    (void)self;
 }
 
 void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset,
@@ -211,6 +212,7 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
 
 void jlos_interrupt_manager_destroy(jlos_interrupt_manager_t* self)
 {
+    (void)self;
 }
 
 void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self)
@@ -300,7 +302,7 @@ void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uin
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
 {
     jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)arch_state_ptr;
-    context->error = cpu->error;
+    context->error = cpu->padding;
     context->instruction_pointer = cpu->eip;
     context->code_segment = cpu->cs;
     context->flags = cpu->eflags;

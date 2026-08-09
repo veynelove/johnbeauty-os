@@ -20,7 +20,7 @@ typedef jlos_gdt_t                    jlos_mmu_t;
 typedef jlos_gdt_segment_descriptor_t jlos_mmu_segment_t;
 
 extern void jlos_mmu_init();
-extern void jlos_mmu_destroy(jlos_mmu_t *self);
+
 extern uint16_t jlos_mmu_code_selector(jlos_mmu_t *self);
 extern uint16_t jlos_mmu_data_selector(jlos_mmu_t *self);
 
@@ -38,6 +38,8 @@ extern jlos_mmu_t *jlos_mmu_get_kernel(void);
 typedef struct {
   uint32_t text_start;
   uint32_t text_end;
+  uint32_t rodata_start;
+  uint32_t rodata_end;
   uint32_t data_start;
   uint32_t data_end;
   uint32_t bss_start;

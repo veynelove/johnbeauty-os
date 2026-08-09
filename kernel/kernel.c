@@ -20,6 +20,8 @@
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
+#include <arch/x86/gdt.h>
+#include <arch/x86/tss.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -44,7 +46,7 @@ void call_constructors()
     }
 }
 
-void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t magicnumber, uint32_t kernel_end)
+void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kernel_end)
 {
     jlos_printk_init();
     jlos_hal_arch_init();
@@ -53,25 +55,24 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t magi
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_mmu_init();
     jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
-    
-    jlos_page_frame_allocator_init(KERNEL_MEMORY_ADDR_START, KERNEL_MEMORY_ADDR_END, kernel_end);
+    jlos_page_frame_allocator_init(KERNEL_MEMORY_PHYSICAL_START, KERNEL_MEMORY_PHYSICAL_END, VIRT_TO_PHYS(kernel_end));
     printf("page frame allocator initialized\n");
     jlos_paging_initialize_kernel_paging();
     printf("paging initialized\n");
-    
-    uint8_t* low_memory_heap = (uint8_t*)(KERNEL_LOW_MEMORY_ADDR_START);
+
+    uint8_t* low_memory_heap = (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START);
     jlos_memory_manager_t low_memory_manager_;
     jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
-    
+
     void *first_free_frame_ptr = jlos_page_frame_malloc();
     jlos_page_frame_free(first_free_frame_ptr);
     uint8_t* heap_start = (uint8_t*)(first_free_frame_ptr);
     jlos_memory_manager_t memory_manager_;
     jlos_memory_manager_init(&memory_manager_, heap_start, KERNEL_MAIN_MEMORY_SIZE);
-    
+
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);
-    
+
     jlos_irq_manager_t irq_mgr;
     jlos_irq_manager_init(&irq_mgr, KERNEL_FIRST_INTERRUPT_VECTOR, mmu, &task_manager_);
     printf("interrupt manager initialized\n");
@@ -89,11 +90,11 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t magi
 
     jlos_hal_pci_controller_t pci_controller;
     jlos_hal_pci_init(&pci_controller);
-    
+
     jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
     jlos_active_memory_manager = &low_memory_manager_;
     printf("switched to low memory manager for PCI driver allocation\n");
-    
+
     jlos_hal_pci_enumerate_and_bind_drivers(&pci_controller, &driver_manager_, &irq_mgr);
     jlos_active_memory_manager = old_manager;
     printf("switched back to main memory manager\n");
@@ -122,7 +123,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t magi
     http_server_test(&network_stack->tcp);
     udp_server_test(&network_stack->udp);
 #endif
-    
+
     for (;;) {
         jlos_hal_halt();
     }
