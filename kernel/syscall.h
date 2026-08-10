@@ -5,12 +5,15 @@
 #include <hal/irq.h>
 #include <hal/syscall_abi.h>
 
-#define JLOS_USER_SPACE_START   0x00000000
-#define JLOS_USER_SPACE_END     0xBFFEFFFF
+#define JLOS_USER_SPACE_START           0x00000000
+#define JLOS_USER_SPACE_END             0xBFFEFFFF
+
+#define JLOS_SYSCALL_WRITE_BUF_SIZE_MAX 4096
 
 typedef struct jlos_syscall_handler jlos_syscall_handler_t;
 
 typedef int32_t (*jlos_syscall_func_t)(uint32_t arg1, uint32_t arg2, uint32_t arg3);
+typedef uint32_t (*jlos_syscall_handle_interrupt_func_t)(jlos_syscall_handler_t*, uint32_t);
 
 struct jlos_syscall_handler {
     uint8_t interrupt_number;

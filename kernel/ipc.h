@@ -19,6 +19,7 @@ typedef struct {
     jlos_semaphore_t sem_read_items;
     jlos_mutex_t mutex;
     bool closed;
+    uint32_t refcount;
 } jlos_pipe_t;
 
 typedef struct jlos_msg_node_t {
@@ -40,4 +41,9 @@ void jlos_pipe_close(jlos_pipe_t *pipe);
 void jlos_pipe_destroy(jlos_pipe_t *pipe);
 uint32_t jlos_pipe_write(jlos_pipe_t *pipe, const void *buf, uint32_t len);
 uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len);
+
+void jlos_mq_init(jlos_mq_t *mq);
+void jlos_mq_destroy(jlos_mq_t *mq);
+uint32_t jlos_mq_send(jlos_mq_t *mq, const void *buf, uint32_t len);
+uint32_t jlos_mq_recv(jlos_mq_t *mq, void *buf, uint32_t max_len);
 #endif

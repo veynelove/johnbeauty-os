@@ -16,6 +16,8 @@ void jlos_icmp_destroy(jlos_icmp_t* self)
 
 bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size)
 {
+    (void)self;
+    (void)dstIP_BE;
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("ICMP: Received packet from ");
     printf_hex(srcIP_BE & 0xFF);

@@ -38,6 +38,7 @@ static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba,
     if (lba > 0x0FFFFFFFull || (lba + (uint64_t)count - 1) > 0x0FFFFFFFull) return -2;
     /* ATA read28 API: size = bytes，所以 count * bytes_per_sector */
     uint32_t total_bytes = count * self->bytes_per_sector;
+    (void)total_bytes;
     /* 连续跨扇区的正确性依赖 ATA 驱动本身，这里只做字节上限
      * jlos_ata_read28 一次只读 count=1？还是支持多扇区？查 ata.h 签名是：
      *   void jlos_ata_read28(..., sector, *data, size)

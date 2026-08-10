@@ -9,6 +9,7 @@ typedef struct {
 
 static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
 {
+    (void)self;
     char foo[2] = " ";
     for (int i = 0; i < size; i++) {
         foo[0] = data[i];

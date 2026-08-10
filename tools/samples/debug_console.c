@@ -2,8 +2,11 @@
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <kernel/memory_manager.h>
+#include <kernel/paging.h>
 
 extern void printf(const char *);
+
+#define JLOS_VGA_TEXT_BUFFER_VA  ((uint16_t *)PHYS_TO_VIRT(0xB8000))
 
 #define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
 
@@ -13,6 +16,7 @@ typedef struct {
 
 static void printf_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c)
 {
+    (void)self;
     char foo[2] = {c, '\0'};
     printf(foo);
 }
@@ -25,7 +29,7 @@ typedef struct {
 
 static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)
 {
-    static uint16_t *video_memory = (uint16_t *)0xb8000;
+    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     mouse_console_t* console = (mouse_console_t*)((char*)self - offsetof(mouse_console_t, base));
 
     video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
@@ -49,7 +53,7 @@ void mouse_console_init(mouse_console_t *mouse_handler)
     mouse_handler->base.mouse_move = mouse_console_mouse_move;
     mouse_handler->x = 40;
     mouse_handler->y = 12;
-    uint16_t *video_memory = (uint16_t *)0xb8000;
+    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     video_memory[80 * mouse_handler->y + mouse_handler->x] = ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0xF000) >> 4)
         | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x0F00) << 4)
         | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x00FF));

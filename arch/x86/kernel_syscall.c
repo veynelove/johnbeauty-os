@@ -1,23 +1,22 @@
 #include <hal/kernel_syscall.h>
 #include <arch/x86/cpu_state.h>
-#include <kernel/multitask.h>
 
-extern jlos_task_t *g_current_task_ptr;
-extern jlos_task_manager_t *g_task_manager_ptr;
-
-uint32_t jlos_syscall_handler_handle_interrupt(jlos_syscall_handler_t* self, uint32_t ctx)
+static uint32_t s_x86_syscall_entry(void *handler, uint32_t ctx)
 {
+    (void)handler;
     jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)ctx;
-    uint32_t syscall_num = cpu->eax;
-    int32_t result = jlos_syscall_do_dispatch(self, syscall_num, cpu->ebx, cpu->ecx, cpu->edx);
-    
-    cpu->eax = result;
-    
-    if (g_current_task_ptr) {
-        if (jlos_syscall_need_resched()) {
-            g_current_task_ptr->yield = false;
-            return (uint32_t)jlos_task_manager_schedule(g_task_manager_ptr, (jlos_cpu_state_t *)cpu);
+    if (jlos_hal_syscall_dispatch) {
+        cpu->eax = (uint32_t)jlos_hal_syscall_dispatch(cpu->eax, cpu->ebx, cpu->ecx, cpu->edx);
+    }
+    if (jlos_hal_syscall_resched_check && jlos_hal_syscall_resched_check()) {
+        if (jlos_hal_syscall_resched_do) {
+            return jlos_hal_syscall_resched_do(ctx);
         }
     }
     return ctx;
+}
+
+void jlos_hal_arch_syscall_init(void)
+{
+    jlos_hal_syscall_entry = s_x86_syscall_entry;
 }

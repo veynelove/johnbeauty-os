@@ -1,5 +1,6 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/memory_manager.h>
+#include <kernel/paging.h>
 #include <hal/spinlock.h>
 
 static uint32_t s_total_frames = 0;
@@ -15,10 +16,12 @@ void jlos_page_frame_allocator_init(uint32_t start_addr, uint32_t end_addr, uint
     s_start_addr = start_addr;
     s_total_frames = (end_addr - start_addr) / JLOS_PAGE_FRAME_SIZE;
 
-    s_bitmap = (uint8_t *)kernel_end_addr;
+    /* kernel_end_addr 是物理地址，必须转虚拟地址后才能作为指针解引用！
+     * 否则切到新页表（去掉了 1MB+ 恒等映射）后访问 bitmap 立刻 PF。 */
+    s_bitmap = (uint8_t *)PHYS_TO_VIRT(kernel_end_addr);
     uint32_t bitmap_size = (s_total_frames + 7) / 8;
-    if ((uint32_t)s_bitmap + bitmap_size > end_addr) {
-        bitmap_size = end_addr - (uint32_t)s_bitmap;
+    if ((uint32_t)s_bitmap + bitmap_size > PHYS_TO_VIRT(end_addr)) {
+        bitmap_size = PHYS_TO_VIRT(end_addr) - (uint32_t)s_bitmap;
         s_total_frames = bitmap_size * 8;
     }
     jlos_memset(s_bitmap, 0x00, bitmap_size);
@@ -71,7 +74,7 @@ void *jlos_page_frame_malloc(void)
             }
             
             jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
-            return (void *)(s_start_addr + free_frame * JLOS_PAGE_FRAME_SIZE);
+            return (void *)PHYS_TO_VIRT(s_start_addr + free_frame * JLOS_PAGE_FRAME_SIZE);
         }
         
         word_idx++;
@@ -84,7 +87,7 @@ void *jlos_page_frame_malloc(void)
 void jlos_page_frame_free(void *addr)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
-    uint32_t frame = ((uint32_t)addr - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t frame = ((uint32_t)(VIRT_TO_PHYS(addr)) - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
     if (frame >= s_total_frames) {
         jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
         return;

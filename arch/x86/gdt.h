@@ -23,7 +23,7 @@ typedef struct {
 } __attribute__((packed)) jlos_gdt_t;
 
 void jlos_gdt_init();
-void jlos_gdt_destroy(jlos_gdt_t* self);
+
 uint16_t jlos_gdt_code_segment_selector(jlos_gdt_t* self);
 uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self);
 

@@ -4,7 +4,6 @@
 #include <tools/config.h>
 #include <common/types.h>
 #include <hal/mmu.h>
-#include <kernel/multitask.h>
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
 #include <arch/x86/interrupts.h>
@@ -24,11 +23,10 @@
   extern void jlos_irq_handler_init(jlos_irq_handler_t *self,
                                     jlos_irq_manager_t *mgr, uint8_t irq);
   extern void jlos_irq_handler_destroy(jlos_irq_handler_t *self);
-  extern uint32_t jlos_irq_handler_handle(jlos_irq_handler_t *self, uint32_t esp);
+  extern uint32_t jlos_irq_handler_handle(uint32_t esp);
 
   extern void jlos_irq_manager_init(jlos_irq_manager_t *self, uint16_t offset,
                                     jlos_mmu_t *mmu, jlos_task_manager_t *tm);
-  extern void jlos_irq_manager_destroy(jlos_irq_manager_t *self);
   extern void jlos_irq_manager_activate(jlos_irq_manager_t *self);
   extern void jlos_irq_manager_deactivate(jlos_irq_manager_t *self);
   extern uint32_t jlos_irq_manager_handle(uint8_t irq, uint32_t esp);
@@ -51,5 +49,4 @@ typedef struct {
 } jlos_irq_context_t;
 
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr);
-void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 #endif

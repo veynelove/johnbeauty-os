@@ -15,16 +15,24 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_GET_ERRNO          = 7,
     JLOS_SYSCALL_GET_TICKS          = 8,
     JLOS_SYSCALL_GET_TASKS_INFO     = 9,
-    JLOS_SYSCALL_WAIT_PID           = 10
+    JLOS_SYSCALL_WAIT_PID           = 10,
+    JLOS_SYSCALL_CREATE_PIPE        = 11,
+    JLOS_SYSCALL_TASK_FD_CLOSE      = 12,
+    JLOS_SYSCALL_TASK_BRK           = 13
 };
 
 enum jlos_syscall_misscode {
-    SYSCALL_ENINVAL     = 1,
-    SYSCALL_ENOSYS      = 2,
-    SYSCALL_EFAULT      = 3,
-    SYSCALL_EPERM       = 4,
-    SYSCALL_ENOMEM      = 5,
-    SYSCALL_ENULL       = 6
+    SYSCALL_ENINVAL                 = 1,
+    SYSCALL_ENOSYS                  = 2,
+    SYSCALL_EFAULT                  = 3,
+    SYSCALL_EPERM                   = 4,
+    SYSCALL_ENOMEM                  = 5,
+};
+
+enum jlos_task_fd_std {
+    JLOS_TASK_FD_STD_IN             = 0,
+    JLOS_TASK_FD_STD_OUT            = 1,
+    JLOS_TASK_FD_STD_ERR            = 2
 };
 
 #endif

@@ -35,7 +35,6 @@ void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self);
 uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t esp);
 
 void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset, jlos_gdt_t* gdt, jlos_task_manager_t *task_manager);
-void jlos_interrupt_manager_destroy(jlos_interrupt_manager_t* self);
 
 void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self);
 void jlos_interrupt_manager_deactivate(jlos_interrupt_manager_t* self);
