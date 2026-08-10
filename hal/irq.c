@@ -11,20 +11,13 @@ void jlos_irq_handler_destroy(jlos_irq_handler_t *self)
 {
     jlos_interrupt_handler_destroy(self);
 }
-uint32_t jlos_irq_handler_handle(jlos_irq_handler_t *self, uint32_t esp)
-{
-    return jlos_interrupt_handler_handle_interrupt(self, esp);
-}
 
 void jlos_irq_manager_init(jlos_irq_manager_t *self, uint16_t offset,
                            jlos_mmu_t *mmu, jlos_task_manager_t *tm)
 {
     jlos_interrupt_manager_init(self, offset, mmu, tm);
 }
-void jlos_irq_manager_destroy(jlos_irq_manager_t *self)
-{
-    jlos_interrupt_manager_destroy(self);
-}
+
 void jlos_irq_manager_activate(jlos_irq_manager_t *self)
 {
     jlos_interrupt_manager_activate(self);

@@ -11,10 +11,14 @@ void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self)
 
 void jlos_keyboard_event_handler_key_down(jlos_keyboard_event_handler_t* self, char key)
 {
+    (void)self;
+    (void)key;
 }
 
 void jlos_keyboard_event_handler_on_key_up(jlos_keyboard_event_handler_t* self, char key)
 {
+    (void)self;
+    (void)key;
 }
 
 void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_irq_manager_t *manager, jlos_keyboard_event_handler_t *handler)
@@ -35,6 +39,7 @@ void jlos_keyboard_driver_init(jlos_keyboard_driver_t* self, jlos_irq_manager_t 
 
 void jlos_keyboard_driver_destroy(jlos_keyboard_driver_t* self)
 {
+    (void)self;
 }
 
 void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self)

@@ -45,6 +45,6 @@ typedef struct {
 } __attribute__((packed)) jlos_x86_tss_t;
 
 void jlos_x86_tss_init(jlos_x86_tss_t *self, uint32_t esp0, uint16_t ss0);
-void jlos_x86_tss_load(jlos_x86_tss_t *self, uint16_t selector);
+void jlos_x86_tss_load(uint16_t selector);
 
 #endif

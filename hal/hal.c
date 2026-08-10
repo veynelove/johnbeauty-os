@@ -1,5 +1,6 @@
 #include <hal/hal.h>
 #include <hal/device.h>
+#include <hal/kernel_syscall.h>
 
 /* hal.c 不依赖 kernel 头；直接 extern 用的输出函数 */
 extern void printf(const char *str);
@@ -193,14 +194,6 @@ static void hal_print_u32_dec(uint32_t v)
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
 {
     (void)is_write;
-    if (port > 0xFFFF) {
-        printf("[HAL] io_sanity: port 0x");
-        printf_hex16(port);
-        printf(" out of range (owner=");
-        printf(owner ? owner : "(null)");
-        printf(")\n");
-        return -1;
-    }
     if ((port >= 0xCF8 && port <= 0xCFF)) {
         int found = 0;
         for (int i = 0; i < JLOS_HAL_IO_RANGES_MAX; i++) {
@@ -364,6 +357,7 @@ void jlos_hal_arch_init(void)
     /* jlos_hal_device_register 内部已调 jlos_hal_irq_claim → refresh_reserved_bitmap，
      * s_hal_info.irq_reserved_bitmap_31_0 自动同步 */
     jlos_hal_kernel_segments_init();
+    jlos_hal_arch_syscall_init();
 }
 
 /* -------------------- 对外只读查询 + bitmap 同步 -------------------- */
@@ -380,3 +374,8 @@ void jlos_hal_irq_refresh_reserved_bitmap(void)
     }
     s_hal_info.irq_reserved_bitmap_31_0 = bm;
 }
+
+jlos_hal_syscall_entry_fn          jlos_hal_syscall_entry          = 0;
+jlos_hal_syscall_dispatch_fn       jlos_hal_syscall_dispatch       = 0;
+jlos_hal_syscall_resched_check_fn  jlos_hal_syscall_resched_check  = 0;
+jlos_hal_syscall_resched_do_fn     jlos_hal_syscall_resched_do     = 0;

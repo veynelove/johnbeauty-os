@@ -12,18 +12,26 @@ void jlos_mouse_event_handler_init(jlos_mouse_event_handler_t* self)
 
 void jlos_mouse_event_handler_on_activate(jlos_mouse_event_handler_t* self)
 {
+    (void)self;
 }
 
 void jlos_mouse_event_handler_on_mouse_down(jlos_mouse_event_handler_t* self, uint8_t button)
 {
+    (void)self;
+    (void)button;
 }
 
 void jlos_mouse_event_handler_on_mouse_up(jlos_mouse_event_handler_t* self, uint8_t button)
 {
+    (void)self;
+    (void)button;
 }
 
 void jlos_mouse_event_handler_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)
 {
+    (void)self;
+    (void)xoffset;
+    (void)yoffset;
 }
 
 void jlos_mouse_driver_init(jlos_mouse_driver_t* self, jlos_irq_manager_t *manager, jlos_mouse_event_handler_t *handler)
@@ -46,6 +54,7 @@ void jlos_mouse_driver_init(jlos_mouse_driver_t* self, jlos_irq_manager_t *manag
 
 void jlos_mouse_driver_destroy(jlos_mouse_driver_t* self)
 {
+    (void)self;
 }
 
 void jlos_mouse_driver_activate(jlos_mouse_driver_t* self)

@@ -18,6 +18,9 @@ void jlos_ether_frame_handler_destroy(jlos_ether_frame_handler_t* self)
 
 bool jlos_ether_frame_handler_on_ether_frame_received(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t size)
 {
+    (void)self;
+    (void)etherframe_payload;
+    (void)size;
     return false;
 }
 
@@ -109,6 +112,7 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
             temp[i] = frame->dstMAC[i];
             frame->dstMAC[i] = frame->srcMAC[i];
         }
+        (void)temp;
         uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), frame->srcMAC);
     }
     return send_back;

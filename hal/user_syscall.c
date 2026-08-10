@@ -67,5 +67,5 @@ void jlos_user_printf(const char *fmt, ...)
             buf[pos++] = fmt[i];
         }
     }
-    jlos_user_write(buf, pos);
+    jlos_user_write(JLOS_TASK_FD_STD_OUT, buf, pos);
 }

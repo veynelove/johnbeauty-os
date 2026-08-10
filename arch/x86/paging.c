@@ -37,6 +37,16 @@ void jlos_hal_paging_flush_tlb(uint32_t virtual_addr)
     );
 }
 
+void jlos_hal_paging_flush_all_tlb(void)
+{
+    uint32_t cr3;
+    __asm__ __volatile__(
+        "movl %%cr3, %0\n\t"
+        "movl %0, %%cr3\n\t"
+        : "=r"(cr3) : : "memory"
+    );
+}
+
 uint32_t jlos_hal_paging_get_fault_addr(void)
 {
     uint32_t cr2;

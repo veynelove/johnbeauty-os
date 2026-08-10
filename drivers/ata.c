@@ -23,6 +23,7 @@ void jlos_ata_init(jlos_ata_t* self, uint16_t port_base, bool master)
 
 void jlos_ata_destroy(jlos_ata_t* self)
 {
+    (void)self;
 }
 
 void jlos_ata_identify(jlos_ata_t* self)

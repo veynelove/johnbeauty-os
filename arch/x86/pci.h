@@ -45,7 +45,6 @@ typedef struct {
 } jlos_pci_controller_t;
 
 void jlos_pci_controller_init(jlos_pci_controller_t* self);
-void jlos_pci_controller_destroy(jlos_pci_controller_t* self);
 
 uint32_t jlos_pci_controller_read(jlos_pci_controller_t* self, uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset);
 void jlos_pci_controller_write(jlos_pci_controller_t* self, uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset, uint32_t value);

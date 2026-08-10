@@ -21,7 +21,7 @@ __attribute__((naked)) void jlos_task_exit_stub(void)
         "sti\n\t"
         "hlt\n\t"
         "jmp 1b\n\t"
-        : : "i"(JLOS_TASK_TERMINATED) : "eax", "memory"
+        : : "i"(JLOS_TASK_ZOMBIE) : "eax", "memory"
     );
 }
 
@@ -55,11 +55,14 @@ void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate,
 void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
     uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top, uint16_t user_ss)
 {
+    (void)stack;
+    (void)stack_size;
     ((jlos_x86_regs_t *)cpustate)->user_esp = user_stack_top;
     ((jlos_x86_regs_t *)cpustate)->user_ss = user_ss;
     ((jlos_x86_regs_t *)cpustate)->eip = (uint32_t)entrypoint;
     ((jlos_x86_regs_t *)cpustate)->cs = 0x23;
-    ((jlos_x86_regs_t *)cpustate)->eflags = 0x200;
+    ((jlos_x86_regs_t *)cpustate)->eflags = 0x0200;  /* IF=1, IOPL=0 */
+    (void)mmu;
 }
 
 void jlos_arch_tss_init(uint16_t kernel_data_selector)
@@ -68,17 +71,12 @@ void jlos_arch_tss_init(uint16_t kernel_data_selector)
     uint16_t tss_sel = jlos_gdt_tss_selector(gdt);
     jlos_gdt_set_tss(gdt, (uint32_t)&s_tss, sizeof(jlos_x86_tss_t) - 1);
     jlos_x86_tss_init(&s_tss, (uint32_t)(s_kernel_stack + 4096), kernel_data_selector);
-    jlos_x86_tss_load(&s_tss, tss_sel);
+    jlos_x86_tss_load(tss_sel);
 }
 
 void jlos_arch_tss_set_ctx(uint32_t ctx)
 {
     s_tss.esp0 = ctx;
-}
-
-uint32_t jlos_arch_tss_get_esp0(void)
-{
-    return s_tss.esp0;
 }
 
 void jlos_arch_tss_init_for_asm(void)

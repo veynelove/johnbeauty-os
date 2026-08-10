@@ -7,9 +7,6 @@
 void jlos_hal_pci_init(jlos_hal_pci_controller_t *self)
 { jlos_pci_controller_init(self); }
 
-void jlos_hal_pci_destroy(jlos_hal_pci_controller_t *self)
-{ jlos_pci_controller_destroy(self); }
-
 /* ---------------- Config 空间读 ----------------
  * PCI Config Mechanism #1 只能 32-bit 对齐读写（低 2 bits == 0）。
  * 8/16 位读我们自己处理：读对应 DWORD 再按 offset&3 shift/mask。 */
@@ -24,6 +21,7 @@ uint32_t jlos_hal_pci_config_read32(jlos_hal_pci_controller_t *self,
         | ((uint32_t)(func & 0x07u)  <<  8u)
         | ((uint32_t)aligned & 0xFCu);
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_WR32, 0xCF8, cfg_addr);
+    (void)cfg_addr;
     uint32_t v = jlos_pci_controller_read(self, bus, dev, func, aligned);
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_RD32, 0xCFC, v);
     return v;
@@ -60,6 +58,7 @@ void jlos_hal_pci_config_write32(jlos_hal_pci_controller_t *self,
         | ((uint32_t)(func & 0x07u)  <<  8u)
         | ((uint32_t)aligned & 0xFCu);
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_WR32, 0xCF8, cfg_addr);
+    (void)cfg_addr;
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_WR32, 0xCFC, val);
     jlos_pci_controller_write(self, bus, dev, func, aligned, val);
 }

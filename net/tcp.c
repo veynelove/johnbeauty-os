@@ -5,21 +5,6 @@ extern void printf(const char *str);
 extern void printf_hex(uint8_t);
 extern void printf_hex32(uint32_t);
 
-static const char *tcp_state_str(uint8_t state)
-{
-    switch (state) {
-        case JLOS_TCP_CLOSED: return "CLOSED";
-        case JLOS_TCP_LISTEN: return "LISTEN";
-        case JLOS_TCP_SYN_SENT: return "SYN_SENT";
-        case JLOS_TCP_SYN_RECEIVED: return "SYN_RCVD";
-        case JLOS_TCP_ESTABLISHED: return "ESTAB";
-        case JLOS_TCP_FIN_WAIT1: return "FIN_W1";
-        case JLOS_TCP_FIN_WAIT2: return "FIN_W2";
-        case JLOS_TCP_CLOSE_WAIT: return "CL_WAIT";
-        default: return "?";
-    }
-}
-
 void jlos_tcp_handler_init(jlos_tcp_handler_t* self)
 {
     self->handle_tcp_message = jlos_tcp_handler_handle_tcp_message;
@@ -27,10 +12,15 @@ void jlos_tcp_handler_init(jlos_tcp_handler_t* self)
 
 void jlos_tcp_handler_destroy(jlos_tcp_handler_t* self)
 {
+    (void)self;
 }
 
 bool jlos_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
 {
+    (void)self;
+    (void)socket;
+    (void)data;
+    (void)size;
     return true;
 }
 
@@ -46,6 +36,7 @@ void jlos_tcp_socket_init(jlos_tcp_socket_t* self, jlos_tcp_provider_t *backend)
 
 void jlos_tcp_socket_destroy(jlos_tcp_socket_t* self)
 {
+    (void)self;
 }
 
 bool jlos_tcp_socket_handle_tcp_message(jlos_tcp_socket_t* self, uint8_t *data, uint16_t size)
@@ -243,6 +234,12 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                 break;
             case JLOS_TCP_ACK:
                 switch (socket->state) {
+                    case JLOS_TCP_CLOSED:
+                    case JLOS_TCP_LISTEN:
+                    case JLOS_TCP_SYN_SENT:
+                    case JLOS_TCP_ESTABLISHED:
+                    case JLOS_TCP_FIN_WAIT2:
+                        break;
                     case JLOS_TCP_SYN_RECEIVED:
                         socket->state = JLOS_TCP_ESTABLISHED;
                         socket->sequence_number = JLOS_SWAP_ENDIAN_32(msg->acknowledgement_number);
@@ -256,7 +253,10 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                     case JLOS_TCP_CLOSE_WAIT:
                         socket->state = JLOS_TCP_CLOSED;
                         break;
+                    default:
+                        break;
                 }
+                __attribute__((fallthrough));
             default:
                 if (JLOS_SWAP_ENDIAN_32(msg->sequence_number) == socket->acknowledgement_number) {
                     uint32_t header_bytes = data_offset * 4;
@@ -400,7 +400,8 @@ jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t
         jlos_tcp_socket_init(socket, self);
         socket->remote_port = JLOS_SWAP_ENDIAN_16(port);
         socket->remote_ip = ip;
-        socket->local_port = JLOS_SWAP_ENDIAN_16(self->free_port++);
+        uint16_t free_port = self->free_port++;
+        socket->local_port = JLOS_SWAP_ENDIAN_16(free_port);
         socket->local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
         socket->state = JLOS_TCP_SYN_SENT;
         socket->sequence_number = 0xbeefcafe;
@@ -437,5 +438,6 @@ jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t 
 
 void jlos_tcp_provider_bind(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, jlos_tcp_handler_t *handler)
 {
+    (void)self;
     socket->handler = handler;
 }
