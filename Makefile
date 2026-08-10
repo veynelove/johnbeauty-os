@@ -13,7 +13,7 @@ GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
 ASPARAMS = --32
 LDPARAMS = -melf_i386
 
-SRC_DIRS := kernel arch/$(ARCH) drivers gui net filesystem tools hal dsa
+SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa
 OBJ_DIR := obj
 
 C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")

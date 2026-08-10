@@ -21,7 +21,7 @@ __attribute__((naked)) void jlos_task_exit_stub(void)
         "sti\n\t"
         "hlt\n\t"
         "jmp 1b\n\t"
-        : : "i"(JLOS_TASK_TERMINATED) : "eax", "memory"
+        : : "i"(JLOS_TASK_ZOMBIE) : "eax", "memory"
     );
 }
 

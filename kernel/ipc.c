@@ -22,6 +22,7 @@ void jlos_pipe_init(jlos_pipe_t *pipe, uint32_t buf_size)
     jlos_semaphore_init(&pipe->sem_read_items, 0);
     jlos_mutex_init(&pipe->mutex);
     pipe->closed = false;
+    pipe->refcount = 1;
 }
 
 void jlos_pipe_close(jlos_pipe_t *pipe)

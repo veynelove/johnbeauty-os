@@ -2,6 +2,7 @@
 #define __JLOS_KERNEL_PAGING_H
 
 #include <common/types.h>
+#include <hal/irq.h>
 
 #define JLOS_PAGE_SIZE                              4096
 #define JLOS_PAGE_TABLE_ENTRIES                     1024
@@ -52,7 +53,7 @@ typedef struct {
     jlos_page_dir_entry_t entries[JLOS_PAGE_DIR_ENTRIES];
 } jlos_page_dir_t;
 
-typedef struct {
+typedef struct jlos_paging_context {
     jlos_page_dir_t *page_dir;
     uint32_t num_page_tables;
 } jlos_paging_context_t;
@@ -69,13 +70,14 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
     uint32_t physical_addr_start, size_t size, uint32_t flags);
 
 void jlos_paging_enable(jlos_paging_context_t *self);
-void jlos_paging_disable(void);
 void jlos_paging_switch(jlos_paging_context_t *self);
 void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
     uint32_t flags);
 
 void jlos_paging_initialize_kernel_paging(void);
 bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len);
+
+void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 
 static inline uint32_t jlos_paging_get_page_dir_index(uint32_t virtual_addr)
 {

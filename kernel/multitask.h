@@ -4,13 +4,12 @@
 #include <common/types.h>
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
-#include <kernel/paging.h>
 
 #define JLOS_TASK_READY             0
 #define JLOS_TASK_RUNNING           1
 #define JLOS_TASK_BLOCKED           2
-#define JLOS_TASK_TERMINATED        3
 #define JLOS_TASK_WAITING           4
+#define JLOS_TASK_ZOMBIE            5
 
 #define JLOS_TASK_STACK_SIZE        16384
 #define JLOS_TASK_NAME_SIZE         32
@@ -24,10 +23,6 @@
 #define JLOS_TASK_FD_WRITE_ONLY     2
 #define JLOS_TASK_FD_READ_WRITE     3
 
-#define JLOS_TASK_FD_STD_IN         0
-#define JLOS_TASK_FD_STD_OUT        1
-#define JLOS_TASK_FD_STD_ERR        2
-
 #define JLOS_TASK_USER_BRK_START    0x08000000
 #define JLOS_TASK_USER_BRK_SIZE     0x01000000
 #define JLOS_TASK_USER_BRK_LIMIT    (JLOS_TASK_USER_BRK_START + JLOS_TASK_USER_BRK_SIZE)
@@ -36,14 +31,14 @@
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
 typedef enum {
-    TASK_EXIT_DEAUFT = 0,
+    TASK_EXIT_DEAUFT        = 0,
     TASK_EXIT_PAGE_FAULT
 } jlos_task_exit_code;
 
 typedef enum {
-    JLOS_TASK_FD_UNUSED = 0,
-    JLOS_TASK_FD_PIPE,
-    JLOS_TASK_FD_CONSOLE,
+    JLOS_TASK_FD_UNUSED     = 0,
+    JLOS_TASK_FD_PIPE       ,
+    JLOS_TASK_FD_CONSOLE    ,
     JLOS_TASK_FD_FILE
 } jlos_task_fd_type_t;
 
@@ -52,6 +47,8 @@ typedef struct {
     void *obj;
     uint8_t flags;
 } jlos_task_fd_t;
+
+typedef struct jlos_paging_context jlos_paging_context_t;
 
 typedef struct jlos_task_t {
     volatile uint32_t status;
@@ -102,13 +99,13 @@ void jlos_task_fd_free(jlos_task_t *task, int32_t fd);
 void jlos_task_set_ready(jlos_task_t *t);
 void jlos_task_set_running(jlos_task_t *t);
 void jlos_task_set_blocked(jlos_task_t *t);
-void jlos_task_set_terminated(jlos_task_t *t, uint32_t exit_code);
+void jlos_task_set_zombie(jlos_task_t *t, uint32_t exit_code);
 void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 
 #define JLOS_TASK_SET_READY         jlos_task_set_ready
 #define JLOS_TASK_SET_RUNNING       jlos_task_set_running
 #define JLOS_TASK_SET_BLOCKED       jlos_task_set_blocked
-#define JLOS_TASK_SET_TERMINATED    jlos_task_set_terminated
+#define JLOS_TASK_SET_ZOMBIE        jlos_task_set_zombie
 #define JLOS_TASK_SET_WAITING       jlos_task_set_waiting
 
 void jlos_task_manager_init(jlos_task_manager_t* self);

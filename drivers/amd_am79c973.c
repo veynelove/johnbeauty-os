@@ -37,7 +37,6 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descripto
 {
     jlos_driver_init(&self->base_driver);
     self->base_driver.activate = (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate;
-    self->base_driver.reset = (int (*)(jlos_driver_t*))jlos_amd_am79c973_reset;
 
     uint8_t irq = dev->interrupt;
     uint8_t interrupt_number = irq + jlos_irq_manager_hw_offset(interrupts);
@@ -237,13 +236,6 @@ void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self)
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("AMD am79c973 activation complete\n");
 #endif
-}
-
-int jlos_amd_am79c973_reset(jlos_amd_am79c973_t* self)
-{
-    jlos_io16_read(&self->reset_port);
-    jlos_io16_write(&self->reset_port, 0);
-    return 10;
 }
 
 uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_t esp)

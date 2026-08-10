@@ -7,7 +7,7 @@
 #include <hal/context.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
-#include <drivers/vga.h>
+
 #include <drivers/ata.h>
 #include <drivers/amd_am79c973.h>
 #include <net/network.h>
@@ -20,8 +20,6 @@
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
-#include <arch/x86/gdt.h>
-#include <arch/x86/tss.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>

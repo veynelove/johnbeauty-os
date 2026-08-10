@@ -3,8 +3,8 @@
 
 #include <tools/config.h>
 #include <common/types.h>
-#include <kernel/multitask.h>
 #include <hal/mmu.h>
+#include <hal/cpu_state.h>
 
 /* ============================================================
  *  Task context switch — architecture specific.

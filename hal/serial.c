@@ -37,41 +37,6 @@ static int uart_wait_thr_empty(uint16_t base)
     return 0;
 }
 
-void jlos_hal_serial_init(uint16_t com_base, uint32_t baud)
-{
-    if (com_base == 0) return;
-    HAL_TRACE_MSG("16550 serial_init (user) begin");
-    jlos_hal_register_io_range(com_base, (uint16_t)(com_base + 7), "16550 UART (user)");
-
-    jlos_io8_t ier, lcr, fcr, mcr;
-    jlos_io8_init(&ier, (uint16_t)(com_base + REG_IER));
-    jlos_io8_init(&lcr, (uint16_t)(com_base + REG_LCR));
-    jlos_io8_init(&fcr, (uint16_t)(com_base + REG_FCR));
-    jlos_io8_init(&mcr, (uint16_t)(com_base + REG_MCR));
-
-    /* 1) 关中断 */
-    jlos_io8_write(&ier, 0x00);
-    /* 2) 开 DLAB，写 divisor */
-    jlos_io8_write(&lcr, LCR_DLAB_BIT);
-    uint32_t divisor = (baud == 0) ? 1 : (UART_INPUT_DIV16 / baud);
-    if (divisor == 0) divisor = 1;
-    if (divisor > 0xFFFF) divisor = 0xFFFF;
-    jlos_io8_t dll, dlm;
-    jlos_io8_init(&dll, (uint16_t)(com_base + 0));
-    jlos_io8_init(&dlm, (uint16_t)(com_base + 1));
-    jlos_io8_write(&dll, (uint8_t)(divisor & 0xFF));
-    jlos_io8_write(&dlm, (uint8_t)((divisor >> 8) & 0xFF));
-    /* 3) 8 bits, no parity, 1 stop（清 DLAB 同时设置 LCR 3=8N1） */
-    jlos_io8_write(&lcr, 0x03);
-    /* 4) FIFO 使能、清 TX/RX FIFO、14-byte threshold */
-    jlos_io8_write(&fcr, 0xC7);
-    /* 5) 开 IRQ（OUT2）+ RTS/DSR，使硬件状态有效 */
-    jlos_io8_write(&mcr, 0x0B);
-
-    s_default_com = com_base;
-    s_default_inited = 1;
-}
-
 void jlos_hal_serial_putc(uint16_t com_base, char c)
 {
     if (com_base == 0) return;
@@ -127,8 +92,4 @@ void jlos_hal_serial_default_puts(const char *s)
     jlos_hal_serial_puts(s_default_com, s);
 }
 
-/* 未来要加 VGA / fb / UDP logging，都在这里汇总 */
-void jlos_hal_console_write(const char *s)
-{
-    jlos_hal_serial_default_puts(s);
-}
+

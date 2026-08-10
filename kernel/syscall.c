@@ -20,7 +20,14 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
         len = JLOS_SYSCALL_WRITE_BUF_SIZE_MAX;
     }
-    if (fd < 3 && len < JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
+    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    if (!fd_entry) {
+        return - SYSCALL_ENINVAL;
+    }
+    if (fd_entry->type == JLOS_TASK_FD_CONSOLE && len < JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
         len += 1;
     }
     uint8_t *buf = (uint8_t *)jlos_malloc(len);
@@ -31,18 +38,9 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         jlos_free(buf);
         return -SYSCALL_EFAULT;
     }
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
-        jlos_free(buf);
-        return -SYSCALL_ENOMEM;
-    }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
-    if (!fd_entry) {
-        jlos_free(buf);
-        return - SYSCALL_ENINVAL;
-    }
     if (fd_entry->type == JLOS_TASK_FD_CONSOLE) {
         buf[len - 1] = '\0';
-        printf((const char *)buf);
+        printk("%s", (const char *)buf);
         jlos_free(buf);
         return len;
     }
@@ -114,6 +112,7 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     fd_w->type = JLOS_TASK_FD_PIPE;
     fd_w->obj = pipe;
     fd_w->flags = JLOS_TASK_FD_WRITE_ONLY;
+    pipe->refcount++;
     int32_t fds[2] = {fd_read, fd_write};
     if (!jlos_copy_to_user((void *)arg1, fds, sizeof(fds))) {
         jlos_task_fd_free(g_current_task_ptr, fd_read);
@@ -138,8 +137,12 @@ static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3
     }
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
-        (void)pipe;
-        //todo
+        if (pipe) {
+            jlos_pipe_close(pipe);
+            if (--pipe->refcount == 0) {
+                jlos_pipe_destroy(pipe);
+            }
+        }
     }
     jlos_task_fd_free(g_current_task_ptr, fd);
     (void)arg2;
@@ -194,7 +197,7 @@ static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    JLOS_TASK_SET_TERMINATED(g_current_task_ptr, arg1);
+    JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, arg1);
     (void)arg2;
     (void)arg3;
     return 0;
@@ -293,7 +296,7 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!target) {
         return -SYSCALL_ENINVAL;
     }
-    if (target->status == JLOS_TASK_TERMINATED) {
+    if (target->status == JLOS_TASK_ZOMBIE) {
         if (exit_code) {
             if (!jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
                 return -SYSCALL_EFAULT;
@@ -316,13 +319,32 @@ void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
     s_syscall_handler->dispatch[num] = handler;
 }
 
+static int32_t s_syscall_dispatch(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3)
+{
+    return jlos_syscall_do_dispatch(s_syscall_handler, num, a1, a2, a3);
+}
+
+static uint32_t s_syscall_resched_do(uint32_t ctx)
+{
+    if (g_current_task_ptr) {
+        g_current_task_ptr->yield = false;
+        return (uint32_t)jlos_task_manager_schedule(g_task_manager_ptr, (jlos_cpu_state_t *)ctx);
+    }
+    return ctx;
+}
+
 void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number)
 {
     s_syscall_handler = self;
     self->interrupt_manager = interrupt_manager;
     self->interrupt_number = interrupt_number;
     jlos_irq_handler_init((jlos_irq_handler_t *)self, interrupt_manager, interrupt_number);
-    self->handle_interrupt = jlos_syscall_handler_handle_interrupt;
+    
+    self->handle_interrupt = (jlos_syscall_handle_interrupt_func_t)jlos_hal_syscall_entry;
+    jlos_hal_syscall_dispatch = s_syscall_dispatch;
+    jlos_hal_syscall_resched_check = jlos_syscall_need_resched;
+    jlos_hal_syscall_resched_do = s_syscall_resched_do;
+
     for (int i = 0; i < JLOS_SYSCALL_MAX; i++) {
         self->dispatch[i] = 0;
     }
@@ -365,7 +387,7 @@ bool jlos_syscall_need_resched()
     if (!g_current_task_ptr) {
         return false;
     }
-    if (g_current_task_ptr->status == JLOS_TASK_TERMINATED || g_current_task_ptr->status == JLOS_TASK_WAITING
+    if (g_current_task_ptr->status == JLOS_TASK_ZOMBIE || g_current_task_ptr->status == JLOS_TASK_WAITING
     || g_current_task_ptr->sleeping || g_current_task_ptr->yield) {
         return true;
     }

@@ -13,6 +13,7 @@
 typedef struct jlos_syscall_handler jlos_syscall_handler_t;
 
 typedef int32_t (*jlos_syscall_func_t)(uint32_t arg1, uint32_t arg2, uint32_t arg3);
+typedef uint32_t (*jlos_syscall_handle_interrupt_func_t)(jlos_syscall_handler_t*, uint32_t);
 
 struct jlos_syscall_handler {
     uint8_t interrupt_number;

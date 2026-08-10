@@ -3,27 +3,9 @@
 void jlos_driver_init(jlos_driver_t* self)
 {
     self->activate = jlos_driver_activate;
-    self->reset = jlos_driver_reset;
-    self->deactivate = jlos_driver_deactivate;
-}
-
-void jlos_driver_destroy(jlos_driver_t* self)
-{
-    (void)self;
 }
 
 void jlos_driver_activate(jlos_driver_t* self)
-{
-    (void)self;
-}
-
-int jlos_driver_reset(jlos_driver_t* self)
-{
-    (void)self;
-    return 0;
-}
-
-void jlos_driver_deactivate(jlos_driver_t* self)
 {
     (void)self;
 }

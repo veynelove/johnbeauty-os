@@ -54,8 +54,5 @@ typedef struct jlos_device {
 } jlos_device_t;
 
 int  jlos_hal_device_register(jlos_device_t *dev);
-void jlos_hal_device_unregister(jlos_device_t *dev);
-int  jlos_hal_device_count(void);
-jlos_device_t *jlos_hal_device_get(int index);
 
 #endif

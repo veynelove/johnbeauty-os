@@ -8,8 +8,6 @@ typedef struct jlos_driver_manager jlos_driver_manager_t;
 
 struct jlos_driver {
     void (*activate)(jlos_driver_t* self);
-    int (*reset)(jlos_driver_t* self);
-    void (*deactivate)(jlos_driver_t* self);
 };
 
 struct jlos_driver_manager {
@@ -18,10 +16,7 @@ struct jlos_driver_manager {
 };
 
 void jlos_driver_init(jlos_driver_t* self);
-void jlos_driver_destroy(jlos_driver_t* self);
 void jlos_driver_activate(jlos_driver_t* self);
-int jlos_driver_reset(jlos_driver_t* self);
-void jlos_driver_deactivate(jlos_driver_t* self);
 
 void jlos_driver_manager_init(jlos_driver_manager_t* self);
 void jlos_driver_manager_add_driver(jlos_driver_manager_t* self, jlos_driver_t *drv);

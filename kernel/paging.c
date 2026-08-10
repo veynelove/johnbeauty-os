@@ -1,5 +1,4 @@
 #include <hal/paging.h>
-#include <hal/irq.h>
 #include <hal/hal.h>
 #include <hal/spinlock.h>
 #include <kernel/paging.h>
@@ -249,11 +248,6 @@ void jlos_paging_enable(jlos_paging_context_t *self)
     jlos_hal_paging_enable(VIRT_TO_PHYS((uint32_t)self->page_dir));
 }
 
-void jlos_paging_disable(void)
-{
-    jlos_hal_paging_disable();
-}
-
 void jlos_paging_switch(jlos_paging_context_t *self)
 {
     jlos_active_paging_context = self;
@@ -321,9 +315,10 @@ void jlos_paging_initialize_kernel_paging(void)
 bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len)
 {
     /* 经典 access_ok：用户地址必须在 0~3GB */
-    if (!s_kernel_paging_context.page_dir
-        || virtual_addr >= KERNEL_VIRTUAL_BASE
-        || virtual_addr + len > KERNEL_VIRTUAL_BASE) {
+    if (!jlos_active_paging_context || !jlos_active_paging_context->page_dir) {
+        return false;
+    }
+    if (virtual_addr >= KERNEL_VIRTUAL_BASE || virtual_addr + len > KERNEL_VIRTUAL_BASE) {
         return false;
     }
     uint32_t flag = jlos_spin_lock_irqsave(&s_paging_lock);
@@ -331,7 +326,7 @@ bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len)
     uint32_t end = JLOS_PAGE_ALIGN_DOWN(virtual_addr + len - 1);
     for (; addr <= end; addr += JLOS_PAGE_SIZE) {
         uint32_t pd_idx = jlos_paging_get_page_dir_index(addr);
-        jlos_page_dir_entry_t *pde = &s_kernel_paging_context.page_dir->entries[pd_idx];
+        jlos_page_dir_entry_t *pde = &jlos_active_paging_context->page_dir->entries[pd_idx];
         if (!(*pde & JLOS_PDE_PRESENT)) {
             continue;
         }
@@ -389,7 +384,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     
     if (g_current_task_ptr) {
         g_current_task_ptr->exit_code = TASK_EXIT_PAGE_FAULT;
-        JLOS_TASK_SET_TERMINATED(g_current_task_ptr, g_current_task_ptr->exit_code);
+        JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, g_current_task_ptr->exit_code);
     }
 }
 

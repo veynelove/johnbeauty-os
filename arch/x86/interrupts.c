@@ -3,6 +3,7 @@
 #include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
+#include <kernel/paging.h>
 #include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);

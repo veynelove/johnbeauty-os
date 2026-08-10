@@ -117,43 +117,4 @@ rollback:
     return rc;
 }
 
-void jlos_hal_device_unregister(jlos_device_t *dev)
-{
-    if (!dev || !dev->registered) return;
-    for (int i = 0; i < JLOS_HAL_MAX_DEVICES; i++) {
-        if (s_devices[i] != dev) continue;
-        s_devices[i] = 0;
-        s_device_count--;
-        break;
-    }
-    for (int i = JLOS_HAL_MAX_RESOURCES - 1; i >= 0; i--) {
-        jlos_resource_t *r = &dev->resources[i];
-        switch (r->type) {
-        case JLOS_RES_IO_PORT:
-            if (r->start <= 0xFFFF && r->end <= 0xFFFF && r->start <= r->end)
-                jlos_hal_unregister_io_range((uint16_t)r->start, (uint16_t)r->end);
-            break;
-        case JLOS_RES_IRQ:
-            if (r->start == r->end && r->start <= 255)
-                jlos_hal_irq_release((uint8_t)r->start);
-            break;
-        case JLOS_RES_MMIO:
-            if (r->start <= r->end)
-                mmio_release(r->start, r->end);
-            break;
-        default: break;
-        }
-    }
-    dev->registered = false;
-}
 
-int jlos_hal_device_count(void)
-{
-    return s_device_count;
-}
-
-jlos_device_t *jlos_hal_device_get(int index)
-{
-    if (index < 0 || index >= JLOS_HAL_MAX_DEVICES) return 0;
-    return s_devices[index];
-}

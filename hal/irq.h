@@ -4,7 +4,6 @@
 #include <tools/config.h>
 #include <common/types.h>
 #include <hal/mmu.h>
-#include <kernel/multitask.h>
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
 #include <arch/x86/interrupts.h>
@@ -50,5 +49,4 @@ typedef struct {
 } jlos_irq_context_t;
 
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr);
-void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 #endif
