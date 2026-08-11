@@ -95,4 +95,17 @@ struct multiboot_info
 };
 typedef struct multiboot_info multiboot_info_t;
 
+typedef struct multiboot_mmap_entry {
+    uint32_t size;
+    uint64_t base_addr;
+    uint64_t length;
+    uint32_t type;
+} multiboot_mmap_entry_t;
+
+#define MULTIBOOT_MEMORY_AVAILABLE  1
+#define MULTIBOOT_MEMORY_RESERVED   2
+#define MULTIBOOT_MEMORY_ACPI       3
+#define MULTIBOOT_MEMORY_NVS        4
+#define MULTIBOOT_MEMORY_BADRAM     5
+
 #endif

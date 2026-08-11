@@ -2,6 +2,7 @@
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/printk.h>
+#include <kernel/device.h>
 #include <hal/spinlock.h>
 
 jlos_memory_manager_t *jlos_active_memory_manager = NULL;
@@ -110,6 +111,21 @@ void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_
         mm_class_add(self, cls, self->first);
     }
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+}
+
+void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
+{
+    uint32_t phys_end = jlos_device_physical_memory_end;
+    uint32_t heap_size = (phys_end - KERNEL_MEMORY_PHYSICAL_START) / 4;
+    if (heap_size < KERNEL_MAIN_MEMORY_MIN_SIZE) {
+        heap_size = KERNEL_MAIN_MEMORY_MIN_SIZE;
+    }
+    if (heap_size > KERNEL_MAIN_MEMORY_MAX_SIZE) {
+        heap_size = KERNEL_MAIN_MEMORY_MAX_SIZE;
+    }
+    heap_size &= ~(JLOS_PAGE_FRAME_SIZE - 1);
+    uint8_t *heap_start = (uint8_t *)jlos_page_frame_reserve_bulk(heap_size / JLOS_PAGE_FRAME_SIZE);
+    jlos_memory_manager_init(self, heap_start, heap_size);
 }
 
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self)

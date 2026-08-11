@@ -1,3 +1,4 @@
+#include <common/multiboot.h>
 #include <hal/irq.h>
 #include <hal/io.h>
 #include <hal/pci.h>
@@ -7,19 +8,18 @@
 #include <hal/context.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
-
 #include <drivers/ata.h>
 #include <drivers/amd_am79c973.h>
 #include <net/network.h>
 #include <filesystem/msdospath.h>
 #include <filesystem/fat.h>
-#include <common/multiboot.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
+#include <kernel/device.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -53,8 +53,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_mmu_init();
     jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
-    jlos_page_frame_allocator_init(KERNEL_MEMORY_PHYSICAL_START, KERNEL_MEMORY_PHYSICAL_END, VIRT_TO_PHYS(kernel_end));
-    printf("page frame allocator initialized\n");
+
+    jlos_device_init(multiboot_structure);
+    jlos_page_frame_allocator_init(VIRT_TO_PHYS(kernel_end));
     jlos_paging_initialize_kernel_paging();
     printf("paging initialized\n");
 
@@ -62,9 +63,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_memory_manager_t low_memory_manager_;
     jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
     
-    uint8_t* heap_start = (uint8_t*)jlos_page_frame_reserve_bulk(KERNEL_MAIN_MEMORY_SIZE / JLOS_PAGE_FRAME_SIZE);
     jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init(&memory_manager_, heap_start, KERNEL_MAIN_MEMORY_SIZE);
+    jlos_memory_manager_init_main(&memory_manager_);
 
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);

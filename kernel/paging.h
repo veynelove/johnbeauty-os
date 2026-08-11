@@ -33,6 +33,11 @@
 
 #define KERNEL_VIRTUAL_BASE             0xC0000000
 
+#define USER_VIRTUAL_END                0xBFFFFFFF
+#define KERNEL_VIRTUAL_END              0xFFFFFFFF
+#define KERNEL_SPACE_SIZE               0x40000000
+#define KERNEL_PHYSICAL_MAX             KERNEL_SPACE_SIZE
+
 #define VIRT_TO_PHYS(addr)          ((uint32_t)(addr) - KERNEL_VIRTUAL_BASE)
 #define PHYS_TO_VIRT(addr)          ((uint32_t)(addr) + KERNEL_VIRTUAL_BASE)
 

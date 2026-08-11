@@ -10,7 +10,7 @@ GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
 			-fno-pic -fno-pie \
             -Wall -Wextra -Wno-address-of-packed-member \
             -O2 -g
-ASPARAMS = --32
+ASPARAMS = --32 -I.
 LDPARAMS = -melf_i386
 
 SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa

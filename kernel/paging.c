@@ -5,6 +5,7 @@
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/printk.h>
+#include <kernel/device.h>
 
 extern jlos_task_t *g_current_task_ptr;
 
@@ -348,9 +349,13 @@ void jlos_paging_initialize_kernel_paging(void)
     jlos_paging_map_range(&s_kernel_paging_context,
         0, 0, 0x00100000, JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
 
-    /* 高半核：0xC0000000+ → PA, 覆盖全部物理内存 */
+    /* 高半核：0xC0000000+ → PA, 覆盖全部物理内存 (限制在 1GB 内核空间内) */
+    uint32_t map_size = jlos_device_physical_memory_end;
+    if (map_size > KERNEL_SPACE_SIZE) {
+        map_size = KERNEL_SPACE_SIZE;
+    }
     jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE,
-        0, KERNEL_MEMORY_PHYSICAL_END, JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
+        0, map_size, JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
 
     /* .text 只读 */
     const jlos_hal_kernel_segments_t *segments = jlos_hal_get_kernel_segments();

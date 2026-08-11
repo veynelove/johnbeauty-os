@@ -1,6 +1,8 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/memory_manager.h>
+#include <kernel/device.h>
 #include <kernel/paging.h>
+#include <kernel/printk.h>
 #include <hal/spinlock.h>
 
 static uint32_t s_total_frames = 0;
@@ -11,22 +13,26 @@ static uint32_t s_first_free_frame = 0;
 
 static jlos_spinlock_t s_pfa_lock = JLOS_SPINLOCK_INIT;
 
-void jlos_page_frame_allocator_init(uint32_t start_addr, uint32_t end_addr, uint32_t kernel_end_addr)
+void jlos_page_frame_allocator_init(uint32_t kernel_end_addr)
 {
-    s_start_addr = start_addr;
-    s_total_frames = (end_addr - start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
+    uint32_t phys_end = jlos_device_physical_memory_end;
+    const multiboot_info_t *mb = jlos_device_multiboot_info;
+
+    s_start_addr = phys_start;
+    s_total_frames = (phys_end - phys_start) / JLOS_PAGE_FRAME_SIZE;
 
     /* kernel_end_addr 是物理地址，必须转虚拟地址后才能作为指针解引用！
      * 否则切到新页表（去掉了 1MB+ 恒等映射）后访问 bitmap 立刻 PF。 */
     s_bitmap = (uint8_t *)PHYS_TO_VIRT(kernel_end_addr);
     uint32_t bitmap_size = (s_total_frames + 7) / 8;
-    if ((uint32_t)s_bitmap + bitmap_size > PHYS_TO_VIRT(end_addr)) {
-        bitmap_size = PHYS_TO_VIRT(end_addr) - (uint32_t)s_bitmap;
+    if ((uint32_t)s_bitmap + bitmap_size > PHYS_TO_VIRT(phys_end)) {
+        bitmap_size = PHYS_TO_VIRT(phys_end) - (uint32_t)s_bitmap;
         s_total_frames = bitmap_size * 8;
     }
     jlos_memset(s_bitmap, 0x00, bitmap_size);
     
-    uint32_t kernel_frames = (kernel_end_addr - start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t kernel_frames = (kernel_end_addr - phys_start) / JLOS_PAGE_FRAME_SIZE;
     uint32_t bitmap_frames = (bitmap_size + JLOS_PAGE_FRAME_SIZE - 1) / JLOS_PAGE_FRAME_SIZE;
 
     for (uint32_t i = 0; i < kernel_frames + bitmap_frames; i++) {
@@ -36,6 +42,31 @@ void jlos_page_frame_allocator_init(uint32_t start_addr, uint32_t end_addr, uint
     }
     s_first_free_frame = kernel_frames + bitmap_frames;
     s_free_frames = s_total_frames - kernel_frames - bitmap_frames;
+
+    if (phys_start > 0) {
+        jlos_page_frame_mark_occupied(0, phys_start);
+    }
+    if (mb && (mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
+        multiboot_mmap_entry_t *entries = (multiboot_mmap_entry_t *)PHYS_TO_VIRT(mb->mmap_addr);
+        uint32_t count = mb->mmap_length / sizeof(multiboot_mmap_entry_t);
+        for (uint32_t i = 0; i < count; i++) {
+            multiboot_mmap_entry_t *e = &entries[i];
+            if (e->type == MULTIBOOT_MEMORY_AVAILABLE) {
+                continue;
+            }
+            uint64_t start = e->base_addr;
+            uint64_t end = start + e->length;
+            if (end <= phys_start || start >= phys_end) {
+                continue;
+            }
+            uint32_t s32 = (start < phys_start) ? phys_start : (uint32_t)start;
+            uint32_t e32 = (end > phys_end) ? phys_end : (uint32_t)end;
+            if (s32 < e32) {
+                jlos_page_frame_mark_occupied(s32, e32);
+                printk("reserved: 0x%x ~ 0x%x\n", s32, e32);
+            }
+        }
+    }
 }
 
 void *jlos_page_frame_malloc(void)
@@ -120,6 +151,29 @@ void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
     s_first_free_frame = end;
     jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
     return (void *)PHYS_TO_VIRT(s_start_addr + start * JLOS_PAGE_FRAME_SIZE);
+}
+
+void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end)
+{
+    if (phys_end <= phys_start) {
+        return;
+    }
+    uint32_t start_frame = (phys_start - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t end_frame = JLOS_EXCEPT_CEIL(phys_end - s_start_addr, JLOS_PAGE_FRAME_SIZE);
+    if (start_frame >= s_total_frames) {
+        return;
+    }
+    if (end_frame > s_total_frames) {
+        end_frame = s_total_frames;
+    }
+    uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
+    for (uint32_t i = start_frame; i < end_frame; i++) {
+        if (!(s_bitmap[i / 8] & (1 << (i % 8)))) {
+            s_bitmap[i / 8] |= (1 << (i % 8));
+            s_free_frames--;
+        }
+    }
+    jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
 }
 
 uint32_t jlos_page_frame_get_total(void)
