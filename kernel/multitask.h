@@ -35,6 +35,13 @@ typedef enum {
     TASK_EXIT_PAGE_FAULT
 } jlos_task_exit_code;
 
+enum jlos_task_errno {
+    TASK_ERR_NOMEM      = 1,
+    TASK_ERR_INVAL      = 2,
+    TASK_ERR_NOT_FOUND  = 3,
+    TASK_ERR_NO_CHILD   = 4,
+};
+
 typedef enum {
     JLOS_TASK_FD_UNUSED     = 0,
     JLOS_TASK_FD_PIPE       ,
@@ -88,8 +95,8 @@ typedef struct {
     bool main_thread_saved;
 } jlos_task_manager_t;
 
-void jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
-void jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
+int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
+int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task);
 
 int32_t jlos_task_fd_malloc(jlos_task_t *task);

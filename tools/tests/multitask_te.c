@@ -34,11 +34,20 @@ void task_user_fn()
 void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
 {
     printf("multitask_test: adding 2 tasks (task_A, task_B)\n");
-    jlos_task_init(&task1, mmu, task_a, "task_a");
-    jlos_task_init(&task2, mmu, task_b, "task_b");
+    if (jlos_task_init(&task1, mmu, task_a, "task_a") < 0) {
+        printf("multitask_test: task_a init failed\n");
+        return;
+    }
+    if (jlos_task_init(&task2, mmu, task_b, "task_b") < 0) {
+        printf("multitask_test: task_b init failed\n");
+        return;
+    }
     jlos_task_manager_add_task(task_manager_, &task1);
     jlos_task_manager_add_task(task_manager_, &task2);
 
-    jlos_task_init_user(&task_user, mmu, task_user_fn, "ring3");
+    if (jlos_task_init_user(&task_user, mmu, task_user_fn, "ring3") < 0) {
+        printf("multitask_test: ring3 init failed\n");
+        return;
+    }
     jlos_task_manager_add_task(task_manager_, &task_user);
 }

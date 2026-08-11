@@ -61,10 +61,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     uint8_t* low_memory_heap = (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START);
     jlos_memory_manager_t low_memory_manager_;
     jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
-
-    void *first_free_frame_ptr = jlos_page_frame_malloc();
-    jlos_page_frame_free(first_free_frame_ptr);
-    uint8_t* heap_start = (uint8_t*)(first_free_frame_ptr);
+    
+    uint8_t* heap_start = (uint8_t*)jlos_page_frame_reserve_bulk(KERNEL_MAIN_MEMORY_SIZE / JLOS_PAGE_FRAME_SIZE);
     jlos_memory_manager_t memory_manager_;
     jlos_memory_manager_init(&memory_manager_, heap_start, KERNEL_MAIN_MEMORY_SIZE);
 

@@ -44,11 +44,14 @@
 .extern jlos_interrupt_manager_handle_interrupt
 
 /* 全局变量：保存原始栈指针，用于 ring3 返回路径 */
+.section .bss
 .global jlos_ring3_original_esp
 jlos_ring3_original_esp:
     .long 0
 
-.set interruptnumber, 0x10000
+.global interruptnumber
+interruptnumber:
+    .long 0
 
 .section .text
 

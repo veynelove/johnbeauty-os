@@ -396,7 +396,9 @@ bool jlos_syscall_need_resched()
 
 bool jlos_access_ok(const void *addr, size_t n)
 {
-    return jlos_paging_is_user_accessible((uint32_t)addr, n);
+    jlos_paging_context_t *ctx =
+        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm : jlos_active_paging_context;
+    return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
 }
 
 bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)

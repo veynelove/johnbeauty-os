@@ -104,6 +104,24 @@ void jlos_page_frame_free(void *addr)
     jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
 }
 
+void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
+{
+    uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
+    uint32_t start = s_first_free_frame;
+    uint32_t end = start + num_frames;
+    if (end > s_total_frames) {
+        jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+        return NULL;
+    }
+    for (uint32_t i = start; i < end; i++) {
+        s_bitmap[i / 8] |= (1 << (i % 8));
+    }
+    s_free_frames -= num_frames;
+    s_first_free_frame = end;
+    jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+    return (void *)PHYS_TO_VIRT(s_start_addr + start * JLOS_PAGE_FRAME_SIZE);
+}
+
 uint32_t jlos_page_frame_get_total(void)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);

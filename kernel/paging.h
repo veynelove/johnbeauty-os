@@ -62,6 +62,7 @@ extern jlos_paging_context_t *jlos_active_paging_context;
 
 void jlos_paging_context_init(jlos_paging_context_t *self);
 void jlos_paging_context_destroy(jlos_paging_context_t *self);
+void jlos_paging_context_clone(jlos_paging_context_t *dst, jlos_paging_context_t *src);
 
 bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t flags);
 bool jlos_paging_unmap(jlos_paging_context_t *self, uint32_t virtual_addr);
@@ -75,7 +76,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     uint32_t flags);
 
 void jlos_paging_initialize_kernel_paging(void);
-bool jlos_paging_is_user_accessible(uint32_t virtual_addr, uint32_t len);
+bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual_addr, uint32_t len);
 
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 
