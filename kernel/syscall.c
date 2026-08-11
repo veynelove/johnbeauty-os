@@ -30,27 +30,42 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (fd_entry->type == JLOS_TASK_FD_CONSOLE && len < JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
         len += 1;
     }
-    uint8_t *buf = (uint8_t *)jlos_malloc(len);
-    if (!buf) {
-        return -SYSCALL_ENOMEM;
+    uint8_t stack_buf[256];
+    uint8_t *buf = NULL;
+    uint32_t alloc_len = len;
+    if (alloc_len <= sizeof(stack_buf)) {
+        buf = stack_buf;
+    } else {
+        buf = (uint8_t *)jlos_malloc(len);
+        if (!buf) {
+            return -SYSCALL_ENOMEM;
+        }
     }
     if (!jlos_copy_from_user(buf, user_buf, len)) {
-        jlos_free(buf);
+        if (buf != stack_buf) {
+            jlos_free(buf);
+        }
         return -SYSCALL_EFAULT;
     }
     if (fd_entry->type == JLOS_TASK_FD_CONSOLE) {
         buf[len - 1] = '\0';
         printk("%s", (const char *)buf);
-        jlos_free(buf);
+        if (buf != stack_buf) {
+            jlos_free(buf);
+        }
         return len;
     }
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
         uint32_t written = jlos_pipe_write(pipe, buf, len);
-        jlos_free(buf);
+        if (buf != stack_buf) {
+            jlos_free(buf);
+        }
         return written;
     }
-    jlos_free(buf);
+    if (buf != stack_buf) {
+        jlos_free(buf);
+    }
     return -SYSCALL_ENINVAL;
 }
 
@@ -68,16 +83,26 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     }
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
-        uint8_t *buf = (uint8_t *)jlos_malloc(len);
-        if (!buf) {
-            return -SYSCALL_ENOMEM;
+        uint8_t stack_buf[256];
+        uint8_t *buf = NULL;
+        if (len <= sizeof(stack_buf)) {
+            buf = stack_buf;
+        } else {
+            buf = (uint8_t *)jlos_malloc(len);
+            if (!buf) {
+                return -SYSCALL_ENOMEM;
+            }
         }
         uint32_t read = jlos_pipe_read(pipe, buf, len);
         if (!jlos_copy_to_user(user_buf, buf, read)) {
-            jlos_free(buf);
+            if (buf != stack_buf) {
+                jlos_free(buf);
+            }
             return -SYSCALL_EFAULT;
         }
-        jlos_free(buf);
+        if (buf != stack_buf) {
+            jlos_free(buf);
+        }
         return read;
     }
     return -SYSCALL_ENINVAL;
@@ -164,18 +189,9 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     }
     uint32_t old_brk = g_current_task_ptr->brk_end;
     jlos_paging_context_t *ctx = g_current_task_ptr->mm ? g_current_task_ptr->mm : jlos_active_paging_context;
-    if (new_brk > old_brk) {
-        uint32_t old_page = JLOS_PAGE_ALIGN_DOWN(old_brk);
-        uint32_t new_page = JLOS_PAGE_ALIGN_UP(new_brk);
-        for (uint32_t addr = old_page; addr < new_page; addr += JLOS_PAGE_FRAME_SIZE) {
-            void *frame = jlos_page_frame_malloc();
-            if (!frame) {
-                return (int32_t)g_current_task_ptr->brk_end;
-            }
-            jlos_paging_map(ctx, addr, VIRT_TO_PHYS((uint32_t)frame),
-                JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER);
-        }
-    } else if (new_brk < old_brk) {
+    
+    //brk扩容时，不分配页帧，缺页补帧
+    if (new_brk < old_brk) {
         uint32_t old_page = JLOS_PAGE_ALIGN_DOWN(old_brk);
         uint32_t new_page = JLOS_PAGE_ALIGN_UP(new_brk);
         for (uint32_t addr = new_page; addr < old_page; addr += JLOS_PAGE_FRAME_SIZE) {

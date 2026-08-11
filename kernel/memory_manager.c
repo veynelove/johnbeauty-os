@@ -4,6 +4,7 @@
 #include <kernel/printk.h>
 #include <kernel/device.h>
 #include <hal/spinlock.h>
+#include <hal/hal.h>
 
 jlos_memory_manager_t *jlos_active_memory_manager = NULL;
 
@@ -124,7 +125,21 @@ void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
         heap_size = KERNEL_MAIN_MEMORY_MAX_SIZE;
     }
     heap_size &= ~(JLOS_PAGE_FRAME_SIZE - 1);
-    uint8_t *heap_start = (uint8_t *)jlos_page_frame_reserve_bulk(heap_size / JLOS_PAGE_FRAME_SIZE);
+    uint8_t *heap_start = NULL;
+    while (heap_size >= KERNEL_MAIN_MEMORY_MIN_SIZE) {
+        heap_start = (uint8_t *)jlos_page_frame_reserve_bulk(heap_size / JLOS_PAGE_FRAME_SIZE);
+        if (heap_start) {
+            break;
+        }
+        heap_size /= 2;
+        heap_size &= ~(JLOS_PAGE_FRAME_SIZE - 1);
+    }
+    if (!heap_start) {
+        printk("out of memory: main heap allocation failed\n");
+        for (;;) {
+            jlos_hal_halt();
+        }
+    }
     jlos_memory_manager_init(self, heap_start, heap_size);
 }
 

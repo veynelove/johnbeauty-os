@@ -5,6 +5,8 @@
 #include <kernel/printk.h>
 #include <hal/spinlock.h>
 
+extern uint32_t _boot_end_phys;
+
 static uint32_t s_total_frames = 0;
 static uint32_t s_free_frames = 0;
 static uint8_t *s_bitmap = NULL;
@@ -42,6 +44,19 @@ void jlos_page_frame_allocator_init(uint32_t kernel_end_addr)
     }
     s_first_free_frame = kernel_frames + bitmap_frames;
     s_free_frames = s_total_frames - kernel_frames - bitmap_frames;
+    
+    uint32_t boot_end = (uint32_t)&_boot_end_phys;
+    uint32_t boot_frames = (boot_end - phys_start) / JLOS_PAGE_FRAME_SIZE;
+    if (boot_frames > 0) {
+        for (uint32_t i = 0; i < boot_frames; i++) {
+            s_bitmap[i / 8] &= ~(1 << (i % 8));
+        }
+        s_free_frames += boot_frames;
+        /* 注意：不改动 s_first_free_frame。
+         * boot 帧虽然已标记空闲，但此时 boot_page_dir 还在 CR3 里。
+         * 等 paging_init 切完内核页目录后，后续当分配器扫描到这些帧时
+         * 就能安全复用了。 */
+    }
 
     if (phys_start > 0) {
         jlos_page_frame_mark_occupied(0, phys_start);
@@ -137,18 +152,41 @@ void jlos_page_frame_free(void *addr)
 
 void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
 {
+    if (!num_frames) {
+        return NULL;
+    }
+    if (num_frames > s_total_frames) {
+        return NULL;
+    }
     uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
-    uint32_t start = s_first_free_frame;
-    uint32_t end = start + num_frames;
-    if (end > s_total_frames) {
+    uint32_t start = 0;
+    uint32_t len = 0;
+    for (uint32_t i = 0; i < s_total_frames; i++) {
+        bool occupied = (s_bitmap[i / 8] & (1 << (i % 8))) != 0;
+        if (occupied) {
+            len = 0;
+            continue;
+        }
+        if (len == 0) {
+            start = i;
+        }
+        len++;
+        if (len >= num_frames) {
+            break;
+        }
+    }
+    if (len < num_frames) {
         jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
         return NULL;
     }
-    for (uint32_t i = start; i < end; i++) {
+    for (uint32_t i = start; i < start + num_frames; i++) {
         s_bitmap[i / 8] |= (1 << (i % 8));
     }
+    
     s_free_frames -= num_frames;
-    s_first_free_frame = end;
+    if (start < s_first_free_frame) {
+        s_first_free_frame = start + num_frames;
+    }
     jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
     return (void *)PHYS_TO_VIRT(s_start_addr + start * JLOS_PAGE_FRAME_SIZE);
 }

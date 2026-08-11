@@ -1,7 +1,5 @@
 #include <filesystem/fat.h>
-
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#include <kernel/printk.h>
 
 void jlos_read_bios_block(jlos_ata_t *hd, uint32_t partition_offset)
 {

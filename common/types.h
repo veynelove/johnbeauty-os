@@ -35,6 +35,6 @@ typedef uint32_t                   uintptr_t;
 
 #define JLOS_EXCEPT_CEIL(a, b) (((a) + (b) - 1) / (b))
 
-#define JLOS_ARRAY_LIMIT_RANGE(idx, range) ((idx) + 1 % (range))
+#define JLOS_ARRAY_LIMIT_RANGE(idx, range) (((idx) + 1) % (range))
 
 #endif

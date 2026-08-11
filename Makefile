@@ -37,12 +37,13 @@ install: $(JLOS).bin
 	@sudo cp $< /boot/$(JLOS).bin
 
 $(JLOS).iso: $(JLOS).bin
+	@rm -rf iso
 	@mkdir -p iso/boot/grub
 	@cp $< iso/boot/$(JLOS).bin
-	@echo 'set timeout=0' >> iso/boot/grub/grub.cfg
+	@echo 'set timeout=0' > iso/boot/grub/grub.cfg
 	@echo 'set default=0' >> iso/boot/grub/grub.cfg
 	@echo '' >> iso/boot/grub/grub.cfg
-	@echo 'menuentry "johnbeauty operating system" {' >> iso/boot/grub/grub.cfg
+	@echo 'menuentry "johnlove operating system" {' >> iso/boot/grub/grub.cfg
 	@echo ' multiboot /boot/$(JLOS).bin' >> iso/boot/grub/grub.cfg
 	@echo ' boot' >> iso/boot/grub/grub.cfg
 	@echo '}' >> iso/boot/grub/grub.cfg

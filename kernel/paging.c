@@ -345,10 +345,8 @@ void jlos_paging_initialize_kernel_paging(void)
 {
     jlos_paging_context_init(&s_kernel_paging_context);
 
-    /* 恒等映射 0~1MB：低内存 BIOS/VGA/GRUB multiboot_info */
-    jlos_paging_map_range(&s_kernel_paging_context,
-        0, 0, 0x00100000, JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE);
-
+    /* 恒等映射 0~1MB：低内存 BIOS/VGA/GRUB multiboot_info. 0-1mb，用PHYS_TO_VIRT()访问，不再使用恒等映射" */
+    
     /* 高半核：0xC0000000+ → PA, 覆盖全部物理内存 (限制在 1GB 内核空间内) */
     uint32_t map_size = jlos_device_physical_memory_end;
     if (map_size > KERNEL_SPACE_SIZE) {
@@ -438,13 +436,37 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         }
     }
 
+    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+        printk("page fault: no current task or mm\n");
+        for (;;) {
+            jlos_hal_halt();
+        }
+    }
+    if (!present && g_current_task_ptr->brk_start &&
+    fault_addr >= g_current_task_ptr->brk_start && fault_addr <g_current_task_ptr->brk_limit) {
+        uint32_t page_dir = JLOS_PAGE_ALIGN_DOWN(fault_addr);
+        if (page_dir < JLOS_PAGE_ALIGN_UP(g_current_task_ptr->brk_end)) {
+            void *frame = jlos_page_frame_malloc();
+            if (!frame) {
+                printk("brk pf: oom at 0x%x\n", fault_addr);
+                JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, TASK_EXIT_PAGE_FAULT);
+                return;
+            }
+            jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
+            if (!jlos_paging_map(g_current_task_ptr->mm, page_dir, VIRT_TO_PHYS((uint32_t)frame),
+            JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER)) {
+                printk("brk pf: map failed at 0x%x\n", fault_addr);
+                jlos_page_frame_free(frame);
+                JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, TASK_EXIT_PAGE_FAULT);
+                return;
+            }
+            return;
+        }    
+    }
     printk("user page fault. pid = %u, addr = 0x%x, present = %u, write = %u\n",
         g_current_task_ptr ? g_current_task_ptr->pid : 0, fault_addr, present, write);
     
-    if (g_current_task_ptr) {
-        g_current_task_ptr->exit_code = TASK_EXIT_PAGE_FAULT;
-        JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, g_current_task_ptr->exit_code);
-    }
+    JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, TASK_EXIT_PAGE_FAULT);
 }
 
 void jlos_paging_print_states(jlos_paging_context_t *self)

@@ -52,20 +52,33 @@ uint32_t jlos_pipe_write(jlos_pipe_t *pipe, const void *buf, uint32_t len)
     }
     uint8_t *buf1 = (uint8_t *)buf;
     uint32_t written = 0;
-    for (uint32_t i = 0; i < len; i++) {
+    while (written < len) {
         jlos_semaphore_wait(&pipe->sem_write_slots);
         if (pipe->closed) {
             jlos_semaphore_post(&pipe->sem_write_slots);
             return written;
         }
         jlos_mutex_lock(&pipe->mutex);
-        pipe->buffer[pipe->write_pos] = buf1[i];
-        pipe->write_pos = JLOS_ARRAY_LIMIT_RANGE(pipe->write_pos, pipe->buf_size);
-        pipe->count++;
+        uint32_t slot = pipe->buf_size - pipe->count;
+        uint32_t free_contig = pipe->buf_size - pipe->write_pos;
+        uint32_t can_write = len - written;
+        if (can_write > slot) {
+            can_write = slot;
+        }
+        if (can_write > free_contig) {
+            can_write = free_contig;
+        }
+        for (uint32_t i = 0; i < can_write; i++) {
+            pipe->buffer[pipe->write_pos] = buf1[written + i];
+            pipe->write_pos = JLOS_ARRAY_LIMIT_RANGE(pipe->write_pos, pipe->buf_size);
+        }
+        pipe->count += can_write;
+        written += can_write;
         jlos_mutex_unlock(&pipe->mutex);
 
-        jlos_semaphore_post(&pipe->sem_read_items);
-        written++;
+        for (uint32_t i = 0; i < can_write; i++) {
+            jlos_semaphore_post(&pipe->sem_read_items);
+        }
     }
     return written;
 }
@@ -77,22 +90,37 @@ uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len)
     }
     uint8_t *buf1 = (uint8_t *)buf;
     uint32_t read = 0;
-    for (uint32_t i = 0; i < len; i++) {
+    while (read < len) {
         jlos_semaphore_wait(&pipe->sem_read_items);
         if (pipe->closed && pipe->count == 0) {
             jlos_semaphore_post(&pipe->sem_read_items);
             return read;
         }
         jlos_mutex_lock(&pipe->mutex);
-        buf1[i] = pipe->buffer[pipe->read_pos];
-        pipe->read_pos = JLOS_ARRAY_LIMIT_RANGE(pipe->read_pos, pipe->buf_size);
-        pipe->count--;
+        
+        uint32_t avail = pipe->count;
+        uint32_t avail_contig = pipe->buf_size - pipe->read_pos;
+        uint32_t can_read = len - read;
+        if (can_read > avail) {
+            can_read = avail;
+        }
+        if (can_read > avail_contig) {
+            can_read = avail_contig;
+        }
+        for (uint32_t i = 0; i < can_read; i++) {
+            buf1[read + i] = pipe->buffer[pipe->read_pos];
+            pipe->read_pos = JLOS_ARRAY_LIMIT_RANGE(pipe->read_pos, pipe->buf_size);
+        }
+        
+        pipe->count -= can_read;
+        read += can_read;
         jlos_mutex_unlock(&pipe->mutex);
 
         if (!pipe->closed) {
-            jlos_semaphore_post(&pipe->sem_write_slots);
+            for (uint32_t i = 0; i < can_read; i++) {
+                jlos_semaphore_post(&pipe->sem_write_slots);
+            }   
         }
-        read++;
     }
     return read;
 }
