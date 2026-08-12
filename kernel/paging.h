@@ -47,6 +47,8 @@
 #define JLOS_PAGE_ADDR_MASK         (~(JLOS_PAGE_SIZE - 1))
 #define JLOS_PDE_4MB_ADDR_MASK      (~(JLOS_PAGE_SIZE * JLOS_PAGE_TABLE_ENTRIES - 1))
 
+#define JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD 32
+
 typedef uint32_t jlos_page_table_entry_t;
 typedef uint32_t jlos_page_dir_entry_t;
 
@@ -77,6 +79,7 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
 
 void jlos_paging_enable(jlos_paging_context_t *self);
 void jlos_paging_switch(jlos_paging_context_t *self);
+void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t flags);
 void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
     uint32_t flags);
 

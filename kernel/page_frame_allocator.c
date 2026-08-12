@@ -12,6 +12,7 @@ static uint32_t s_free_frames = 0;
 static uint8_t *s_bitmap = NULL;
 static uint32_t s_start_addr = 0;
 static uint32_t s_first_free_frame = 0;
+static uint8_t *s_refcount = NULL;
 
 static jlos_spinlock_t s_pfa_lock = JLOS_SPINLOCK_INIT;
 
@@ -32,14 +33,25 @@ void jlos_page_frame_allocator_init(uint32_t kernel_end_addr)
         bitmap_size = PHYS_TO_VIRT(phys_end) - (uint32_t)s_bitmap;
         s_total_frames = bitmap_size * 8;
     }
+
+    s_refcount = s_bitmap + bitmap_size;
+    uint32_t refcount_size = s_total_frames;
+    
+    uint32_t alloc_end_phys = kernel_end_addr + bitmap_size + refcount_size;
+    uint32_t alloc_end_frame = (alloc_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
+    if (alloc_end_frame > s_total_frames) {
+        alloc_end_frame = s_total_frames;
+    }
     jlos_memset(s_bitmap, 0x00, bitmap_size);
+    jlos_memset(s_refcount, 0x00, refcount_size);
     
     uint32_t kernel_frames = (kernel_end_addr - phys_start) / JLOS_PAGE_FRAME_SIZE;
-    uint32_t bitmap_frames = (bitmap_size + JLOS_PAGE_FRAME_SIZE - 1) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t bitmap_frames = JLOS_EXCEPT_CEIL(bitmap_size + refcount_size, JLOS_PAGE_FRAME_SIZE);
 
     for (uint32_t i = 0; i < kernel_frames + bitmap_frames; i++) {
         if (i < s_total_frames) {
             s_bitmap[i / 8] |= (1 << (i % 8));
+            s_refcount[i] = 1;
         }
     }
     s_first_free_frame = kernel_frames + bitmap_frames;
@@ -118,7 +130,7 @@ void *jlos_page_frame_malloc(void)
                     s_first_free_frame++;
                 }
             }
-            
+            s_refcount[free_frame] = 1;
             jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
             return (void *)PHYS_TO_VIRT(s_start_addr + free_frame * JLOS_PAGE_FRAME_SIZE);
         }
@@ -130,24 +142,56 @@ void *jlos_page_frame_malloc(void)
     return NULL;
 }
 
+static void jlos_page_frame_bit_map_set_0(uint32_t frame)
+{
+    if (s_bitmap[frame / 8] & (1 << (frame % 8))) {
+        s_bitmap[frame / 8] &= ~(1 << (frame % 8));
+        s_free_frames++;
+        if (frame < s_first_free_frame) {
+            s_first_free_frame = frame;
+        }
+    }
+}
+
 void jlos_page_frame_free(void *addr)
 {
+    jlos_page_frame_refcount_dec((uint32_t)VIRT_TO_PHYS(addr));
+}
+
+void jlos_page_frame_refcount_inc(uint32_t phys_addr)
+{
     uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
-    uint32_t frame = ((uint32_t)(VIRT_TO_PHYS(addr)) - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t frame = (phys_addr - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+    if (frame < s_total_frames && s_refcount[frame] < JLOS_PAGE_FRAME_REFCOUNT_MAX) {
+        s_refcount[frame]++;
+    }
+    jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+}
+
+void jlos_page_frame_refcount_dec(uint32_t phys_addr)
+{
+    uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
+    uint32_t frame = (phys_addr - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
     if (frame >= s_total_frames) {
         jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
         return;
     }
-    if (!(s_bitmap[frame / 8] & (1 << (frame % 8)))) {
-        jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
-        return;
-    }
-    s_bitmap[frame / 8] &= ~(1 << (frame % 8));
-    s_free_frames++;
-    if (frame < s_first_free_frame) {
-        s_first_free_frame = frame;
+    if (s_refcount[frame] && --s_refcount[frame] == 0) {
+        jlos_page_frame_bit_map_set_0(frame);
     }
     jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+}
+
+uint8_t jlos_page_frame_refcount_get(uint32_t phys_addr)
+{
+    uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
+    uint32_t frame = (phys_addr - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+    uint8_t refcount = 0;
+    if (frame < s_total_frames) {
+        refcount = s_refcount[frame];
+    }
+    jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+    return refcount;
 }
 
 void *jlos_page_frame_reserve_bulk(uint32_t num_frames)

@@ -18,6 +18,7 @@
 #define JLOS_TASK_MLFQ_AGING_TICKS  200
 
 #define JLOS_TASK_FDS_NUM           16
+#define JLOS_TASK_MAX_NUM           256
 
 #define JLOS_TASK_FD_READ_ONLY      1
 #define JLOS_TASK_FD_WRITE_ONLY     2
@@ -88,7 +89,7 @@ typedef struct jlos_task_t {
 } jlos_task_t;
 
 typedef struct {
-    jlos_task_t *tasks[256];
+    jlos_task_t *tasks[JLOS_TASK_MAX_NUM];
     int num_tasks;
     int current_task;
     jlos_cpu_state_t main_thread_state;
