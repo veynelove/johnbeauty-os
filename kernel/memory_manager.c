@@ -169,7 +169,7 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
             return NULL;
         }
         uint32_t virtual_addr = (uint32_t)(new_heap_start + i * JLOS_PAGE_SIZE);
-        if (!jlos_paging_map(jlos_active_paging_context, virtual_addr, (uint32_t)physical_frame, JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE)) {
+        if (!jlos_paging_map(jlos_active_paging_context, virtual_addr, (uint32_t)physical_frame, JLOS_PTE_KERNEL_RW)) {
             jlos_page_frame_free(physical_frame);
             for (uint32_t j = 0; j < pages_done; j++) {
                 uint32_t vi_addr = (uint32_t)(new_heap_start + j * JLOS_PAGE_SIZE);

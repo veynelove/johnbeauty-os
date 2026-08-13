@@ -225,6 +225,7 @@ void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
     }
     for (uint32_t i = start; i < start + num_frames; i++) {
         s_bitmap[i / 8] |= (1 << (i % 8));
+        s_refcount[i] = 1;
     }
     
     s_free_frames -= num_frames;

@@ -7,6 +7,7 @@
 #define JLOS_PAGE_FRAME_REFCOUNT_MAX    255
 
 void jlos_page_frame_allocator_init(uint32_t kernel_end_addr);
+
 void *jlos_page_frame_malloc(void);
 void jlos_page_frame_free(void *addr);
 

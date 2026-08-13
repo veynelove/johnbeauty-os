@@ -1,6 +1,6 @@
-# JohnBeauty OS 内核优化计划
+# JohnBeauty OS 内核架构升级计划
 
-版本: v2.3 | 日期: 2026-08-11 | 作者: JohnLove
+版本: v2.4 | 日期: 2026-08-13 | 作者: JohnLove
 
 ---
 
@@ -8,10 +8,13 @@
 
 1. 核心功能优先;
 2. 优化时，选择经典做法优先;
+3. **性能优先于改动大小;**
+4. **面向未来多核/SMP 设计，不为单核临时妥协;**
+5. **各子系统按依赖顺序升级，底层先于上层。**
 
 ---
 
-## 已完成里程碑
+## 里程碑总览
 
 | 模块 | 完成项 | 验证 |
 |------|--------|------|
@@ -32,20 +35,268 @@
 
 ---
 
-## 优化总览
+## 架构升级总览（v2.4 核心）
 
-| 阶段 | 模块 | 优先级 | 状态 |
-|------|------|--------|------|
-| 一 | 虚拟内存管理 | 高 | 已完成，持续优化 |
-| 二 | 系统调用接口 | 高 | 已完成核心，持续扩展 |
-| 三 | 多任务系统增强 | 高 | 已完成核心，持续扩展 |
-| 四 | 文件系统完善（FAT32） | 中 | 待开始 |
-| 五 | 网络驱动优化 | 中 | 部分完成 |
-| 六 | 高级特性 | 低 | 待开始 |
+当前系统四个基础子系统（PFA / Paging / MemoryManager / Multitask）存在大量非经典做法和性能瓶颈。本计划按**依赖顺序**从底层向上逐层重构，使内核达到经典操作系统教科书级别的实现质量，同时为 SMP 预留清晰的扩展点。
+
+```
+依赖关系：
+
+Phase 0: Buddy PFA  ←────────────────────────────────────┐
+Phase 1: Paging 修复  ←── 依赖 PFA                       │
+Phase 2: Memory Manager 升级 ←── 依赖 PFA + Paging        │
+Phase 3: Multitask 升级 ←── 依赖 PFA + Paging + MM        │
+Phase 4: SMP 预留  ←── 依赖全部                          │
+                                                         │
+                    ─── 先修 BUG，再做优化 ───             │
+                    ─── 底层改好，上层才好改 ───            │
+```
 
 ---
 
-## 已解决问题
+## Phase 0: Buddy Page Frame Allocator（最高优先级）
+
+### 当前问题
+
+| # | 问题 | 严重度 | 经典做法 |
+|---|------|--------|----------|
+| PFA-1 | O(N) bitmap 线性扫描，free 后不合并邻居帧 → 碎片化 | 🔴 Critical | Buddy allocator + merge |
+| PFA-2 | reserve_bulk O(N×M) 找连续帧 + 与 malloc 扫描逻辑不统一 | 🔴 Critical | Buddy split from high order |
+| PFA-3 | `mark_occupied` 只设 bitmap 不设 refcount，语义含糊 | 🟡 | 统一 refcount=1 标记 |
+| PFA-4 | `first_free_frame` 只单帧推进，reserve_bulk 不推进 | 🟡 | 由 buddy free_area 完全替代 |
+| PFA-5 | 全局单 spinlock → 多核瓶颈 | 🟢 暂不处理 | 留给 Phase 4 per-CPU cache |
+
+### 设计方案
+
+```
+数据结构：
+  s_bitmap[frame/8]   → 1=reserved(内核/MMIO), 0=buddy pool
+  s_refcount[frame]   → PTE 引用计数 (COW 用)
+  s_free_area[0..MAX_ORDER] → 每个 order 一条空闲链表
+
+order: 0=1页, 1=2页, 2=4页, ..., 10=1024页=4MB
+
+空闲链表节点嵌入物理帧本身：
+  struct free_node { free_node *next; uint32_t frame; }
+  节点放在空闲块的第一个物理帧的前 8 字节里（利用空闲内存）
+
+分配流程 (page_frame_malloc / reserve_bulk):
+  1. order = (size == 1) ? 0 : ceil(log2(size))
+  2. 从 s_free_area[order] 取头节点 → O(1)
+  3. 没有？向高 order 借 → split → 剩余挂回低 order
+  4. 标记所有帧: refcount=1, bitmap 保持 0
+  5. 返回首帧虚拟地址
+
+释放流程 (refcount_dec → 归 0):
+  1. 找到 buddy = frame ^ (1 << order)
+  2. 判断 buddy 可合并: bitmap[buddy] == 0 && refcount[buddy] == 0
+  3. 合并成大一块 → 递归向上
+  4. 最终挂回 s_free_area[final_order]
+
+reserve_bulk 流程 (内核堆预留):
+  1. order = ceil(log2(num_frames))
+  2. 跟 malloc 一样从 buddy 分配
+  3. 标记所有帧 bitmap=1 (reserved, 永不归还)
+  4. 返回虚拟地址
+
+初始化:
+  1. 同现有 init: 标记 kernel/bitmap/MMIO/boot 帧
+  2. 剩余帧按 order 分块，挂入 s_free_area[]
+     (从高 order 开始切，把能凑成大块的凑大块)
+```
+
+### 接口变更
+
+```c
+// 保持所有现有接口签名不变！
+void *jlos_page_frame_malloc(void);       // 内部改为从 free_area[0] 取
+void jlos_page_frame_free(void *addr);    // 内部改为 refcount_dec → 归 0 时 buddy_free
+void *jlos_page_frame_reserve_bulk(uint32_t num_frames);  // 内部改为 order=ceil(log2(n)) + 标记 reserved
+void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end);  // 保持不变
+void jlos_page_frame_refcount_inc/dec/get;  // 保持不变
+```
+
+**关键约束**：所有上层调用者（paging.c / memory_manager.c / multitask.c）不需要改任何代码。
+
+### 实施清单
+
+| 序号 | 任务 | 涉及文件 | 复杂度 |
+|------|------|----------|--------|
+| 0.1 | 定义 `MAX_ORDER` (建议 10 = 1024 页) + `free_area[]` 数组 + `free_node` 结构 | page_frame_allocator.h | 低 |
+| 0.2 | 实现 buddy `split_block` / `merge_block` / `buddy_alloc` / `buddy_free` | page_frame_allocator.c | 中 |
+| 0.3 | 重写 `page_frame_allocator_init`：空闲帧按 order 分块挂链表 | page_frame_allocator.c | 中 |
+| 0.4 | 重写 `page_frame_malloc`：从 free_area[0] 取，无则 split | page_frame_allocator.c | 低 |
+| 0.5 | 重写 `page_frame_reserve_bulk`：order=ceil(log2(n))，分配后 bitmap=1 标记 | page_frame_allocator.c | 低 |
+| 0.6 | 修改 `refcount_dec`：归 0 时调 buddy_free 合并 | page_frame_allocator.c | 低 |
+| 0.7 | 删除 `first_free_frame` 相关所有代码 | page_frame_allocator.c | 低 |
+| 0.8 | 修复 `mark_occupied`：加 `s_refcount[i] = 1` 保持语义一致 | page_frame_allocator.c | 低 |
+| 0.9 | 验证：boot、init_main、fork COW、exec、brk page fault 全流程 | 全项目 | 高 |
+
+---
+
+## Phase 1: Paging 子系统修复与优化
+
+### 当前问题
+
+| # | 问题 | 严重度 | 经典做法 |
+|---|------|--------|----------|
+| PAG-1 | **`map_range` 回滚死锁**：释放 `s_paging_lock` 后调 `jlos_paging_unmap`，后者又要拿同一把锁 | 🔴 Critical | 内部 `*_nolock` 变体 |
+| PAG-2 | **全局 `s_paging_lock`**：所有 context 的 map/unmap 抢同一把锁 | 🟡 High | Per-context lock |
+| PAG-3 | `access_ok` 每次调都拿全局锁遍历页表 | 🟡 High | Fast path: 地址范围检查 + present 即放行 |
+| PAG-4 | Kernel page table 每 context 都 clone 但实际可共享 | 🟢 Med | 让 `context_clone` 直接共享内核 PTs（当前已是这样，确认即可） |
+| PAG-5 | `context_destroy` 遍历 768 个 PDE（用户空间全扫描） | 🟢 Med | 优化：只遍历已映射 PDE（维护一个 used_pde_count） |
+| PAG-6 | 4MB PDE unmap 循环 1024 次 `page_frame_free` 每次拿锁 | 🟢 Med | 批量处理：一次锁 + 批量 refcount_dec |
+| PAG-7 | 无 page table slab cache → 每次 map 都 page_frame_malloc 单个 PT | 🟢 Med | 预分配 PT slab，批量分配 |
+| PAG-8 | COW page fault 的 refcount 查询拿到锁后又释放（`get_physical_addr` 拿锁 → 释放 → `change_flags` 又拿锁） | 🟢 Low | 减少锁次数，或在 handler 里加一次锁统一做 |
+
+### 实施清单
+
+| 序号 | 任务 | 涉及文件 | 复杂度 |
+|------|------|----------|--------|
+| 1.1 | 修复 `map_range` 回滚死锁：抽取 `unmap_nolock` 内部版本 | paging.c | 低 |
+| 1.2 | 把 `s_paging_lock` 移入 `paging_context_t` → per-context lock | paging.h + paging.c | 中 |
+| 1.3 | 重写 `access_ok` fast path：地址范围检查 → 若地址在用户空间内则先放行，不拿锁 | paging.c | 低 |
+| 1.4 | 4MB PDE unmap 优化：1 次锁 + 批量 refcount_dec（不再循环拿放锁） | paging.c | 低 |
+| 1.5 | `context_clone` 内核 PT 共享确认 + 注释 | paging.c | 极低 |
+| 1.6 | Page table slab cache：预分配 64 个 PT 的池，batch 分配/释放 | paging.c | 中 |
+| 1.7 | COW fault handler 锁合并：一次锁内完成 get_phys + refcount + change_flags/map | paging.c | 低 |
+| 1.8 | 验证：fork/exec/brk page fault/kernel map 全流程 | 全项目 | 高 |
+
+---
+
+## Phase 2: Memory Manager 升级
+
+### 当前问题
+
+| # | 问题 | 严重度 | 经典做法 |
+|---|------|--------|----------|
+| MM-1 | 全局 `s_mm_lock` → 多核瓶颈 | 🟡 High | Per-CPU freelists (SLUB style) |
+| MM-2 | `expand_heap` 逐页 `page_frame_malloc` 再 map → 慢 | 🟡 High | 从 buddy reserve_bulk 大块分配 |
+| MM-3 | 只有单一 manager，无 per-type cache | 🟢 Med | 多个 `kmem_cache`（task / fd / pipe 各一个） |
+| MM-4 | 全局 `jlos_active_memory_manager` → 无法多 manager 并存 | 🟢 Med | 改为显式传 self，保留 active 作为默认 |
+| MM-5 | 16B min alloc + 24B header → 小对象 50% 开销 | 🟢 Med | 调整 size classes 到常用尺寸（task≈128B, fd≈16B） |
+| MM-6 | 没有 per-CPU partial slab tracking | 🟢 Low | SLUB active/partial/full 概念 |
+
+### 实施清单
+
+| 序号 | 任务 | 涉及文件 | 复杂度 |
+|------|------|----------|--------|
+| 2.1 | 把 `expand_heap` 从逐页 malloc 改为 `page_frame_reserve_bulk` + 批量 map | memory_manager.c | 低 |
+| 2.2 | 把 `jlos_active_memory_manager` 从全局变量改为每-CPU 存储（为 Phase 4 预留） | memory_manager.c/h | 中 |
+| 2.3 | 实现 `kmem_cache`：固定-size 对象缓存（task_cache / fd_cache / pipe_cache） | 新建 kmem_cache.c/h | 中 |
+| 2.4 | `jlos_malloc` 改为先查 per-CPU freelist，miss 再走全局锁 | memory_manager.c | 中 |
+| 2.5 | 验证：所有 `jlos_malloc`/`jlos_free` 调用点兼容 | 全项目 | 中 |
+
+---
+
+## Phase 3: Multitask 调度器升级
+
+### 当前问题
+
+| # | 问题 | 严重度 | 经典做法 |
+|---|------|--------|----------|
+| MT-1 | **Zombie 清理 O(n²)**：每次 schedule 都双循环扫所有任务 | 🔴 Critical | Parent→children 双向链表 + O(1) reap |
+| MT-2 | **Zombie 清理 swap 后跳过元素**：倒序遍历 + swap 移除会跳过 | 🔴 Critical | 用链表代替数组，或正序遍历 |
+| MT-3 | **O(n) 调度选择**：4 层 × n 任务全扫 | 🟡 High | O(1) 或 O(log n) 选择 |
+| MT-4 | 静态 `tasks[JLOS_TASK_MAX_NUM]` 数组 → 256 上限 | 🟡 High | 动态数组 or 链表 |
+| MT-5 | O(n) pid lookup（wait_pid 循环扫 tasks） | 🟡 High | pid hash table |
+| MT-6 | 单全局 runqueue → 多核无 locality | 🟢 Low | per-CPU runqueue（留给 Phase 4） |
+| MT-7 | `exec` init_user 失败后继续赋 pid + 清 exit_code | 🟢 Low | 失败直接 return -1 |
+| MT-8 | `fork` 遍历 768 个 PDE（全空间），大部分不存在 | 🟢 Low | 只遍历已 present 的 PDE |
+
+### 实施清单
+
+| 序号 | 任务 | 涉及文件 | 复杂度 |
+|------|------|----------|--------|
+| 3.1 | Task struct 加 `children_head`, `parent`, `next_child`, `prev_child` → 建立父子链表 | multitask.h | 低 |
+| 3.2 | fork 时把 child 挂入 parent->children_head；exit 时从 children 链表摘除 | multitask.c | 低 |
+| 3.3 | Zombie 清理：只遍历 parent 的 children 链表，parent 死了就杀所有子 | multitask.c | 中 |
+| 3.4 | tasks 改动态数组 (realloc)，或保持数组但换 O(1) 移除逻辑 | multitask.c | 低 |
+| 3.5 | pid hash table (256 桶)：pid→task 直接定位，替换所有 tasks 循环扫 | multitask.c | 中 |
+| 3.6 | exec init_user 失败 → 直接 return -1，不赋值 pid/pid/exit_code | multitask.c | 低 |
+| 3.7 | fork COW: 只遍历 present PDE（加一个 present_bitmap 或在 loop 里提前 continue） | multitask.c | 低 |
+| 3.8 | wait_pid: 用 pid hash 找 task，不再循环扫 tasks | multitask.c | 低 |
+| 3.9 | 验证：fork/exec/wait_pid/zombie 全流程 | 全项目 | 高 |
+
+---
+
+## Phase 4: SMP 预留（多 CPU 准备）
+
+本阶段不实现 SMP，而是为 SMP 预留清晰的扩展点。当前单核实现中就把架构搭好，避免未来重写。
+
+| 序号 | 任务 | 涉及文件 | 复杂度 |
+|------|------|----------|--------|
+| 4.1 | PFA: per-CPU frame cache (order-0 batch refill/drain) | page_frame_allocator.c/h | 中 |
+| 4.2 | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位 | 低 |
+| 4.3 | MM: per-CPU freelist + batch drain to global | memory_manager.c | 中 |
+| 4.4 | Multitask: per-CPU runqueue + task->cpu + task->cpumask | multitask.h + multitask.c | 高 |
+| 4.5 | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()` | hal/cpu.h | 低 |
+| 4.6 | Spinlock: ticket lock 替换当前实现（为多核公平性） | hal/spinlock.c | 中 |
+
+---
+
+## 实施优先级
+
+| 优先级 | Phase | 任务 | 依赖 |
+|--------|-------|------|------|
+| **P0** | 0 | Buddy Page Frame Allocator | 无 |
+| **P0** | 1.1 | 修复 map_range 回滚死锁 | Phase 0 |
+| **P0** | 1.2 | Per-context paging lock | Phase 0 |
+| **P1** | 3.1-3.3 | Zombie O(1) 清理 + 父子链表 | 无（可独立） |
+| **P1** | 1.3-1.4 | access_ok fast path + 4MB PDE unmap | Phase 0 |
+| **P1** | 3.5 | pid hash table | 无 |
+| **P2** | 2.1 | expand_heap 大块分配 | Phase 0 |
+| **P2** | 1.6 | PT slab cache | Phase 0 |
+| **P2** | 2.3-2.4 | kmem_cache + per-CPU freelist | Phase 0 + 1 |
+| **P3** | 4.x | SMP 全部预留 | Phase 0-3 |
+
+---
+
+## 待实现功能（按经典路线图）
+
+| 编号 | 功能 | 模块 | 依赖 |
+|------|------|------|------|
+| F1 | 按需分页 (demand paging, 已实现 brk + stack) | paging.c | 无 |
+| F2 | COW 写时复制 (已实现) | paging.c + multitask.c | — |
+| F3 | 用户态 malloc/free | user | 依赖 brk（已完成） |
+| F4 | FAT32 完善 (mount/open/close/read/write/seek/readdir) | filesystem | 依赖块设备完善 |
+| F5 | open/close 系统调用 | syscall.c | 依赖 F4 |
+| F6 | ELF 用户态程序加载 | user | 依赖 F4 |
+| F7 | signal/kill 信号机制 | syscall.c + multitask.c | 无 |
+| F8 | 线程支持（共享地址空间） | multitask.c | 依赖 COW (F2) |
+| F9 | DHCP 自动获取 IP | net | 无 |
+| F10 | DNS 域名解析 | net | 依赖 F9 |
+| F11 | mmap 内存映射 | paging.c + syscall.c | 依赖 F4 |
+
+---
+
+## 已知遗留（低优先或需更大重构）
+
+| # | 问题 | 说明 |
+|---|------|------|
+| A1 | 用户态代码与内核混编 | 经典做法用户态独立 ELF + 加载器；当前靠 PTE_USER 共享 .text/.rodata；安全隔离性弱 |
+| A2 | 0~1MB 恒等映射残留 | GRUB 退出后不再需要，经典做法移除 |
+| A3 | boot_page_dir 内存未释放 | 切到内核页表后 4KB 无法回收 |
+| A4 | MLFQ 不 starvation-free | CFS weighted fair queuing 更经典但复杂度高；当前可接受 |
+| A5 | 任务表硬编码 256 上限 | Phase 3.4 改为动态数组 |
+
+---
+
+## 历史版本（v2.3 及以前，保留参考）
+
+### 已完成里程碑（历史）
+
+| 模块 | 完成项 | 验证 |
+|------|--------|------|
+| 虚拟内存 | 3:1 高半核分页 + 内核/用户地址空间隔离 + 页表深拷贝 | 动态映射，ring3 用户进程正常运行 |
+| 内存管理 | 动态物理内存探测（GRUB mmap） + 页帧分配器 + 低内存堆(0x50000) + 主堆(动态 4~64MB) + 16字节最小分配 | 支持不同物理内存大小，MMIO 保留区自动标记 |
+| 系统调用 | exit/fork/read/write/get_errno/get_pid/yield/sleep/wait_pid/brk/pipe/fd_close | per-thread errno + wait_pid 退出码 |
+| 多任务调度 | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 | 时间片轮转正常，交互型优先 |
+| 同步原语 | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量 | spinlock 关中断保护 |
+| IPC | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组) | FIFO 顺序，close/destroy 分离 |
+| 用户进程 | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork 用户栈复制 | Hello from ring3 + Wake up 验证通过 |
+
+### 已解决问题（历史）
 
 | 编号 | 问题 | 解决版本 | 修复方式 |
 |------|------|----------|----------|
@@ -58,310 +309,17 @@
 | — | 连续物理帧分配不验证碎片 | v2.2 | reserve_bulk 重写为遍历 bitmap 找真正连续空闲帧 |
 | — | 页帧分配器无 OOM 防护 | v2.2 | init_main 逐级回退 heap_size，极端情况 halt |
 
----
+### 开发日志
 
-## 已知问题与优化建议
+#### 2026-08-13（v2.4）
 
-### 架构级
+- 全面审计 PFA / Paging / MemoryManager / Multitask 四个子系统
+- 识别出 Phase 0-4 五级架构升级路线
+- 确立 Buddy PFA 为最高优先级基础设施重构
+- 确立 per-context lock、Zombie O(1) 清理、pid hash 等核心改进项
+- 更新计划至 v2.4
 
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| A1 | 用户态代码与内核混编 | 中 | `jlos_user_*` 函数和字符串字面量链接在 `.text/.rodata`（内核空间 0xC0xxxxxx），靠 `PTE_USER` 共享。经典做法是用户态代码单独编译为独立 ELF 加载到用户地址空间，当前方案隔离性弱 |
-| A2 | 0~1MB 恒等映射未移除 | 低 | 启动时映射的 0~1MB 恒等映射在内核运行后仍保留。对当前项目影响小（用户页表不复制低 3GB），但经典做法会移除 |
-| A3 | 具体架构代码边界 | 低 | 需持续检查 x86 代码不泄漏到 kernel 层，保持 HAL 抽象层纯净 |
-
-### 网络驱动
-
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| N1 | DHCP/DNS 未实现 | 低 | 当前 IP 硬编码，缺少自动获取和域名解析 |
-
-### 系统调用
-
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| S2 | syscall_write 每次 malloc/free | 低 | 每次 write 都 `jlos_malloc`/`jlos_free`，可用栈缓冲或预分配缓冲池优化 |
-
-### 内存管理
-
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| M3 | loader 启动页目录浪费 | 低 | `boot_page_dir` 占 4KB，切到内核页目录后不再使用但仍占用内存 |
-| M4 | jlos_paging_is_user_accessible 性能 | 低 | 每次检查遍历页表，无快速路径（已有 KERNEL_VIRTUAL_BASE 检查，可进一步优化） |
-
-### 多任务调度
-
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| T1 | 主线程 hlt 循环效率 | 低 | 主线程在 hlt 循环中，每个 PIT tick 都 save/restore main_thread_state，功能正确但略有浪费 |
-| T2 | sleep 精度受限 | 低 | sleep 基于 tick 计数，精度为 10ms（100Hz），不支持更精细睡眠 |
-| T3 | 非抢占式下任务不交替 | 低 | task_a/task_b 各跑完 10 次才切换，非抢占式下任务不主动让出 |
-
-### P0 - Bug / 正确性问题（必须修复）
-
-| 编号 | 问题 | 位置 | 影响 |
-|------|------|------|------|
-| B1 | **fork 时 brk 重置不完整** | multitask.c `jlos_process_fork` | 子进程 `brk_end = brk_start`，但父进程已扩展的 brk 区域的物理页未复制到子进程，访问会 page fault |
-| B2 | **exec 的 user_stack 清理不完整** | multitask.c `jlos_process_exec` | unmap 后物理帧未释放，多次 exec 耗尽内存 |
-| B3 | **interruptnumber 全局变量非原子** | interrupts_asm.s | 中断号写入和读取之间可能被另一个中断覆盖，极少数情况下 handler 收到错误中断号 |
-| B4 | **reserve_bulk 与 mark_occupied 竞态** | page_frame_allocator.c | reserve_bulk 释放锁后才更新 s_first_free_frame，低概率重复分配同一帧 |
-| B5 | **Makefile grub.cfg 重复追加** | Makefile `$(JLOS).iso` | 没有清理旧 grub.cfg，多次 make 导致 menuentry 重复 |
-
-### P1 - 代码质量问题
-
-| 编号 | 问题 | 位置 | 说明 |
-|------|------|------|------|
-| A10 | **JLOS_ARRAY_LIMIT_RANGE 宏优先级 bug** | types.h | `(idx) + 1 % (range)` 应为 `((idx) + 1) % (range)`，% 优先级高于 + |
-| A1 | **0~1MB 恒等映射残留** | paging.c `jlos_paging_initialize_kernel_paging` | GRUB 退出后不再需要，占用页表内存 + 安全隐患 |
-| A2 | **boot_page_dir 内存未释放** | loader.s | 切到内核页表后 4KB 无法回收 |
-| A3 | **fork 物理页 memcpy（非 COW）** | multitask.c | 用户栈所有物理页立即拷贝，内存翻倍开销 |
-| A4 | **syscall_write 每次 malloc/free** | syscall.c | 高频 write 时 malloc/free 开销大 |
-| A5 | **semaphore/mutex 无 timeout wait** | sync.c | wait 是无限阻塞，用户态无法实现带超时同步 |
-| A6 | **硬编码 4MB 内核栈** | loader.s `.bss` | 固定分配浪费物理内存，应改为页帧动态分配 |
-| A7 | **网络 IP 硬编码** | network.c | 换网络环境需改代码重编译 |
-| A8 | **ATA/FAT 调试 printf 残留** | ata.c, fat.c | 运行时输出污染 |
-| A9 | **任务表硬编码 256 上限** | multitask.h `jlos_task_t *tasks[256]` | 超过 256 任务时崩溃 |
-
-### P2 - 性能优化
-
-| 编号 | 问题 | 位置 | 说明 |
-|------|------|------|------|
-| P1 | **pipe 逐字节读写** | ipc.c | 4KB buffer 写满需要 4096 次 semaphore + mutex，改为批量可提升 10~100x |
-| P2 | **access_ok 每次遍历页表** | paging.c | 每个 syscall 都遍历页表，延迟增加 |
-| P3 | **网络初始化大量验证** | network.c | 每次启动都检查所有 handler 非空 + EtherType 匹配，可改为 assert |
-| P4 | **fork 立即 memcpy 所有页** | multitask.c | 即使子进程 exec 后也不需要，内存瞬时峰值高 |
-
-### P3 - 功能缺失（按经典路线图）
-
-| 编号 | 功能 | 模块 | 依赖 |
-|------|------|------|------|
-| F1 | 按需分页 (demand paging) | paging.c | 无 |
-| F2 | COW 写时复制 | multitask.c + paging.c | 依赖 F1 |
-| F3 | 用户态 malloc/free | user | 依赖 brk（已完成） |
-| F4 | FAT32 完善 (mount/open/close/read/write/seek/readdir) | filesystem | 依赖块设备完善 |
-| F5 | open/close 系统调用 | syscall.c | 依赖 F4 |
-| F6 | ELF 用户态程序加载 | user | 依赖 F4 |
-| F7 | signal/kill 信号机制 | syscall.c + multitask.c | 无 |
-| F8 | 线程支持（共享地址空间） | multitask.c | 依赖 COW (F2) |
-| F9 | DHCP 自动获取 IP | net | 无 |
-| F10 | DNS 域名解析 | net | 依赖 F9 |
-
----
-
-## 阶段一：虚拟内存管理（已完成核心，持续优化）
-
-**已完成**：
-
-- [x] x86 4KB 分页机制 + 页表/页目录管理
-- [x] CR3 切换 + 虚拟地址空间映射
-- [x] 3:1 高半核架构（内核 0xC0000000，用户 0-3GB）
-- [x] 低内存区域 cache disable 映射（DMA 一致性）
-- [x] 用户栈多页映射（64KB）到用户地址空间
-- [x] .text/.rodata PTE_USER 标志（ring3 syscall wrapper 可取指/读常量）
-- [x] 页表深拷贝（fork 时分配新页表，非共享）
-- [x] 动态物理内存探测（GRUB mmap 解析 + 保留区自动标记）
-- [x] 动态主堆大小（phys_end/4，夹在 4MB~64MB，4KB 对齐）
-- [x] 连续物理帧分配验证（reserve_bulk 重写，防止 MMIO 区间碎片）
-- [x] 页帧分配器 OOM 回退（逐级减半 heap_size 直到成功或 halt）
-- [x] access_ok 用户空间指针校验（copy_from_user / copy_to_user）
-
-**待优化**：
-
-- [ ] Page Fault 处理完善（区分非法访问 vs 合法缺页，如 brk 区域）
-- [ ] 写时复制（COW）fork 优化（当前 memcpy 物理页）
-- [ ] 按需分页（demand paging）
-- [ ] mmap 内存映射
-- [ ] 移除启动期 0~1MB 恒等映射（A2，对当前项目非必须）
-- [ ] 释放 boot_page_dir（M3）
-
----
-
-## 阶段二：系统调用接口（已完成核心，持续扩展）
-
-**已完成系统调用**：
-
-| 编号 | 名称 | 功能 | 状态 |
-|------|------|------|------|
-| 0 | EXIT | 退出进程 + exit_code | 已完成 |
-| 1 | FORK | 创建子进程 + 用户栈复制 | 已完成 |
-| 2 | READ | 读 fd（pipe） | 已完成 |
-| 3 | WRITE | 写 fd / 控制台输出（已修复 printf 漏洞） | 已完成 |
-| 4 | PRINTF | 打印字符串 | 已完成 |
-| 5 | GET_ERRNO | 获取线程级 errno | 已完成 |
-| 6 | GET_PID | 获取当前 PID | 已完成 |
-| 7 | YIELD | 主动让出 CPU | 已完成 |
-| 8 | SLEEP | 睡眠指定 tick | 已完成 |
-| 9 | DEBUG_TASKS | 打印任务列表 | 已完成 |
-| 10 | WAIT_PID | 等待子进程 + 退出码 + Zombie 释放 | 已完成 |
-| 11 | CREATE_PIPE | 创建管道 | 已完成 |
-| 12 | TASK_FD_CLOSE | 关闭文件描述符 + pipe 引用计数 destroy | 已完成 |
-| 13 | TASK_BRK | 用户堆动态扩展/收缩 | 已完成 |
-
-**已完成配套**：
-
-- [x] per-thread errno
-- [x] 用户空间指针校验（copy_from_user / copy_to_user）
-- [x] 错误码定义（SYSCALL_ENOMEM / EFAULT / ENINVAL / ENOSYS 等）
-- [x] 标准文件描述符预分配（fd 0=stdin, 1=stdout, 2=stderr）
-- [x] jlos_user_puts 栈缓冲拷贝（修复 .rodata 指针被 access_ok 拒绝问题）
-- [x] syscall_write printf 格式化漏洞修复（S1）
-- [x] fd 类型显式判断替代魔法数字（S3）
-- [x] pipe close 引用计数 + destroy 完整实现（S4）
-
-**待扩展**：
-
-- [ ] open/close 系统调用（依赖 FAT32）
-- [ ] 用户态 malloc/free（依赖 brk）
-- [ ] signal/kill 信号机制
-- [ ] 用户态同步原语接口（sem/mutex 系统调用）
-- [ ] 用户态代码独立编译为 ELF（A1）
-
----
-
-## 阶段三：多任务系统增强（已完成核心，持续扩展）
-
-**已完成**：
-
-- [x] MLFQ 四级反馈队列调度器（Level 0-3，时间片 2/4/8/16 ticks）
-- [x] 老化升级机制（200 ticks 未运行自动升级）
-- [x] 抢占式/协作式宏开关（KERNEL_CONFIG_PREEMPTIVE）
-- [x] 任务状态机（READY/RUNNING/SLEEPING/WAITING/ZOMBIE）
-- [x] 集中状态转换宏（JLOS_TASK_SET_READY/RUNNING/ZOMBIE 等）
-- [x] 信号量 + 互斥锁（可重入 + 所有权传递 + spinlock 保护）
-- [x] 条件变量（cond_wait/signal/broadcast）
-- [x] 管道（堆分配环形缓冲 + close/destroy 分离 + 引用计数）
-- [x] 消息队列（柔性数组 + FIFO 顺序）
-- [x] ring3 用户进程（TSS 特权级切换 + 用户栈多页映射）
-- [x] sleep/wake 机制（基于 tick 计数）
-- [x] Zombie 进程回收（wait_pid 后释放 PCB）
-- [x] fork 用户栈复制（分配新物理帧 + memcpy）
-
-**待扩展**：
-
-- [ ] 线程支持（共享地址空间）
-- [ ] 用户态同步原语接口
-- [ ] 定时器（timer_create/timer_settime）
-- [ ] 死锁检测（可选）
-
----
-
-## 阶段四：FAT32 文件系统完善（待开始）
-
-**当前状态**：仅基础 FAT32 结构定义（fat.c 有简陋读取逻辑）
-
-**目标 API**：
-
-```c
-mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
-```
-
-**配套**：文件权限 + 目录遍历 + 缓冲区缓存
-
----
-
-## 阶段五：网络驱动优化（部分完成）
-
-**已完成协议**：ARP IPv4 ICMP UDP TCP HTTP
-
-**待完成**：
-
-- [ ] DHCP（自动获取 IP）
-- [ ] DNS（域名解析）
-
-**性能优化**：
-
-- DMA 减少 CPU 拷贝 + 中断合并 + 零拷贝 + 缓冲池预分配
-
----
-
-## 阶段六：高级特性（低优先）
-
-- slab / 伙伴系统分配器
-- 统一设备驱动框架
-- 电源管理
-- 安全加固
-
----
-
-## 实施优先级清单
-
-| 优先级 | 任务 | 状态 |
-|--------|------|------|
-| 高 | 1. 3:1 高半核分页 + 虚拟内存基础 | 已完成 |
-| 高 | 2. 进程管理增强（PCB + 状态机 + MLFQ） | 已完成 |
-| 高 | 3. 系统调用核心（exit/fork/read/write/wait_pid） | 已完成 |
-| 高 | 4. 同步原语（信号量/互斥锁/条件变量） | 已完成 |
-| 高 | 5. IPC（管道/消息队列） | 已完成 |
-| 高 | 6. ring3 用户进程 + TSS 特权级切换 | 已完成 |
-| 高 | 7. 动态内存探测 + 页表深拷贝 + fork 用户栈 | 已完成 |
-| 高 | 8. syscall_write 漏洞修复 + pipe close 完整实现 | 已完成 |
-| 中 | 9. COW 写时复制 + 用户态 brk 完善 | 待开始 |
-| 中 | 10. 用户态 malloc/free + 按需分页 + 线程支持 | 待开始 |
-| 中 | 11. 用户态同步原语 + signal/kill + 定时器 + mmap | 待开始 |
-| 中 | 12. FAT32 文件系统 | 待开始 |
-| 中 | 13. 网络性能优化 + DHCP/DNS | 待开始 |
-| 低 | 14. 用户态代码独立编译 ELF + 移除恒等映射 | 待开始 |
-| 低 | 15. 磁盘交换机制 | 待开始 |
-| 低 | 16. slab/伙伴系统 + 设备驱动框架 | 待开始 |
-
----
-
-## 实施路线图（v2.3）
-
-### Phase 1：Bug 修复 & 代码清理（立即执行）
-
-| 序号 | 编号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|------|----------|--------|
-| 1 | A10 | JLOS_ARRAY_LIMIT_RANGE 宏优先级修复 | types.h | 极低 |
-| 2 | B5 | Makefile grub.cfg 重复追加 | Makefile | 极低 |
-| 3 | B1 | fork 时 brk 重置不完整 | multitask.c | 中 |
-| 4 | B2 | exec 的 user_stack 物理帧泄漏 | multitask.c | 低 |
-| 5 | A8 | ATA/FAT 调试 printf 清理 | ata.c, fat.c | 极低 |
-
-### Phase 2：内存与性能优化（短期）
-
-| 序号 | 编号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|------|----------|--------|
-| 6 | A1 | 移除 0~1MB 恒等映射 | paging.c | 低 |
-| 7 | A2 | 释放 boot_page_dir 内存 | loader.s + kernel.c | 低 |
-| 8 | A4 | syscall_write 栈缓冲优化 | syscall.c | 低 |
-| 9 | P1 | pipe 批量读写 | ipc.c | 中 |
-| 10 | P3 | 网络验证改为 assert 或条件编译 | network.c | 低 |
-
-### Phase 3：核心架构升级（中期）
-
-| 序号 | 编号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|------|----------|--------|
-| 11 | A3+F2 | COW 写时复制 | paging.c + multitask.c | 高 |
-| 12 | F1 | 按需分页 (brk 区域) | paging.c | 中 |
-| 13 | F3 | 用户态 malloc/free（基于 brk） | 新建 user/heap.c | 中 |
-| 14 | A7 | 网络 IP 配置化 | network.c | 低 |
-| 15 | A6 | 动态内核栈大小 | loader.s + kernel.c | 中 |
-
-### Phase 4：文件系统完善（中-长期）
-
-| 序号 | 编号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|------|----------|--------|
-| 16 | F4 | FAT32 mount + 路径解析 | filesystem/ | 高 |
-| 17 | F5 | open/close/read/write 系统调用 | syscall.c | 中 |
-| 18 | F4+ | FAT32 seek/create/delete/readdir | filesystem/ | 高 |
-
-### Phase 5：高级特性（长期）
-
-| 序号 | 编号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|------|----------|--------|
-| 19 | F6 | ELF 用户态程序加载 | user/ | 高 |
-| 20 | F7 | signal/kill 信号机制 | syscall.c + multitask.c | 高 |
-| 21 | F8 | 线程支持（共享地址空间） | multitask.c | 高 |
-| 22 | F9 | DHCP 自动获取 IP | net/ | 中 |
-| 23 | F10 | DNS 域名解析 | net/ | 高 |
-| 24 | A9 | 任务表动态扩展 | multitask.c/h | 中 |
-
----
-
-## 开发日志
-
-### 2026-08-11（v2.3）
+#### 2026-08-11（v2.3）
 
 - 完整系统扫描：52 个 C 文件 + 2 个汇编 + 50 个头文件全覆盖
 - 发现并分类 5 个 P0 Bug、10 个 P1 代码质量问题、4 个 P2 性能问题、10 个 P3 功能缺失
@@ -372,7 +330,7 @@ mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
 - 制定 Phase 1~5 实施路线图
 - 更新计划至 v2.3
 
-### 2026-08-11（v2.2）
+#### 2026-08-11（v2.2）
 
 - 动态物理内存探测完成：GRUB mmap 解析 + MMIO 保留区自动标记 + 动态主堆大小（phys_end/4，夹 4MB~64MB）
 - 栈切换 bug 修复：loader.s 用 .boot 段全局变量保存 multiboot 参数，防止切栈后参数丢失
@@ -384,7 +342,7 @@ mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
 - 页表深拷贝：fork 时分配新页表，不再共享 PTE
 - 更新计划至 v2.2
 
-### 2026-08-09
+#### 2026-08-09
 
 - 3:1 高半核重构完成：内核映射 0xC0000000，用户空间 0-3GB
 - ring3 用户进程完整运行：TSS 特权级切换、用户栈映射、syscall wrapper
@@ -394,7 +352,7 @@ mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
 - 清理全部调试代码（串口标记、DBG 宏、临时函数）
 - 更新计划至 v2.1
 
-### 2026-07-31
+#### 2026-07-31
 
 - 阶段三多任务系统增强完成：MLFQ 调度器、状态机、同步原语、IPC 全部实现
 - 全项目结构体成员 m_ 前缀去除重构完成（71 文件）
@@ -402,12 +360,12 @@ mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
 - per-thread errno + wait_pid 退出码实现
 - 更新计划至 v2.0
 
-### 2026-07-01
+#### 2026-07-01
 
 - 网络栈全部打通：ARP/IPv4/ICMP/UDP/TCP/HTTP 全部验证通过
 - TCP 序列号三次握手对齐 Bug 修复完成，curl -v 原生 HTTP/1.1 200 OK
 
-### 2026-06-23
+#### 2026-06-23
 
 - 初始化优化计划
 - 启动阶段一：虚拟内存管理
@@ -420,3 +378,5 @@ mount/unmount -> open/close -> read/write/seek -> create/delete -> readdir
 2. OSDEV Wiki：<https://wiki.osdev.org/>
 3. 《Operating Systems: Three Easy Pieces》
 4. 《Modern Operating Systems》 - Andrew Tanenbaum
+5. Linux kernel source (buddy allocator, SLUB, scheduler)
+6. FreeBSD VM system design
