@@ -116,31 +116,27 @@ void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_
 
 void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
 {
-    uint32_t phys_end = jlos_device_physical_memory_end;
-    uint32_t heap_size = (phys_end - KERNEL_MEMORY_PHYSICAL_START) / 4;
-    if (heap_size < KERNEL_MAIN_MEMORY_MIN_SIZE) {
-        heap_size = KERNEL_MAIN_MEMORY_MIN_SIZE;
-    }
-    if (heap_size > KERNEL_MAIN_MEMORY_MAX_SIZE) {
-        heap_size = KERNEL_MAIN_MEMORY_MAX_SIZE;
-    }
-    heap_size &= ~(JLOS_PAGE_FRAME_SIZE - 1);
-    uint8_t *heap_start = NULL;
-    while (heap_size >= KERNEL_MAIN_MEMORY_MIN_SIZE) {
-        heap_start = (uint8_t *)jlos_page_frame_reserve_bulk(heap_size / JLOS_PAGE_FRAME_SIZE);
-        if (heap_start) {
-            break;
+    uint32_t initial_pages = KERNEL_MAIN_MEMORY_MIN_SIZE / JLOS_PAGE_FRAME_SIZE;
+    uint8_t *heap_start = (uint8_t *)KERNEL_HEAP_VIRT_BASE;
+
+    for (uint32_t i = 0; i < initial_pages; i++) {
+        void *pf = jlos_page_frame_malloc();
+        if (!pf) {
+            printk("out of memory: initial heap page %u / %u\n", i, initial_pages);
+            for (;;) {
+                jlos_hal_halt();
+            }
         }
-        heap_size /= 2;
-        heap_size &= ~(JLOS_PAGE_FRAME_SIZE - 1);
-    }
-    if (!heap_start) {
-        printk("out of memory: main heap allocation failed\n");
-        for (;;) {
-            jlos_hal_halt();
+        uint32_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
+        if (!jlos_paging_map(jlos_active_paging_context, va, (uint32_t)VIRT_TO_PHYS(pf), JLOS_PTE_KERNEL_RW)) {
+            printk("out of memory: paging map faild at page %u\n", i);
+            jlos_page_frame_free(pf);
+            for (;;) {
+                jlos_hal_halt();
+            }
         }
     }
-    jlos_memory_manager_init(self, heap_start, heap_size);
+    jlos_memory_manager_init(self, heap_start, KERNEL_MAIN_MEMORY_MIN_SIZE);
 }
 
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self)

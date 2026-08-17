@@ -178,7 +178,6 @@ typedef struct {
 ```text
 页帧分配器（page_frame_allocator.c）
 ├── 位图：每 bit 代表 1 个物理页帧（4KB）
-├── s_first_free_frame：跳过已分配的低地址帧
 ├── 32-bit word 扫描：每次检查 32 帧
 │   ├── word == 0xFFFFFFFF → 整字跳过
 │   └── __builtin_ctz(~word) → O(1) 定位第一个空闲帧

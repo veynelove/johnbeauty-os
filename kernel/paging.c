@@ -12,6 +12,8 @@ extern jlos_task_t *g_current_task_ptr;
 jlos_paging_context_t *jlos_active_paging_context = NULL;
 jlos_paging_context_t s_kernel_paging_context;
 
+static page_table_alloc_fn s_page_table_alloc = NULL;
+
 static jlos_spinlock_t s_paging_lock = JLOS_SPINLOCK_INIT;
 
 void jlos_paging_context_init(jlos_paging_context_t *self)
@@ -104,7 +106,7 @@ bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_
         return false;
     }
     if (!self->page_dir) {
-        self->page_dir = jlos_page_frame_malloc();
+        self->page_dir = s_page_table_alloc ? s_page_table_alloc() : jlos_page_frame_malloc();
         if (!self->page_dir) {
             return false;
         }
@@ -126,7 +128,7 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
     uint32_t physical_addr_start, size_t size, uint32_t flags)
 {
     if (!self->page_dir) {
-        self->page_dir = jlos_page_frame_malloc();
+        self->page_dir = s_page_table_alloc ? s_page_table_alloc() : jlos_page_frame_malloc();
         if (!self->page_dir) {
             return false;
         }
@@ -146,7 +148,7 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
         if (*pde & JLOS_PDE_PRESENT) {
             page_table = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
         } else {
-            page_table = jlos_page_frame_malloc();
+            page_table = s_page_table_alloc ? s_page_table_alloc() : jlos_page_frame_malloc();
             if (!page_table) {
                 jlos_spin_unlock_irqrestore(&s_paging_lock, fl);
                 for (uint32_t i = 0; i < pages_done; i++) {
@@ -340,16 +342,15 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     jlos_spin_unlock_irqrestore(&s_paging_lock, fl);
 }
 
-void jlos_paging_initialize_kernel_paging(void)
+void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn)
 {
+    s_page_table_alloc = alloc_fn;
     jlos_paging_context_init(&s_kernel_paging_context);
-
-    /* 恒等映射 0~1MB：低内存 BIOS/VGA/GRUB multiboot_info. 0-1mb，用PHYS_TO_VIRT()访问，不再使用恒等映射" */
     
     /* 高半核：0xC0000000+ → PA, 覆盖全部物理内存 (限制在 1GB 内核空间内) */
     uint32_t map_size = jlos_device_physical_memory_end;
-    if (map_size > KERNEL_SPACE_SIZE) {
-        map_size = KERNEL_SPACE_SIZE;
+    if (map_size > KERNEL_DIRECT_MAP_SIZE) {
+        map_size = KERNEL_DIRECT_MAP_SIZE;
     }
     jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE,
         0, map_size, JLOS_PTE_KERNEL_RW);
@@ -366,6 +367,7 @@ void jlos_paging_initialize_kernel_paging(void)
     }
 
     jlos_paging_enable(&s_kernel_paging_context);
+    s_page_table_alloc = NULL;
 }
 
 bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual_addr, uint32_t len)

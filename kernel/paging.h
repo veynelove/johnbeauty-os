@@ -47,6 +47,9 @@
 #define KERNEL_SPACE_SIZE               0x40000000
 #define KERNEL_PHYSICAL_MAX             KERNEL_SPACE_SIZE
 
+#define KERNEL_DIRECT_MAP_SIZE          0x38000000
+#define KERNEL_HEAP_VIRT_BASE           (KERNEL_VIRTUAL_BASE + KERNEL_DIRECT_MAP_SIZE)
+
 #define VIRT_TO_PHYS(addr)          ((uint32_t)(addr) - KERNEL_VIRTUAL_BASE)
 #define PHYS_TO_VIRT(addr)          ((uint32_t)(addr) + KERNEL_VIRTUAL_BASE)
 
@@ -60,6 +63,8 @@
 
 typedef uint32_t jlos_page_table_entry_t;
 typedef uint32_t jlos_page_dir_entry_t;
+
+typedef void *(*page_table_alloc_fn)(void);
 
 typedef struct {
     jlos_page_table_entry_t entries[JLOS_PAGE_TABLE_ENTRIES];
@@ -92,7 +97,7 @@ void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr
 void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
     uint32_t flags);
 
-void jlos_paging_initialize_kernel_paging(void);
+void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn);
 bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual_addr, uint32_t len);
 
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context);

@@ -55,8 +55,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
 
     jlos_device_init(multiboot_structure);
-    jlos_page_frame_allocator_init(VIRT_TO_PHYS(kernel_end));
-    jlos_paging_initialize_kernel_paging();
+    jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
+    jlos_paging_initialize_kernel_paging(jlos_pfa_boot_alloc_page);
+    jlos_page_frame_allocator_init();
     printf("paging initialized\n");
 
     uint8_t* low_memory_heap = (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START);
@@ -118,6 +119,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     hard_driver_test();
     http_server_test(&network_stack->tcp);
     udp_server_test(&network_stack->udp);
+#if KERNEL_CONFIG_DEBUG_MEMORY
+    jlos_page_frame_print_buddy();
+#endif
 #endif
 
     for (;;) {
