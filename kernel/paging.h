@@ -3,6 +3,7 @@
 
 #include <common/types.h>
 #include <hal/irq.h>
+#include <hal/spinlock.h>
 
 #define JLOS_PAGE_SIZE                              4096
 #define JLOS_PAGE_TABLE_ENTRIES                     1024
@@ -77,6 +78,7 @@ typedef struct {
 typedef struct jlos_paging_context {
     jlos_page_dir_t *page_dir;
     uint32_t num_page_tables;
+    jlos_spinlock_t lock;
 } jlos_paging_context_t;
 
 extern jlos_paging_context_t *jlos_active_paging_context;

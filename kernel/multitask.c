@@ -259,6 +259,9 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
             break;
         }
     }
+    if (g_current_task_ptr == task) {
+        g_current_task_ptr = NULL;
+    }
     jlos_free(task);
 }
 
@@ -334,6 +337,7 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
             continue;
         }
         if (t == g_current_task_ptr) {
+            g_current_task_ptr = NULL;
             continue;
         }
         if (!t->is_user_process) {

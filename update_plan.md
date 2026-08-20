@@ -1,6 +1,6 @@
 # JohnBeauty OS 内核架构升级计划
 
-版本: v2.4 | 日期: 2026-08-13 | 作者: JohnLove
+版本: v2.5 | 日期: 2026-08-18 | 作者: JohnLove
 
 ---
 
@@ -26,7 +26,7 @@
 | TCP | 完整状态机 + 三次握手/四次挥手 + SYN/FIN 序列号处理 | curl 直连成功 |
 | HTTP | HTTP/1.1 响应 + Content-Length + 正确 header | curl -v 原生解析 200 OK |
 | 虚拟内存 | 3:1 高半核分页 + 内核/用户地址空间隔离 + 页表深拷贝 | 动态映射，ring3 用户进程正常运行 |
-| 内存管理 | 动态物理内存探测（GRUB mmap） + 页帧分配器 + 低内存堆(0x50000) + 主堆(动态 4~64MB) + 16字节最小分配 | 支持不同物理内存大小，MMIO 保留区自动标记 |
+| 内存管理 | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 (DIRECT_MAP=896MB) | 256MB QEMU 全流程通过 |
 | 系统调用 | exit/fork/read/write/get_errno/get_pid/yield/sleep/wait_pid/brk/pipe/fd_close | per-thread errno + wait_pid 退出码 |
 | 多任务调度 | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 | 时间片轮转正常，交互型优先 |
 | 同步原语 | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量 | spinlock 关中断保护 |
@@ -35,132 +35,96 @@
 
 ---
 
-## 架构升级总览（v2.4 核心）
+## 架构升级总览（v2.5 核心）
 
 当前系统四个基础子系统（PFA / Paging / MemoryManager / Multitask）存在大量非经典做法和性能瓶颈。本计划按**依赖顺序**从底层向上逐层重构，使内核达到经典操作系统教科书级别的实现质量，同时为 SMP 预留清晰的扩展点。
 
 ```
 依赖关系：
 
-Phase 0: Buddy PFA  ←────────────────────────────────────┐
-Phase 1: Paging 修复  ←── 依赖 PFA                       │
-Phase 2: Memory Manager 升级 ←── 依赖 PFA + Paging        │
-Phase 3: Multitask 升级 ←── 依赖 PFA + Paging + MM        │
-Phase 4: SMP 预留  ←── 依赖全部                          │
-                                                         │
-                    ─── 先修 BUG，再做优化 ───             │
-                    ─── 底层改好，上层才好改 ───            │
+Phase 0: Buddy PFA ✅  ←──────────────────────────────────┐
+Phase 1: Paging 修复  ←── 依赖 PFA                         │
+Phase 2: Memory Manager 升级 ←── 依赖 PFA + Paging          │
+Phase 3: Multitask 升级 ←── 依赖 PFA + Paging + MM          │
+Phase 4: SMP 预留  ←── 依赖全部                              │
+                                                             │
+                    ─── 先修 BUG，再做优化 ───               │
+                    ─── 底层改好，上层才好改 ───              │
 ```
 
 ---
 
-## Phase 0: Buddy Page Frame Allocator（最高优先级）
+## Phase 0: Buddy Page Frame Allocator ✅ 已完成
 
-### 当前问题
+### 实施结果
 
-| # | 问题 | 严重度 | 经典做法 |
-|---|------|--------|----------|
-| PFA-1 | O(N) bitmap 线性扫描，free 后不合并邻居帧 → 碎片化 | 🔴 Critical | Buddy allocator + merge |
-| PFA-2 | reserve_bulk O(N×M) 找连续帧 + 与 malloc 扫描逻辑不统一 | 🔴 Critical | Buddy split from high order |
-| PFA-3 | `mark_occupied` 只设 bitmap 不设 refcount，语义含糊 | 🟡 | 统一 refcount=1 标记 |
-| PFA-4 | `first_free_frame` 只单帧推进，reserve_bulk 不推进 | 🟡 | 由 buddy free_area 完全替代 |
-| PFA-5 | 全局单 spinlock → 多核瓶颈 | 🟢 暂不处理 | 留给 Phase 4 per-CPU cache |
+| 项 | 状态 | 说明 |
+|----|------|------|
+| Buddy 分配器 (MAX_ORDER=10, free_area[0..10]) | ✅ | 空闲链表节点嵌入物理帧前 8 字节 |
+| Bootstrap Allocator (boot_alloc) | ✅ | 按字节分配，page_alloc 为薄 wrapper |
+| 两阶段初始化 (boot_alloc → paging → PFA init) | ✅ | 经典方案 A |
+| 元数据按字节分配 (bitmap/refcount/buddy_order) | ✅ | 不再固定 1 页，按实际大小 |
+| mark_occupied 语义统一 | ✅ | bitmap=1 + refcount=1 + buddy_order=INVALID |
+| reserve_bulk 从 buddy 分配 | ✅ | 修复 mark_reserve 循环变量 bug (frame+i) |
+| Linux 风格虚拟布局 | ✅ | DIRECT_MAP_SIZE=896MB, HEAP_BASE=0xF8000000 |
+| 内核堆逐帧映射 | ✅ | init_main + expand_heap 同构 (物理散、虚拟连) |
+| spinlock 保护 | ✅ | s_pfa_lock |
+| 验证 | ✅ | 256MB QEMU 全流程通过: ring3 + fork COW + 网络 + 多任务 |
 
-### 设计方案
+### 已知遗留
 
-```
-数据结构：
-  s_bitmap[frame/8]   → 1=reserved(内核/MMIO), 0=buddy pool
-  s_refcount[frame]   → PTE 引用计数 (COW 用)
-  s_free_area[0..MAX_ORDER] → 每个 order 一条空闲链表
-
-order: 0=1页, 1=2页, 2=4页, ..., 10=1024页=4MB
-
-空闲链表节点嵌入物理帧本身：
-  struct free_node { free_node *next; uint32_t frame; }
-  节点放在空闲块的第一个物理帧的前 8 字节里（利用空闲内存）
-
-分配流程 (page_frame_malloc / reserve_bulk):
-  1. order = (size == 1) ? 0 : ceil(log2(size))
-  2. 从 s_free_area[order] 取头节点 → O(1)
-  3. 没有？向高 order 借 → split → 剩余挂回低 order
-  4. 标记所有帧: refcount=1, bitmap 保持 0
-  5. 返回首帧虚拟地址
-
-释放流程 (refcount_dec → 归 0):
-  1. 找到 buddy = frame ^ (1 << order)
-  2. 判断 buddy 可合并: bitmap[buddy] == 0 && refcount[buddy] == 0
-  3. 合并成大一块 → 递归向上
-  4. 最终挂回 s_free_area[final_order]
-
-reserve_bulk 流程 (内核堆预留):
-  1. order = ceil(log2(num_frames))
-  2. 跟 malloc 一样从 buddy 分配
-  3. 标记所有帧 bitmap=1 (reserved, 永不归还)
-  4. 返回虚拟地址
-
-初始化:
-  1. 同现有 init: 标记 kernel/bitmap/MMIO/boot 帧
-  2. 剩余帧按 order 分块，挂入 s_free_area[]
-     (从高 order 开始切，把能凑成大块的凑大块)
-```
-
-### 接口变更
-
-```c
-// 保持所有现有接口签名不变！
-void *jlos_page_frame_malloc(void);       // 内部改为从 free_area[0] 取
-void jlos_page_frame_free(void *addr);    // 内部改为 refcount_dec → 归 0 时 buddy_free
-void *jlos_page_frame_reserve_bulk(uint32_t num_frames);  // 内部改为 order=ceil(log2(n)) + 标记 reserved
-void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end);  // 保持不变
-void jlos_page_frame_refcount_inc/dec/get;  // 保持不变
-```
-
-**关键约束**：所有上层调用者（paging.c / memory_manager.c / multitask.c）不需要改任何代码。
-
-### 实施清单
-
-| 序号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|----------|--------|
-| 0.1 | 定义 `MAX_ORDER` (建议 10 = 1024 页) + `free_area[]` 数组 + `free_node` 结构 | page_frame_allocator.h | 低 |
-| 0.2 | 实现 buddy `split_block` / `merge_block` / `buddy_alloc` / `buddy_free` | page_frame_allocator.c | 中 |
-| 0.3 | 重写 `page_frame_allocator_init`：空闲帧按 order 分块挂链表 | page_frame_allocator.c | 中 |
-| 0.4 | 重写 `page_frame_malloc`：从 free_area[0] 取，无则 split | page_frame_allocator.c | 低 |
-| 0.5 | 重写 `page_frame_reserve_bulk`：order=ceil(log2(n))，分配后 bitmap=1 标记 | page_frame_allocator.c | 低 |
-| 0.6 | 修改 `refcount_dec`：归 0 时调 buddy_free 合并 | page_frame_allocator.c | 低 |
-| 0.7 | 删除 `first_free_frame` 相关所有代码 | page_frame_allocator.c | 低 |
-| 0.8 | 修复 `mark_occupied`：加 `s_refcount[i] = 1` 保持语义一致 | page_frame_allocator.c | 低 |
-| 0.9 | 验证：boot、init_main、fork COW、exec、brk page fault 全流程 | 全项目 | 高 |
+| # | 问题 | 说明 | 优先级 |
+|---|------|------|--------|
+| PFA-R1 | 全局单 spinlock → 多核瓶颈 | 留给 Phase 4 per-CPU cache | 低 |
+| PFA-R2 | boot_alloc 用完不释放指针 | s_boot_heap_ptr 后续不再被引用，无实际影响 | 极低 |
 
 ---
 
 ## Phase 1: Paging 子系统修复与优化
 
-### 当前问题
+### 已完成修复（v2.5 扫描确认）
 
-| # | 问题 | 严重度 | 经典做法 |
-|---|------|--------|----------|
-| PAG-1 | **`map_range` 回滚死锁**：释放 `s_paging_lock` 后调 `jlos_paging_unmap`，后者又要拿同一把锁 | 🔴 Critical | 内部 `*_nolock` 变体 |
-| PAG-2 | **全局 `s_paging_lock`**：所有 context 的 map/unmap 抢同一把锁 | 🟡 High | Per-context lock |
-| PAG-3 | `access_ok` 每次调都拿全局锁遍历页表 | 🟡 High | Fast path: 地址范围检查 + present 即放行 |
-| PAG-4 | Kernel page table 每 context 都 clone 但实际可共享 | 🟢 Med | 让 `context_clone` 直接共享内核 PTs（当前已是这样，确认即可） |
-| PAG-5 | `context_destroy` 遍历 768 个 PDE（用户空间全扫描） | 🟢 Med | 优化：只遍历已映射 PDE（维护一个 used_pde_count） |
-| PAG-6 | 4MB PDE unmap 循环 1024 次 `page_frame_free` 每次拿锁 | 🟢 Med | 批量处理：一次锁 + 批量 refcount_dec |
-| PAG-7 | 无 page table slab cache → 每次 map 都 page_frame_malloc 单个 PT | 🟢 Med | 预分配 PT slab，批量分配 |
-| PAG-8 | COW page fault 的 refcount 查询拿到锁后又释放（`get_physical_addr` 拿锁 → 释放 → `change_flags` 又拿锁） | 🟢 Low | 减少锁次数，或在 handler 里加一次锁统一做 |
+| # | 项 | 状态 | 位置 |
+|---|----|------|------|
+| PAG-D1 | PSE 4MB flag 保留 (change_flags_1 保留 PS 位) | ✅ | paging.c L295-300 |
+| PAG-D2 | TLB 刷新策略 (非 active context 不刷, active 按 threshold 批量) | ✅ | paging.c L177-192 |
+| PAG-D3 | Boot allocator 集成 (paging_init 接收 alloc_fn) | ✅ | paging.c L345-371 |
+| PAG-D4 | Linux 风格虚拟布局 (DIRECT_MAP_SIZE=896MB) | ✅ | paging.h L50-51 |
+| PAG-D5 | 内核段权限分离 (.text RO, .data/.bss RW) | ✅ | paging.c L358-367 |
+| PAG-D6 | access_ok 地址范围 fast check | ✅ | paging.c L379 |
 
-### 实施清单
+### 当前问题（2026-08-18 完整扫描）
 
-| 序号 | 任务 | 涉及文件 | 复杂度 |
-|------|------|----------|--------|
-| 1.1 | 修复 `map_range` 回滚死锁：抽取 `unmap_nolock` 内部版本 | paging.c | 低 |
-| 1.2 | 把 `s_paging_lock` 移入 `paging_context_t` → per-context lock | paging.h + paging.c | 中 |
-| 1.3 | 重写 `access_ok` fast path：地址范围检查 → 若地址在用户空间内则先放行，不拿锁 | paging.c | 低 |
-| 1.4 | 4MB PDE unmap 优化：1 次锁 + 批量 refcount_dec（不再循环拿放锁） | paging.c | 低 |
-| 1.5 | `context_clone` 内核 PT 共享确认 + 注释 | paging.c | 极低 |
-| 1.6 | Page table slab cache：预分配 64 个 PT 的池，batch 分配/释放 | paging.c | 中 |
-| 1.7 | COW fault handler 锁合并：一次锁内完成 get_phys + refcount + change_flags/map | paging.c | 低 |
-| 1.8 | 验证：fork/exec/brk page fault/kernel map 全流程 | 全项目 | 高 |
+| # | 问题 | 严重度 | 经典做法 | 现状 |
+|---|------|--------|----------|------|
+| PAG-1 | **map_range 回滚低效**：失败回滚时释放锁 → 循环调 unmap 每次重新拿锁 | 🟡 High | 抽取 unmap_nolock 内部版本，锁内回滚 | 非 deadlock（已释放锁），但每次 unmap 独立拿/放锁，回滚 N 页 = 2N 次 lock/unlock |
+| PAG-2 | **全局 s_paging_lock**：所有 context 的 map/unmap 抢同一把锁 | 🟡 High | Per-context lock | L17 全局锁，所有操作共用 |
+| PAG-3 | **access_ok 仍遍历页表**：有 fast check 但之后仍拿锁遍历所有 PTE 检查 USER 位 | 🟡 High | 仅范围检查即放行，MMU 强制权限 | L382-408 拿锁遍历，应信任 MMU |
+| PAG-4 | **context_clone 深拷贝内核 4KB PT**：内核 4KB PDE 被逐个 malloc+memcpy，而非共享 | 🔴 Critical | 内核 PDE 直接共享 (浅拷贝) | L91-98 对 4KB 内核 PDE 深拷贝，浪费内存 + 破坏一致性 |
+| PAG-5 | **context_destroy 遍历全部 1024 PDE** | 🟢 Med | 维护 used_pde_count | L31 遍历 1024 项 |
+| PAG-6 | **4MB PDE unmap 循环 1024 次 free**：每次调 page_frame_free → refcount_dec → 拿 PFA 锁 | 🟡 High | 1 次锁 + 批量 refcount_dec | L212-213 循环 1024 次独立 free |
+| PAG-7 | **无 page table slab cache** | 🟢 Med | 预分配 PT 池 | 每次 map 都 page_frame_malloc 单个 PT |
+| PAG-8 | **COW fault handler 多次锁**：get_phys(锁) → refcount_get(锁) → change_flags/map(锁) = 3~4 次 | 🟡 High | 一次锁内完成 | L483-495 三次独立 lock/unlock |
+| **PAG-9** | **context_clone malloc 失败静默跳过**：PT 分配失败只 continue，留空 PDE | 🔴 Critical | 失败回滚已分配的 PT 或 panic | L93-94 continue 后空 PDE → 内核 PF |
+| **PAG-10** | **change_flags 双重 TLB 刷新**：change_flags_1 内部刷一次，外层又刷一次 (4MB PDE) | 🟢 Low | 内部不刷，外层统一刷 | L299 + L322 |
+| **PAG-11** | **fork COW change_flags_range 遍历 3GB**：对 [0, 0xC0000000) 全范围改 flags | 🟡 High | 只遍历 present 的 PDE | multitask.c L529 + paging.c L333 循环 768 PDE × 1024 PTE |
+
+### 实施清单（修订版）
+
+| 序号 | 任务 | 涉及文件 | 严重度 | 复杂度 |
+|------|------|----------|--------|--------|
+| 1.1 | 抽取 unmap_nolock / map_nolock 内部版本，map_range 回滚在锁内完成 | paging.c | 🟡 | 低 |
+| 1.2 | 把 s_paging_lock 移入 paging_context_t → per-context lock | paging.h + paging.c | 🟡 | 中 |
+| 1.3 | 重写 access_ok：仅地址范围检查即放行，删掉页表遍历 | paging.c | 🟡 | 低 |
+| 1.4 | 4MB PDE unmap 优化：1 次锁 + 批量 refcount_dec | paging.c | 🟡 | 低 |
+| 1.5 | context_clone 内核 PDE 浅拷贝 (共享，不深拷贝) | paging.c | 🔴 | 低 |
+| 1.6 | context_clone malloc 失败处理：回滚已分配 PT 或 panic | paging.c | 🔴 | 低 |
+| 1.7 | change_flags_1 删掉内部 TLB flush，由外层统一刷 | paging.c | 🟢 | 极低 |
+| 1.8 | fork COW 只遍历 present PDE (跳过空 PDE) | paging.c change_flags_range | 🟡 | 低 |
+| 1.9 | COW fault handler 锁合并：一次锁内完成 get_phys + refcount + map | paging.c | 🟡 | 低 |
+| 1.10 | context_destroy 用 used_pde_count 优化遍历 | paging.c | 🟢 | 低 |
+| 1.11 | Page table slab cache (可选，优先级低) | paging.c | 🟢 | 中 |
+| 1.12 | 验证：fork/exec/brk page fault/kernel map 全流程 | 全项目 | — | 高 |
 
 ---
 
@@ -239,14 +203,16 @@ void jlos_page_frame_refcount_inc/dec/get;  // 保持不变
 
 | 优先级 | Phase | 任务 | 依赖 |
 |--------|-------|------|------|
-| **P0** | 0 | Buddy Page Frame Allocator | 无 |
-| **P0** | 1.1 | 修复 map_range 回滚死锁 | Phase 0 |
-| **P0** | 1.2 | Per-context paging lock | Phase 0 |
+| **P0** | 0 | Buddy Page Frame Allocator | ✅ 已完成 |
+| **P0** | 1.5-1.6 | context_clone 内核 PT 共享 + 失败处理 (🔴 Critical) | Phase 0 ✅ |
+| **P0** | 1.1 | map_range 回滚 unmap_nolock | Phase 0 ✅ |
+| **P0** | 1.2 | Per-context paging lock | Phase 0 ✅ |
 | **P1** | 3.1-3.3 | Zombie O(1) 清理 + 父子链表 | 无（可独立） |
-| **P1** | 1.3-1.4 | access_ok fast path + 4MB PDE unmap | Phase 0 |
+| **P1** | 1.3-1.4 | access_ok fast path + 4MB PDE unmap | Phase 0 ✅ |
+| **P1** | 1.8-1.9 | fork COW present-only + COW handler 锁合并 | Phase 0 ✅ |
 | **P1** | 3.5 | pid hash table | 无 |
-| **P2** | 2.1 | expand_heap 大块分配 | Phase 0 |
-| **P2** | 1.6 | PT slab cache | Phase 0 |
+| **P2** | 2.1 | expand_heap 大块分配 | Phase 0 ✅ |
+| **P2** | 1.11 | PT slab cache | Phase 0 ✅ |
 | **P2** | 2.3-2.4 | kmem_cache + per-CPU freelist | Phase 0 + 1 |
 | **P3** | 4.x | SMP 全部预留 | Phase 0-3 |
 
@@ -310,6 +276,25 @@ void jlos_page_frame_refcount_inc/dec/get;  // 保持不变
 | — | 页帧分配器无 OOM 防护 | v2.2 | init_main 逐级回退 heap_size，极端情况 halt |
 
 ### 开发日志
+
+#### 2026-08-18（v2.5）
+
+- Phase 0 Buddy PFA 全部完成：
+  - Bootstrap Allocator (boot_alloc) 按字节分配
+  - 两阶段初始化 (boot_alloc → paging → PFA init)
+  - Buddy 分配器 MAX_ORDER=10，空闲链表嵌入物理帧
+  - mark_occupied/refcount/buddy_order 语义统一
+  - reserve_bulk mark_reserve 循环变量 bug 修复 (frame+i)
+- Linux 风格虚拟布局：
+  - KERNEL_DIRECT_MAP_SIZE=896MB (0x38000000)
+  - KERNEL_HEAP_VIRT_BASE=0xF8000000 (vmalloc 区)
+  - init_main 逐帧 malloc + paging_map (物理散、虚拟连)
+- 完整扫描 paging.c，更新 Phase 1：
+  - 确认 6 项已完成 (PSE flag 保留 / TLB 策略 / boot_alloc 集成 / Linux 布局 / 段权限 / access_ok)
+  - 发现 3 个新问题 (PAG-9 clone 失败静默 / PAG-10 双重 TLB / PAG-11 fork COW 遍历 3GB)
+  - 修正 PAG-1 描述 (非 deadlock，是低效回滚)
+  - 修正 PAG-4 严重度 (从 🟢 Med → 🔴 Critical，确认是深拷贝而非共享)
+- 更新计划至 v2.5
 
 #### 2026-08-13（v2.4）
 

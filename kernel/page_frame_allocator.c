@@ -265,6 +265,21 @@ void jlos_page_frame_free(void *addr)
     jlos_page_frame_refcount_dec((uint32_t)VIRT_TO_PHYS(addr));
 }
 
+void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
+{
+    uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
+    for (uint32_t i = 0; i < num_frames; i++) {
+        uint32_t phys = phys_start + i * JLOS_PAGE_FRAME_SIZE;
+        uint32_t frame = (phys - s_start_addr) / JLOS_PAGE_FRAME_SIZE;
+        if (frame < s_total_frames && s_refcount[frame] && --s_refcount[frame] == 0) {
+            if (!JLOS_PFA_BIT_MAP_FRAME_VALUE(frame)) {
+                buddy_free_nolock(frame, 0);
+            }
+        }
+    }
+    jlos_spin_unlock_irqrestore(&s_pfa_lock, flags);
+}
+
 void jlos_page_frame_refcount_inc(uint32_t phys_addr)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&s_pfa_lock);
@@ -386,7 +401,7 @@ void jlos_page_frame_print_buddy(void)
         free_order_node_t *n = s_free_area[o];
         while (n) { count++; n = n->next; }
         if (count) {
-            printk("order %d (%u frames): %u blocks\n", o, order_to_frames(o), count);
+            printk("order: %d, frames: %u, blocks: %u\n", o, order_to_frames(o), count);
         }
     }
 }

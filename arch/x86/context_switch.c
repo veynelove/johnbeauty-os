@@ -1,7 +1,8 @@
-#include <hal/context.h>
-#include <kernel/multitask.h>
 #include <arch/x86/tss.h>
 #include <arch/x86/cpu_state.h>
+#include <hal/context.h>
+#include <hal/hal.h>
+#include <kernel/multitask.h>
 
 jlos_task_t *g_current_task_ptr = NULL;
 uint32_t jlos_arch_tss_base_addr = 0;
@@ -9,19 +10,23 @@ uint32_t jlos_arch_tss_base_addr = 0;
 static jlos_x86_tss_t s_tss;
 static uint8_t s_kernel_stack[4096];
 
+__attribute__((noreturn)) void jlos_task_do_exit(void)
+{
+    __asm__ __volatile__("cli");
+    if (g_current_task_ptr) {
+        JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, 0);
+    }
+    __asm__ __volatile__("sti");
+    for (;;) {
+        jlos_hal_halt();
+    }
+}
+
 __attribute__((naked)) void jlos_task_exit_stub(void)
 {
     __asm__ __volatile__(
-        "cli\n\t"
-        "movl g_current_task_ptr, %%eax\n\t"
-        "test %%eax, %%eax\n\t"
-        "jz 1f\n\t"
-        "movl %0, (%%eax)\n\t"
-    "1:\n\t"
-        "sti\n\t"
-        "hlt\n\t"
-        "jmp 1b\n\t"
-        : : "i"(JLOS_TASK_ZOMBIE) : "eax", "memory"
+        "call jlos_task_do_exit\n\t"
+        ::: "memory"
     );
 }
 

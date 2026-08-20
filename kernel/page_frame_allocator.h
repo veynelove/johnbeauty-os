@@ -26,6 +26,8 @@ void jlos_page_frame_allocator_init(void);
 void *jlos_page_frame_malloc(void);
 void jlos_page_frame_free(void *addr);
 
+void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames);
+
 void *jlos_page_frame_reserve_bulk(uint32_t num_frames);
 void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end);
 
