@@ -296,15 +296,8 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_t *target = NULL;
-    for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
-        jlos_task_t *t = g_task_manager_ptr->tasks[i];
-        if (t && t->pid == target_pid && t->parent_pid == g_current_task_ptr->pid) {
-            target = t;
-            break;
-        }
-    }
-    if (!target) {
+    jlos_task_t *target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
+    if (!target || target->parent_pid != g_current_task_ptr->pid) {
         return -SYSCALL_ENINVAL;
     }
     if (target->status == JLOS_TASK_ZOMBIE) {

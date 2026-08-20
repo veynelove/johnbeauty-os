@@ -153,27 +153,21 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     }
     size_t pages_needed = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
     uint8_t *new_heap_start = self->heap_current;
-    uint32_t pages_done = 0;
 
+    void *vframe = jlos_page_frame_reserve_bulk(pages_needed);
+    if (!vframe) {
+        return NULL;
+    }
+    uint32_t phys = (uint32_t)VIRT_TO_PHYS(vframe);
     for (size_t i = 0; i < pages_needed; i++) {
-        void *physical_frame = jlos_page_frame_malloc();
-        if (!physical_frame) {
-            for (uint32_t j = 0; j < pages_done; j++) {
-                uint32_t virtual_addr = (uint32_t)(new_heap_start + j * JLOS_PAGE_SIZE);
-                jlos_paging_unmap(jlos_active_paging_context, virtual_addr);
-            }
-            return NULL;
-        }
         uint32_t virtual_addr = (uint32_t)(new_heap_start + i * JLOS_PAGE_SIZE);
-        if (!jlos_paging_map(jlos_active_paging_context, virtual_addr, (uint32_t)physical_frame, JLOS_PTE_KERNEL_RW)) {
-            jlos_page_frame_free(physical_frame);
-            for (uint32_t j = 0; j < pages_done; j++) {
-                uint32_t vi_addr = (uint32_t)(new_heap_start + j * JLOS_PAGE_SIZE);
-                jlos_paging_unmap(jlos_active_paging_context, vi_addr);
+        if (!jlos_paging_map(jlos_active_paging_context, virtual_addr, phys + i * JLOS_PAGE_SIZE, JLOS_PTE_KERNEL_RW)) {
+            for (uint32_t j = 0; j < i; j++) {
+                jlos_paging_unmap(jlos_active_paging_context, (uint32_t)(new_heap_start + j * JLOS_PAGE_SIZE));
             }
+            jlos_page_frame_free_bulk(phys, pages_needed);
             return NULL;
         }
-        pages_done++;
     }
     size_t new_chunk_size = pages_needed * JLOS_PAGE_SIZE;
     jlos_memory_chunk_t *new_chunk = (jlos_memory_chunk_t *)new_heap_start;
@@ -185,17 +179,25 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     new_chunk->free_prev = NULL;
 
     uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
-    if (self->tail) {
-        self->tail->next = new_chunk;
-        new_chunk->prev = self->tail;
+    if (self->tail && !self->tail->allocated) {
+        jlos_memory_chunk_t *tail = self->tail;
+        int tcls = mm_size_to_class(tail->size, self->max_class);
+        mm_class_remove_chunk(self, tcls, tail);
+        tail->size += new_chunk->size + sizeof(jlos_memory_chunk_t);
+        new_chunk = tail;
     } else {
-        self->first = new_chunk;
+        new_chunk->prev = self->tail;
+        if (self->tail) {
+            self->tail->next = new_chunk;
+        } else {
+            self->first = new_chunk;
+        }
+        self->tail = new_chunk;
     }
-    self->tail = new_chunk;
     int cls = mm_size_to_class(new_chunk->size, self->max_class);
     mm_class_add(self, cls, new_chunk);
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
     self->heap_current += new_chunk_size;
+    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
     return new_chunk;
 }
 
@@ -268,16 +270,15 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
         jlos_memory_chunk_t *prev = chunk->prev;
         int pcls = mm_size_to_class(prev->size, self->max_class);
         mm_class_remove_chunk(self, pcls, prev);
-        chunk->size += prev->size + sizeof(jlos_memory_chunk_t);
-        chunk->prev = prev->prev;
-        if (chunk->prev) {
-            chunk->prev->next = chunk;
-        } else {
-            self->first = chunk;
+        prev->size += chunk->size + sizeof(jlos_memory_chunk_t);
+        prev->next = chunk->next;
+        if (prev->next) {
+            prev->next->prev = prev;
         }
         if (self->tail == chunk) {
             self->tail = prev;
         }
+        chunk = prev;
     }
     if (chunk->next && !chunk->next->allocated) {
         jlos_memory_chunk_t *next = chunk->next;
@@ -287,6 +288,9 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
         chunk->next = next->next;
         if (chunk->next) {
             chunk->next->prev = chunk;
+        }
+        if (self->tail == next) {
+            self->tail = chunk;
         }
     }
     int cls = mm_size_to_class(chunk->size, self->max_class);

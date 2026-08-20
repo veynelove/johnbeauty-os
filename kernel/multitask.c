@@ -15,6 +15,32 @@ jlos_task_manager_t *g_task_manager_ptr = NULL;
 
 static uint32_t s_next_pid = 1;
 
+static inline uint32_t pid_hash_fn(uint32_t pid)
+{
+    return pid % jLOS_TASK_PID_HASH_SIZE;
+}
+
+static void pid_hash_insert(jlos_task_manager_t *self, jlos_task_t *task)
+{
+    uint32_t b = pid_hash_fn(task->pid);
+    task->next_hash = self->pid_hash[b];
+    self->pid_hash[b] = task;
+}
+
+static void pid_hash_remove(jlos_task_manager_t *self, jlos_task_t *task)
+{
+    uint32_t b = pid_hash_fn(task->pid);
+    jlos_task_t **pp = &self->pid_hash[b];
+    while (pp) {
+        if (*pp == task) {
+            *pp = task->next_hash;
+            task->next_hash = NULL;
+            return;
+        }
+        pp = &(*pp)->next_hash;
+    }
+}
+
 void jlos_task_set_ready(jlos_task_t *t)
 {
     if (!t) {
@@ -88,6 +114,7 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->priority = 0;
     self->default_slice = (2 << self->priority);
     self->remain_slice = self->default_slice;
+    self->next_hash = NULL;
 }
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name)
@@ -236,6 +263,7 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
     if (!self || !task) {
         return;
     }
+    pid_hash_remove(self, task);
     if (task->stack) {
         jlos_free(task->stack);
         task->stack = NULL;
@@ -301,6 +329,9 @@ void jlos_task_manager_init(jlos_task_manager_t* self)
     self->num_tasks = 0;
     self->current_task = -1;
     self->main_thread_saved = false;
+    for (int i = 0; i < jLOS_TASK_PID_HASH_SIZE; i++) {
+        self->pid_hash[i] = NULL;
+    }
     g_task_manager_ptr = self;
 }
 
@@ -315,12 +346,24 @@ void jlos_task_manager_destroy(jlos_task_manager_t* self)
     g_task_manager_ptr = NULL;
 }
 
+jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid)
+{
+    uint32_t b = pid_hash_fn(pid);
+    for (jlos_task_t *t = self->pid_hash[b]; t; t = t->next_hash) {
+        if (t->pid == pid) {
+            return t;
+        }
+    }
+    return NULL;
+}
+
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task)
 {
     if (self->num_tasks >= JLOS_TASK_MAX_NUM) {
         return false;
     }
     self->tasks[self->num_tasks++] = task;
+    pid_hash_insert(self, task);
     return true;
 }
 
@@ -344,15 +387,8 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
             jlos_task_free(self, t);
             continue;
         }
-        bool parent_alive = false;
-        for (int j = 0 ; j < self->num_tasks; j++) {
-            jlos_task_t *p = self->tasks[j];
-            if (p && p != t && p->pid == t->parent_pid && p->status != JLOS_TASK_ZOMBIE) {
-                parent_alive = true;
-                break;
-            }
-        }
-        if (!parent_alive) {
+        jlos_task_t *parent = jlos_task_manager_find_pid(self, t->parent_pid);
+        if (!parent || parent->status == JLOS_TASK_ZOMBIE) {
             jlos_task_free(self, t);
         }
     }
@@ -398,15 +434,11 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
             t->wake_tick = now_tick;
         }
         if (t->status == JLOS_TASK_WAITING && t->waiting_pid != t->pid) {
-            for (int j = 0; j < self->num_tasks; j++) {
-                jlos_task_t *child = self->tasks[j];
-                if (child && child->pid == t->waiting_pid
-                && child->status == JLOS_TASK_ZOMBIE) {
-                    t->waiting_pid = t->pid;
-                    JLOS_TASK_SET_READY(t);
-                    t->last_ready_tick = now_tick;
-                    break;
-                }
+            jlos_task_t *child = jlos_task_manager_find_pid(self, t->waiting_pid);
+            if (child && child->status == JLOS_TASK_ZOMBIE) {
+                t->waiting_pid = t->pid;
+                JLOS_TASK_SET_READY(t);
+                t->last_ready_tick = now_tick;
             }
         }
         if (t->status == JLOS_TASK_READY && (now_tick - t->last_ready_tick) > JLOS_TASK_MLFQ_AGING_TICKS
@@ -533,9 +565,19 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent)
         jlos_paging_change_flags_range(parent->mm, 0, KERNEL_VIRTUAL_BASE, JLOS_PTE_USER_COW);
     }
 
+    child->next_hash = NULL;
     child->exit_code = TASK_EXIT_DEAUFT;
     jlos_cpu_state_set_retval(&child->cpustate, 0);
-    self->tasks[self->num_tasks++] = child;
+    if (!jlos_task_manager_add_task(self, child)) {
+        jlos_free(child->stack);
+        jlos_free(child->fds);
+        if (child->mm) {
+            jlos_paging_context_destroy(child->mm);
+            jlos_free(child->mm);
+        }
+        jlos_free(child);
+        return NULL;
+    }
     return child;
 }
 

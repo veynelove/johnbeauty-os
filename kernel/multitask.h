@@ -31,6 +31,8 @@
 #define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
+#define jLOS_TASK_PID_HASH_SIZE     256
+
 typedef enum {
     TASK_EXIT_DEAUFT        = 0,
     TASK_EXIT_PAGE_FAULT
@@ -86,10 +88,12 @@ typedef struct jlos_task_t {
     uint32_t brk_start;
     uint32_t brk_end;
     uint32_t brk_limit;
+    struct jlos_task_t *next_hash;
 } jlos_task_t;
 
 typedef struct {
     jlos_task_t *tasks[JLOS_TASK_MAX_NUM];
+    jlos_task_t *pid_hash[jLOS_TASK_PID_HASH_SIZE];
     int num_tasks;
     int current_task;
     jlos_cpu_state_t main_thread_state;
@@ -119,6 +123,8 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 void jlos_task_manager_init(jlos_task_manager_t* self);
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
+
+jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid);
 jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu_state_t *cpustate);
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 
