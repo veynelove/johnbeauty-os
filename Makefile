@@ -4,12 +4,13 @@ ARCH := x86
 
 all: $(JLOS).iso
 
-GCPPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
-            -fno-leading-underscore -std=gnu11 \
-            -ffreestanding -fno-stack-protector \
-			-fno-pic -fno-pie \
-            -Wall -Wextra -Wno-address-of-packed-member \
-            -O2 -g
+CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
+		-fno-leading-underscore -std=gnu11 \
+		-ffreestanding -fno-stack-protector \
+		-fno-pic -fno-pie \
+		-Wall -Wextra -Wno-address-of-packed-member \
+		-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx \
+		-O2 -g
 ASPARAMS = --32 -I.
 LDPARAMS = -melf_i386
 
@@ -24,7 +25,7 @@ OBJS := $(C_OBJS) $(AS_OBJS)
 
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-	@gcc $(GCPPARAMS) -o $@ -c $<
+	@gcc $(CPARAMS) -o $@ -c $<
 
 $(OBJ_DIR)/%.o: %.s
 	@mkdir -p $(@D)

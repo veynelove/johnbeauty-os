@@ -3,6 +3,7 @@
 #include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
+#include <hal/ext_state.h>
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 
@@ -256,6 +257,11 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         return esp;
     }
 
+    if (interrupt == 0x07) {
+        jlos_arch_task_ext_trap_body();
+        return esp;
+    }
+
     uint8_t vector = interrupt;
     if (interrupt < 16) {
         vector = interrupt + self->hardware_interrupt_offset;
@@ -285,9 +291,9 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         }
 #endif
     }
-    if (interrupt < 16) {
+    if (vector >= 0x20 && vector < 0x30) {
         jlos_port8_bit_slow_write(&self->pic_master_command, 0x20);
-        if (interrupt >= 8) {
+        if (vector >= 0x28) {
             jlos_port8_bit_slow_write(&self->pic_slave_command, 0x20);
         }
     }

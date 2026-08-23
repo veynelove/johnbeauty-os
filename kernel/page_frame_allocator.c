@@ -340,17 +340,10 @@ void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
     }
 
     uint32_t extra = order_to_frames(target_order) - num_frames;
-    uint32_t ef = frame + num_frames;
-    while (extra > 0) {
-        uint32_t eo = 0;
-        for (int o = JLOS_PFA_MAX_ORDER; o >= 0; o--) {
-            uint32_t sz = order_to_frames(o);
-            if (sz <= extra) { eo = o; break; }
-        }
-        uint32_t esz = order_to_frames(eo);
-        buddy_insert(ef, eo);
-        ef += esz;
-        extra -= esz;
+    for (uint32_t i = 0; i < extra; i++) {
+        uint32_t free_frame = frame + num_frames + i;
+        jlos_page_frame_mark_recycle(free_frame);
+        buddy_free_nolock(free_frame, 0);
     }
 
     for (uint32_t i = 0; i < num_frames; i++) {

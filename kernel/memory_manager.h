@@ -14,16 +14,14 @@
 #define JLOS_MM_MIN_ALLOC      16
 #define JLOS_MM_CLASS_COUNT    32
 
-typedef struct jlos_memory_chunk jlos_memory_chunk_t;
-
-struct jlos_memory_chunk {
-    jlos_memory_chunk_t *next;
-    jlos_memory_chunk_t *prev;
-    jlos_memory_chunk_t *free_next;
-    jlos_memory_chunk_t *free_prev;
+typedef struct jlos_memory_chunk {
+    struct jlos_memory_chunk *next;
+    struct jlos_memory_chunk *prev;
+    struct jlos_memory_chunk *free_next;
+    struct jlos_memory_chunk *free_prev;
     bool allocated;
     size_t size;
-};
+} __attribute__((aligned(16))) jlos_memory_chunk_t;
 
 typedef struct {
     jlos_memory_chunk_t *first;

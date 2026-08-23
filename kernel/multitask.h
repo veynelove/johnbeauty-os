@@ -4,6 +4,7 @@
 #include <common/types.h>
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
+#include <hal/ext_state.h>
 
 #define JLOS_TASK_READY             0
 #define JLOS_TASK_RUNNING           1
@@ -60,36 +61,40 @@ typedef struct {
 
 typedef struct jlos_paging_context jlos_paging_context_t;
 
-typedef struct jlos_task_t {
-    volatile uint32_t status;
-    char name[JLOS_TASK_NAME_SIZE];
-    uint8_t *stack;
-    uint32_t stack_size;
-    uint8_t *user_stack;
-    uint32_t user_stack_size;
-    jlos_cpu_state_t cpustate;
-    uint32_t pid;
-    uint32_t parent_pid;
-    jlos_task_exit_code exit_code;
-    bool is_user_process;
-    jlos_paging_context_t *mm;
-    uint32_t wake_tick;
-    bool sleeping;
-    bool yield;
-    int32_t errno;
-    uint32_t waiting_pid;
-    uint32_t priority;
-    uint32_t remain_slice;
-    uint32_t default_slice;
-    uint32_t last_ready_tick;
-    struct jlos_task_t *next_wait;
-    jlos_task_fd_t *fds;
-    uint32_t fds_size;
-    uint32_t brk_start;
-    uint32_t brk_end;
-    uint32_t brk_limit;
-    struct jlos_task_t *next_hash;
-} jlos_task_t;
+typedef struct jlos_task {
+    volatile uint32_t       status;
+    char                    name[JLOS_TASK_NAME_SIZE];
+    uint8_t                 *stack;
+    uint32_t                stack_size;
+    uint8_t                 *user_stack;
+    uint32_t                user_stack_size;
+    jlos_cpu_state_t        cpustate;
+    uint32_t                pid;
+    uint32_t                parent_pid;
+    jlos_task_exit_code     exit_code;
+    bool                    is_user_process;
+    jlos_paging_context_t   *mm;
+    uint32_t                wake_tick;
+    bool                    sleeping;
+    bool                    yield;
+    int32_t                 errno;
+    uint32_t                waiting_pid;
+    uint32_t                priority;
+    uint32_t                remain_slice;
+    uint32_t                default_slice;
+    uint32_t                last_ready_tick;
+    jlos_task_fd_t          *fds;
+    uint32_t                fds_size;
+    uint32_t                brk_start;
+    uint32_t                brk_end;
+    uint32_t                brk_limit;
+    jlos_task_t             *next_wait;
+    jlos_task_t             *next_hash;
+    jlos_arch_ext_state_t   ext_state;
+    jlos_task_t             *parent;
+    jlos_task_t             *children;
+    jlos_task_t             *next_sibling;
+} __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
     jlos_task_t *tasks[JLOS_TASK_MAX_NUM];

@@ -54,15 +54,17 @@ loader:
     jl    1b
 
     /* 开分页: CR4.PSE → CR3 → CR0.PG → jmp 序列化 */
+    /* CR4: PSE(bit4,4MB页) | OSFXSR(bit9,启用FXSAVE/FXRSTOR/SSE) */
     movl  %cr4, %eax
-    orl   $0x10, %eax
+    orl   $0x210, %eax
     movl  %eax, %cr4
 
     movl  $boot_page_dir, %eax
     movl  %eax, %cr3
 
     movl  %cr0, %eax
-    orl   $0x80000000, %eax
+    andl  $~0x4, %eax
+    orl   $0x80000022, %eax /* PG(bit 31) | MP(bit 1) | NE(bit 5) */ 
     movl  %eax, %cr0
     jmp   .Lpg_flush
 .Lpg_flush:

@@ -31,7 +31,7 @@ static void pid_hash_remove(jlos_task_manager_t *self, jlos_task_t *task)
 {
     uint32_t b = pid_hash_fn(task->pid);
     jlos_task_t **pp = &self->pid_hash[b];
-    while (pp) {
+    while (*pp) {
         if (*pp == task) {
             *pp = task->next_hash;
             task->next_hash = NULL;
@@ -115,6 +115,7 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->default_slice = (2 << self->priority);
     self->remain_slice = self->default_slice;
     self->next_hash = NULL;
+    jlos_arch_task_ext_init(self);
 }
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name)
@@ -227,12 +228,17 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
 
     int32_t ret = jlos_task_create_user_mm(self);
     if (ret < 0) {
+        if (self->mm) {
+            jlos_paging_context_destroy(self->mm);
+            jlos_free(self->mm);
+        }
         jlos_free(self->fds);
         jlos_free(self->stack);
         return ret;
     }
     ret = jlos_task_create_user_stack(self);
     if (ret < 0) {
+        jlos_paging_context_destroy(self->mm);
         jlos_free(self->mm);
         jlos_free(self->fds);
         jlos_free(self->stack);
@@ -264,6 +270,7 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
         return;
     }
     pid_hash_remove(self, task);
+    jlos_arch_task_ext_destroy(task);
     if (task->stack) {
         jlos_free(task->stack);
         task->stack = NULL;
@@ -461,6 +468,7 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
                 JLOS_TASK_SET_RUNNING(next);
                 g_current_task_ptr = next;
                 jlos_arch_tss_set_ctx((uint32_t)(next->stack + next->stack_size));
+                jlos_arch_task_ext_switch();
                 return &next->cpustate;
             }
         }
@@ -469,6 +477,7 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
     g_current_task_ptr = NULL;
     self->current_task = -1;
     jlos_paging_switch(&s_kernel_paging_context);
+    jlos_arch_task_ext_switch();
     if (self->main_thread_saved) {
         self->main_thread_saved = false;
         return &self->main_thread_state;

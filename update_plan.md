@@ -1,6 +1,6 @@
 # JohnBeauty OS 内核架构升级计划
 
-版本: v2.6 | 日期: 2026-08-20 | 作者: JohnLove
+版本: v2.7 | 日期: 2026-08-23 | 作者: JohnLove
 
 ---
 
@@ -32,6 +32,7 @@
 | 同步原语 | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量 | spinlock 关中断保护 |
 | IPC | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组) | FIFO 顺序，close/destroy 分离 |
 | 用户进程 | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork COW + exit stub 修复 | Hello from ring3 + Wake up 验证通过 |
+| FPU/SSE | Lazy 上下文切换 (CR0.TS + #NM handler) + FXSAVE/FXRSTOR + HAL ext_state 抽象层 + 干净模板初始化 | multitask_test + ring3 正常运行 |
 
 ---
 
@@ -204,6 +205,8 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | F9 | DHCP 自动获取 IP | net | 无 |
 | F10 | DNS 域名解析 | net | 依赖 F9 |
 | F11 | mmap 内存映射 | paging.c + syscall.c | 依赖 F4 |
+| F12 | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成 | arch/x86/fpu.c + hal/ext_state.h | — |
+| F13 | O(1) 调度选择（per-level runqueue + bitmap） | kernel/multitask.c | 无 |
 
 ---
 
@@ -247,6 +250,26 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | — | 页帧分配器无 OOM 防护 | v2.2 | init_main 逐级回退 heap_size，极端情况 halt |
 
 ### 开发日志
+
+#### 2026-08-23（v2.7）
+
+- **F12 FPU/SSE 上下文切换全部完成（Lazy 模式）**：
+  - HAL 抽象层：新增 `hal/ext_state.h`，用 opaque 类型 + 前向声明避免循环依赖，声明 4 个 hook（init/destroy/switch/trap_body）；ARM/RISC-V 留 `#error` 占位
+  - 状态结构：`arch/x86/fpu_state.h` 定义 `struct jlos_arch_ext_state`（512B 16B 对齐 fxsave_area + used 标志）
+  - 4 个 hook 实现（`arch/x86/fpu.c`）：
+    - `ext_init`：拷贝干净模板到 task，used=false
+    - `ext_destroy`：若 task 是 FPU owner 则清空所有权（锁保护）
+    - `ext_switch`：仅置 CR0.TS（lazy 触发，不立即 save/restore）
+    - `ext_trap_body`：#NM 处理，开头先 `clts` 防 GCC 生成 SSE 指令递归触发 #NM；owner 不变直接返回，否则 save 旧 owner + restore 新 owner
+  - 干净模板 `build_clean_template`：`clts → fninit → ldmxcsr(0x1F80) → fxsave`，幂等（s_init_template_done 守卫）
+  - task struct 新增 `ext_state` 字段（16B 对齐），与 parent/children/next_sibling/next_hash 独立
+  - 调度器接入：init_1 调 ext_init、task_free 调 ext_destroy、schedule 调 ext_switch
+  - IDT 注册：#NM(0x07) 和 #PF(0x0E) 都在 IRQ 向量转换前分发；均用 IDT_INTERRUPT_GATE（IF 自动清零，irqrestore 安全）
+  - Boot 初始化：loader.s CR0=PG|MP|NE(EM=0)，CR4=PSE|OSFXSR
+  - 编译选项：Makefile 加 `-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx` 防编译器生成 SSE
+  - spinlock 实现用 xchgl/pause/pushf，无 SSE 指令，CR0.TS=1 下安全
+- 全流程验证通过：multitask_test + ring3 用户进程 + 网络
+- 更新计划至 v2.7
 
 #### 2026-08-20（v2.6）
 

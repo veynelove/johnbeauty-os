@@ -296,6 +296,7 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
     int cls = mm_size_to_class(chunk->size, self->max_class);
     mm_class_add(self, cls, chunk);
     jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    ptr = NULL;
 }
 
 void *jlos_malloc(size_t size)

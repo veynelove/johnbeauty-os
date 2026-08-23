@@ -496,6 +496,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
                 jlos_spin_unlock_irqrestore(&ctx->lock, fl);
                 goto page_fault_kill;
             }
+            jlos_page_frame_refcount_dec(old_phys);
             jlos_spin_unlock_irqrestore(&ctx->lock, fl);
             jlos_hal_paging_flush_tlb(page_addr);
             return;
@@ -506,10 +507,15 @@ page_fault_kill:
     printk("user page fault. pid = %u, addr = 0x%x, present = %u, write = %u, ins_pointer = 0x%x\n",
         task->pid, fault_addr, present, write, context->instruction_pointer);
     JLOS_TASK_SET_ZOMBIE(task, TASK_EXIT_PAGE_FAULT);
-    return;
+    for (;;) {
+        jlos_hal_halt();
+    }
 page_fault_oom:
     printk("page fault oom. pid = %u, addr = 0x%x\n", task->pid, fault_addr);
     JLOS_TASK_SET_ZOMBIE(task, TASK_EXIT_PAGE_FAULT);
+    for (;;) {
+        jlos_hal_halt();
+    }
 }
 
 void jlos_paging_print_states(jlos_paging_context_t *self)
