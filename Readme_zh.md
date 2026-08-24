@@ -16,26 +16,6 @@
 
 ---
 
-## 📂 项目目录结构
-
-```text
-johnbeauty-os/
-├── arch/x86/               # x86 底层：loader.s、GDT/IDT、interruptstubs.s(4-byte int#)、context_switch、port I/O、PCI cfg、syscall 0x80
-├── hal/                    # HAL 硬件抽象层（6级全部完成）：io/irq/mmu/syscall/context/barrier/spinlock/timer/pci/serial/block/dma/device/diag
-├── kernel/                 # 内核核心：kernel_main 三阶段启动、memory_manager(双堆)、multitask(RR调度)
-├── drivers/                # 驱动：driver_manager + amd_am79c973 + ata_pio28 + ps2_keyboard + ps2_mouse + vga
-├── net/                    # 网络栈：etherframe + arp + ipv4 + icmp + udp + tcp
-├── filesystem/             # 文件系统：fat(16/32) + msdospath
-├── gui/                    # GUI：desktop + window + widget(composite pattern)
-├── common/                 # 共用头：types.h(JLOS_NET_MAX_SLOTS)、multiboot.h、graphics.h
-├── tools/                  # 配置(config.h) + tests/* + samples/debug_console
-├── docs/                   # 📚 架构文档（见下方索引）
-├── linker.ld               # ELF i386 链接脚本
-├── Makefile                # gcc -m32 -nostdlib 构建入口
-├── HAL_DESIGN.md           # HAL 6级升级设计蓝图
-└── Readme_zh.md            # 本文档
-```
-
 ---
 
 ## 关键硬约束（踩坑总结）
@@ -101,47 +81,6 @@ Starting HTTP server on port 1234...
 UDP server listening on port 5678
 task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
 ```
-
-## 📖 背景 / 源项目
-
-1. 原始教程（C++ 版，Viktor Engelmann 德国）：<https://www.youtube.com/playlist?list=PLHh55M_Kq4OApWScZyPl5HhgsTJS9MZ6M>
-2. 学习搬运视频（B 站）：<https://www.bilibili.com/video/BV1Ng411x7As>
-3. 原作者主页：<http://www.algorithman.de/Autor/index.php>
-4. 语言选择：原教程 C++（有优雅命名空间）；本项目重写为纯 C（考虑内核可移植性 + 编译器支持广度）。
-5. ⚠️ GUI 提示：建议不要开启 GUI 图形模式（老硬件/某些 VMware 版本对 VGA 寄存器有损坏风险），默认用串口/VGA 文本模式即可。
-6. 源项目的网卡驱动，arp, tcp, udp, gdt, interrupts等存在问题，无法直接跑通。本项目继承并修复了问题，并做了自己的优化。个人觉得优化的不错。
-
----
-
-## ❓ 历史 Question（留档）
-
-### 1. GDT i[0]/i[1] 顺序问题
-
-原 `gdt.cpp:10` 代码：
-
-```cpp
-i[0] = (uint32_t)this;
-i[1] = sizeof(GlobalDescriptorTable) << 16;
-// ↓ 原作者可能误写成以下相反
-i[1] = (uint32_t)this;
-i[0] = sizeof(global_descriptor_table) << 16;
-```
-
-> 在 `interrupts.activate()` 后启动虚拟机失败，提示虚拟 CPU 异常。**交换 i[0] 和 i[1] 后**，正常收到硬件中断。（GDTR 低 16 位是 limit，高 32 位是 base）
-
-### 2. Mouse 颜色反转问题
-
-原 `mouse.cpp:60` 点击颜色代码：
-
-```cpp
-for (uint8_t i = 0; i < 3; i++)
-    if ((buffer[0] & (1<<i)) != (buttons & (1<<i)))
-        VideoMemory[80*y+x] = ((VideoMemory[80*y+x] & 0xF000)>>4)
-                             | ((VideoMemory[80*y+x] & 0x0F00)<<4)
-                             | ((VideoMemory[80*y+x] & 0x00FF));
-```
-
-> 加上这段后，光标点击移动时**初始位置颜色不会恢复**（翻转后未复位）。本项目 VGA 驱动改为独立鼠标光标缓冲避免。
 
 ---
 
