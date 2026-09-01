@@ -146,7 +146,7 @@ jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, j
                     printf("\n");
                     printf("Allocating AMD am79c973 driver structure...\n");
 #endif
-                    driver = (jlos_driver_t *)jlos_malloc(sizeof(jlos_amd_am79c973_t));
+                    driver = (jlos_driver_t *)jlos_kalloc(sizeof(jlos_amd_am79c973_t));
                     if (driver) {
 #if KERNEL_CONFIG_DEBUG_NETWORK
                         printf("AMD am79c973 driver allocated at: 0x");

@@ -10,30 +10,30 @@
 #define JLOS_KERNEL_MQ_MSG_MAX_SIZE     256
 
 typedef struct {
-    uint8_t *buffer;
-    uint32_t buf_size;
-    uint32_t read_pos;
-    uint32_t write_pos;
-    uint32_t count;
-    jlos_semaphore_t sem_write_slots;
-    jlos_semaphore_t sem_read_items;
-    jlos_mutex_t mutex;
-    bool closed;
-    uint32_t refcount;
+    uint8_t             *buffer;
+    uint32_t            buf_size;
+    uint32_t            read_pos;
+    uint32_t            write_pos;
+    uint32_t            count;
+    jlos_semaphore_t    sem_write_slots;
+    jlos_semaphore_t    sem_read_items;
+    jlos_mutex_t        mutex;
+    bool                closed;
+    uint32_t            refcount;
 } jlos_pipe_t;
 
 typedef struct jlos_msg_node_t {
-    uint32_t len;
-    struct jlos_msg_node_t *next;
-    uint8_t data[];
+    uint32_t                len;
+    struct jlos_msg_node_t  *next;
+    uint8_t                 data[];
 } jlos_msg_node_t;
 
 typedef struct {
-    jlos_msg_node_t *head;
-    jlos_msg_node_t *tail;
-    uint32_t count;
-    jlos_semaphore_t sem_read_items;
-    jlos_mutex_t mutex;
+    jlos_msg_node_t     *head;
+    jlos_msg_node_t     *tail;
+    uint32_t            count;
+    jlos_semaphore_t    sem_read_items;
+    jlos_mutex_t        mutex;
 } jlos_mq_t;
 
 void jlos_pipe_init(jlos_pipe_t *pipe, uint32_t buf_size);

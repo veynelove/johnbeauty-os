@@ -15,7 +15,7 @@ void jlos_hash_chain_init(jlos_hash_chain_t *self, uint32_t bucket_count,
 
     self->bucket_count = power;
     self->bucket_mask = power - 1;
-    self->buckets = (jlos_hash_head_t *)jlos_malloc(power * sizeof(jlos_hash_head_t));
+    self->buckets = (jlos_hash_head_t *)jlos_kalloc(power * sizeof(jlos_hash_head_t));
     for (uint32_t i = 0; i < power; i++) {
         self->buckets[i].first = NULL;
     }
@@ -92,7 +92,7 @@ void jlos_hash_chain_destroy(jlos_hash_chain_t *self)
         for (uint32_t i = 0; i < self->bucket_count; i++) {
             self->buckets[i].first = NULL;
         }
-        jlos_free(self->buckets);
+        jlos_kfree(self->buckets);
         self->buckets = NULL;
     }
     self->bucket_count = 0;
@@ -114,5 +114,5 @@ uint32_t jlos_hash_uint32(const void *key)
 
 uint32_t jlos_hash_ptr(const void *key)
 {
-    return (uint32_t)(uintptr_t)key;
+    return (uint32_t)key;
 }
