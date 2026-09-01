@@ -1,3 +1,4 @@
+#include <common/multiboot.h>
 #include <hal/irq.h>
 #include <hal/io.h>
 #include <hal/pci.h>
@@ -7,19 +8,18 @@
 #include <hal/context.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
-
 #include <drivers/ata.h>
 #include <drivers/amd_am79c973.h>
 #include <net/network.h>
 #include <filesystem/msdospath.h>
 #include <filesystem/fat.h>
-#include <common/multiboot.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
+#include <kernel/device.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -53,20 +53,19 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_mmu_init();
     jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
-    jlos_page_frame_allocator_init(KERNEL_MEMORY_PHYSICAL_START, KERNEL_MEMORY_PHYSICAL_END, VIRT_TO_PHYS(kernel_end));
-    printf("page frame allocator initialized\n");
-    jlos_paging_initialize_kernel_paging();
+
+    jlos_device_init(multiboot_structure);
+    jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
+    jlos_paging_initialize_kernel_paging(jlos_pfa_boot_alloc_page);
+    jlos_page_frame_allocator_init();
     printf("paging initialized\n");
 
     uint8_t* low_memory_heap = (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START);
     jlos_memory_manager_t low_memory_manager_;
     jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
-
-    void *first_free_frame_ptr = jlos_page_frame_malloc();
-    jlos_page_frame_free(first_free_frame_ptr);
-    uint8_t* heap_start = (uint8_t*)(first_free_frame_ptr);
+    
     jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init(&memory_manager_, heap_start, KERNEL_MAIN_MEMORY_SIZE);
+    jlos_memory_manager_init_main(&memory_manager_);
 
     jlos_task_manager_t task_manager_;
     jlos_task_manager_init(&task_manager_);
@@ -110,7 +109,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
 #endif
-    network_stack_t *network_stack = (network_stack_t *)jlos_malloc(sizeof(network_stack_t));
+    network_stack_t *network_stack = (network_stack_t *)jlos_kalloc(sizeof(network_stack_t));
     network_init(network_stack, &driver_manager_);
 
 #if KERNEL_CONFIG_ENABLE_TESTS
@@ -120,6 +119,9 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     hard_driver_test();
     http_server_test(&network_stack->tcp);
     udp_server_test(&network_stack->udp);
+#if KERNEL_CONFIG_DEBUG_MEMORY
+    jlos_page_frame_print_buddy();
+#endif
 #endif
 
     for (;;) {

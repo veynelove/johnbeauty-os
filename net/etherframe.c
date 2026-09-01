@@ -120,7 +120,7 @@ bool jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t*
 
 void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t etherType_BE, uint8_t *buffer, uint32_t size)
 {
-    uint8_t *buffer2 = (uint8_t *)jlos_malloc(sizeof(jlos_ether_frame_header_t) + size);
+    uint8_t *buffer2 = (uint8_t *)jlos_kalloc(sizeof(jlos_ether_frame_header_t) + size);
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)buffer2;
     
     uint64_to_mac(dstMAC_BE, frame->dstMAC);
@@ -133,7 +133,7 @@ void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t 
         dst[i] = src[i];
     }
     jlos_amd_am79c973_send(self->base_handler.backend, buffer2, size + sizeof(jlos_ether_frame_header_t));
-    jlos_free(buffer2);
+    jlos_kfree(buffer2);
 }
 
 uint64_t jlos_ether_frame_provider_get_mac_address(jlos_ether_frame_provider_t* self)

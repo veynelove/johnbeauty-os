@@ -61,22 +61,22 @@ void mouse_console_init(mouse_console_t *mouse_handler)
 
 void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
-    printf_keyboard_event_handler_t *kbhandler = (printf_keyboard_event_handler_t *)jlos_malloc(sizeof(printf_keyboard_event_handler_t));
+    printf_keyboard_event_handler_t *kbhandler = (printf_keyboard_event_handler_t *)jlos_kalloc(sizeof(printf_keyboard_event_handler_t));
     jlos_keyboard_event_handler_init(&kbhandler->base);
     kbhandler->base.key_down = printf_keyboard_key_down;
 
-    jlos_keyboard_driver_t *keyboard = (jlos_keyboard_driver_t *)jlos_malloc(sizeof(jlos_keyboard_driver_t));
+    jlos_keyboard_driver_t *keyboard = (jlos_keyboard_driver_t *)jlos_kalloc(sizeof(jlos_keyboard_driver_t));
     jlos_keyboard_driver_init(keyboard, interrupts, &kbhandler->base);
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)keyboard);
 }
 
 void debug_console_mouse(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
-    mouse_console_t *mouse_handler_ = (mouse_console_t *)jlos_malloc(sizeof(mouse_console_t));
+    mouse_console_t *mouse_handler_ = (mouse_console_t *)jlos_kalloc(sizeof(mouse_console_t));
     jlos_mouse_event_handler_init(&mouse_handler_->base);
     mouse_console_init(mouse_handler_);
 
-    jlos_mouse_driver_t *mouse = (jlos_mouse_driver_t *)jlos_malloc(sizeof(jlos_mouse_driver_t));
+    jlos_mouse_driver_t *mouse = (jlos_mouse_driver_t *)jlos_kalloc(sizeof(jlos_mouse_driver_t));
     jlos_mouse_driver_init(mouse, interrupts, &mouse_handler_->base);
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)mouse);
 }

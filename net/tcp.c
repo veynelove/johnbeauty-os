@@ -302,7 +302,7 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
         if (node) {
             jlos_hash_chain_remove(&self->sockets, node);
             self->num_sockets--;
-            jlos_free(socket);
+            jlos_kfree(socket);
         }
     }
     return false;
@@ -362,7 +362,7 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
     uint16_t total_length = size + tcp_hdr_len;
     uint16_t length_incl_p_hdr = total_length + sizeof(jlos_tcp_pseudo_header_t);
 
-    uint8_t *buffer = (uint8_t *)jlos_malloc(length_incl_p_hdr);
+    uint8_t *buffer = (uint8_t *)jlos_kalloc(length_incl_p_hdr);
     
     jlos_tcp_pseudo_header_t *phdr = (jlos_tcp_pseudo_header_t *)buffer;
     jlos_tcp_header_t *msg = (jlos_tcp_header_t *)(buffer + sizeof(jlos_tcp_pseudo_header_t));
@@ -390,12 +390,12 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
     msg->checksum = 0;
     msg->checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)buffer, length_incl_p_hdr);
     jlos_internet_protocol_handler_send(&self->base_handler, socket->remote_ip, (uint8_t *)msg, total_length);
-    jlos_free(buffer);
+    jlos_kfree(buffer);
 }
 
 jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t ip, uint16_t port)
 {
-    jlos_tcp_socket_t *socket = (jlos_tcp_socket_t *)jlos_malloc(sizeof(jlos_tcp_socket_t));
+    jlos_tcp_socket_t *socket = (jlos_tcp_socket_t *)jlos_kalloc(sizeof(jlos_tcp_socket_t));
     if (socket) {
         jlos_tcp_socket_init(socket, self);
         socket->remote_port = JLOS_SWAP_ENDIAN_16(port);
@@ -423,7 +423,7 @@ void jlos_tcp_provider_disconnect(jlos_tcp_provider_t* self, jlos_tcp_socket_t *
 
 jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t port)
 {
-    jlos_tcp_socket_t *socket = (jlos_tcp_socket_t *)jlos_malloc(sizeof(jlos_tcp_socket_t));
+    jlos_tcp_socket_t *socket = (jlos_tcp_socket_t *)jlos_kalloc(sizeof(jlos_tcp_socket_t));
     if (socket) {
         jlos_tcp_socket_init(socket, self);
         socket->state = JLOS_TCP_LISTEN;

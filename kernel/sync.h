@@ -6,24 +6,24 @@
 #include <hal/spinlock.h>
 
 typedef struct {
-    volatile int32_t resource_count;
-    jlos_task_t *wait_head;
-    jlos_task_t *wait_tail;
-    jlos_spinlock_t lock;
+    volatile int32_t    resource_count;
+    jlos_task_t         *wait_head;
+    jlos_task_t         *wait_tail;
+    jlos_spinlock_t     lock;
 } jlos_semaphore_t;
 
 typedef struct {
-    volatile uint32_t locked;
-    jlos_task_t *owner;
-    uint32_t recursion;
-    jlos_task_t *wait_head;
-    jlos_task_t *wait_tail;
-    jlos_spinlock_t lock;
+    volatile uint32_t   locked;
+    jlos_task_t         *owner;
+    uint32_t            recursion;
+    jlos_task_t         *wait_head;
+    jlos_task_t         *wait_tail;
+    jlos_spinlock_t     lock;
 } jlos_mutex_t;
 
 typedef struct {
-    jlos_task_t *wait_head;
-    jlos_task_t *wait_tail;
+    jlos_task_t     *wait_head;
+    jlos_task_t     *wait_tail;
     jlos_spinlock_t lock;
 } jlos_cond_t;
 

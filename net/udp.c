@@ -174,7 +174,7 @@ bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, 
 
 jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t ip, uint16_t port)
 {
-    jlos_udp_socket_t *socket = (jlos_udp_socket_t *)jlos_malloc(sizeof(jlos_udp_socket_t));
+    jlos_udp_socket_t *socket = (jlos_udp_socket_t *)jlos_kalloc(sizeof(jlos_udp_socket_t));
     if (socket) {
         jlos_udp_socket_init(socket, self);
         socket->remote_port = JLOS_SWAP_ENDIAN_16(port);
@@ -191,7 +191,7 @@ jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t
 
 jlos_udp_socket_t *jlos_udp_provider_listen(jlos_udp_provider_t* self, uint16_t port)
 {
-    jlos_udp_socket_t *socket = (jlos_udp_socket_t *)jlos_malloc(sizeof(jlos_udp_socket_t));
+    jlos_udp_socket_t *socket = (jlos_udp_socket_t *)jlos_kalloc(sizeof(jlos_udp_socket_t));
     if (socket) {
         jlos_udp_socket_init(socket, self);
         socket->listening = true;
@@ -208,13 +208,13 @@ void jlos_udp_provider_disconnect(jlos_udp_provider_t* self, jlos_udp_socket_t *
 {
     jlos_hash_chain_remove(&self->sockets, &socket->hash_node);
     self->num_sockets--;
-    jlos_free(socket);
+    jlos_kfree(socket);
 }
 
 void jlos_udp_provider_send(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, uint8_t *data, uint16_t size)
 {
     uint16_t total_length = size + sizeof(jlos_udp_header_t);
-    uint8_t *buffer = (uint8_t *)jlos_malloc(total_length);
+    uint8_t *buffer = (uint8_t *)jlos_kalloc(total_length);
     uint8_t *buffer2 = buffer + sizeof(jlos_udp_header_t);
     jlos_udp_header_t *msg = (jlos_udp_header_t *)buffer;
     msg->src_port = socket->local_port;
@@ -225,7 +225,7 @@ void jlos_udp_provider_send(jlos_udp_provider_t* self, jlos_udp_socket_t *socket
     }
     msg->checksum = 0;
     jlos_internet_protocol_handler_send(&self->base_handler, socket->remote_ip, buffer, total_length);
-    jlos_free(buffer);
+    jlos_kfree(buffer);
 }
 
 void jlos_udp_provider_bind(jlos_udp_provider_t* self, jlos_udp_socket_t *socket, jlos_udp_handler_t *handler)

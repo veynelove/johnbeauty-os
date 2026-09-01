@@ -40,7 +40,7 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
         const char *crlfcrlf = "\r\n\r\n";
         uint16_t clen_len = ci;
         uint16_t total = hdr_len + clen_len + 4 + body_len;
-        uint8_t *resp = (uint8_t *)jlos_malloc(total);
+        uint8_t *resp = (uint8_t *)jlos_kalloc(total);
         uint16_t p = 0;
         for (uint16_t i = 0; i < hdr_len; i++) resp[p++] = hdr[i];
         for (uint16_t i = 0; i < clen_len; i++) resp[p++] = clen[i];
@@ -54,7 +54,7 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
 
 void http_server_test(jlos_tcp_provider_t *tcp)
 {
-    printf_tcp_handler_t *tcphandler = jlos_malloc(sizeof(printf_tcp_handler_t));
+    printf_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(printf_tcp_handler_t));
     jlos_tcp_handler_init(&tcphandler->base);
     tcphandler->base.handle_tcp_message = printf_tcp_handler_handle_tcp_message;
 
