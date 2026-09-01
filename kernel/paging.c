@@ -6,6 +6,7 @@
 #include <kernel/printk.h>
 #include <kernel/device.h>
 
+extern uint32_t _boot_end_phys;
 extern jlos_task_t *g_current_task_ptr;
 
 jlos_paging_context_t *jlos_active_paging_context = NULL;
@@ -44,6 +45,7 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
         
         jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
         if (!is_kernel_space) {
+            /* 用户空间 PT: 释放 PTE 引用计数 + PT 页本身 */
             for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
                 jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
                 if (*pte & JLOS_PTE_PRESENT) {
@@ -51,6 +53,9 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
                 }
             }
         }
+        /* 内核空间 PT: clone 深拷贝出来的新 PT 必须释放(否则泄漏).
+         * 原始内核 PT 不会走到这里(内核自己的 paging_context 不 destroy).
+         * 4MB PDE 没有 PT, 不涉及. */
         jlos_page_frame_free(pt);
     }
     jlos_spin_unlock_irqrestore(&self->lock, flags);
@@ -80,8 +85,23 @@ void jlos_paging_context_clone(jlos_paging_context_t *dst, jlos_paging_context_t
         if (vir_addr < KERNEL_VIRTUAL_BASE) {
             continue;
         }
-        dst->page_dir->entries[i] = src_pde;
-        if (!(src_pde & JLOS_PDE_4MB)) {
+        if (src_pde & JLOS_PDE_4MB) {
+            /* 4MB PDE: 直接拷贝(无 PT 可共享, PDE 自身含物理地址) */
+            dst->page_dir->entries[i] = src_pde;
+        } else {
+            /* 4KB PT PDE: 深拷贝 — 分配新 PT 页, 复制 PTE, 更新 dst PDE 指向新 PT.
+             * 否则 dst 和 src 共享 PT, change_flags 修改 dst PTE/PDE 直接污染
+             * src 内核全局页表, 导致内核访问 buddy 元数据时 WRITABLE/USER 位错乱. */
+            jlos_page_table_t *src_pt = (jlos_page_table_t *)PHYS_TO_VIRT(src_pde & JLOS_PAGE_ADDR_MASK);
+            jlos_page_table_t *dst_pt = (jlos_page_table_t *)jlos_page_frame_malloc();
+            if (!dst_pt) {
+                /* OOM: 只能放弃当前 PDE, 前面已分配的 PT 会随 page_dir 释放回收 */
+                continue;
+            }
+            jlos_memcpy(dst_pt, src_pt, sizeof(jlos_page_table_t));
+            uint32_t dst_pt_phys = VIRT_TO_PHYS(dst_pt);
+            /* 新 PDE = 原 PDE 低位标志 + 新 PT 物理地址 */
+            dst->page_dir->entries[i] = (src_pde & ~JLOS_PAGE_ADDR_MASK) | dst_pt_phys;
             dst->num_page_tables++;
         }
     }
@@ -194,6 +214,16 @@ static bool jlos_paging_map_nolock(jlos_paging_context_t *self, uint32_t virtual
     if (flags & JLOS_PDE_4MB) {
         uint32_t pd_index = jlos_paging_get_page_dir_index(virtual_addr);
         jlos_page_dir_entry_t *pde = &self->page_dir->entries[pd_index];
+        if ((*pde & JLOS_PDE_PRESENT) && !(*pde & JLOS_PDE_4MB)) {
+            jlos_page_table_t *old_pt = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
+            for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
+                if (old_pt->entries[pt_idx] & JLOS_PTE_PRESENT) {
+                    jlos_page_frame_free((void *)PHYS_TO_VIRT(old_pt->entries[pt_idx] & JLOS_PAGE_ADDR_MASK));
+                }
+            }
+            jlos_page_frame_free(old_pt);
+            self->num_page_tables--;
+        }
         *pde = (physical_addr & JLOS_PDE_4MB_ADDR_MASK) | flags | JLOS_PDE_PRESENT | JLOS_PDE_WRITABLE;
         return true;
     }
@@ -320,6 +350,8 @@ uint32_t jlos_paging_get_physical_addr(jlos_paging_context_t *self, uint32_t vir
     return phys;
 }
 
+extern jlos_paging_context_t s_kernel_paging_context;
+
 void jlos_paging_enable(jlos_paging_context_t *self)
 {
     jlos_active_paging_context = self;
@@ -375,12 +407,17 @@ void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn)
     if (map_size > KERNEL_DIRECT_MAP_SIZE) {
         map_size = KERNEL_DIRECT_MAP_SIZE;
     }
-    jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE,
-        0, map_size, JLOS_PTE_KERNEL_RW);
-
+    uint32_t low_end = (uint32_t)&_boot_end_phys;
+    uint32_t huge_start = JLOS_EXCEPT_CEIL(low_end, 4 * 1024 * 1024);
+    if (huge_start > map_size) {
+        huge_start = map_size;
+    }
+    if (huge_start) {
+        jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE, 0, huge_start, JLOS_PTE_KERNEL_RW);
+    }
     /* .text 只读 */
     const jlos_hal_kernel_segments_t *segments = jlos_hal_get_kernel_segments();
-    if (segments->text_start != 0) {
+    if (segments->text_start) {
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->text_start, segments->text_end,
             JLOS_PTE_KERNEL_RO);
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->data_start, segments->data_end,
@@ -388,7 +425,9 @@ void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn)
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->bss_start, segments->bss_end,
             JLOS_PTE_KERNEL_RW);
     }
-
+    for (uint32_t pa = huge_start; pa < map_size; pa += 4 * 1024 * 1024) {
+        jlos_paging_map(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE + pa, pa, JLOS_PTE_KERNEL_RW | JLOS_PDE_4MB);
+    }
     jlos_paging_enable(&s_kernel_paging_context);
     s_page_table_alloc = NULL;
 }
@@ -407,33 +446,25 @@ bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual
 
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
 {
+    extern jlos_paging_context_t s_kernel_paging_context;
     uint32_t fault_addr = jlos_hal_paging_get_fault_addr();
     uint32_t error_code = context->error;
     bool present = error_code & 0x01;
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
+    /* PF 总览: 仅一行核心定位信息 (addr/err/user/ip/pid) */
+    printk("[PF] addr=0x%x err=0x%x user=%d ip=0x%x pid=%u\n",
+           fault_addr, error_code, user,
+           context->instruction_pointer,
+           g_current_task_ptr ? g_current_task_ptr->pid : 0);
     if (!user) {
-        printk("kernel page fault at 0x%x, error=0x%x\n", fault_addr, error_code);
-        if (!present) {
-            printk("page not present\n");
-        } else {
-            if (write) {
-                printk("write protection violation\n");
-            } else {
-                printk("read protection violation\n");
-            }
-        }
-        printk("page fault handler: unrecoverable error!\n");
-        printk("instruction pointer: 0x%x, code segment: 0x%x\n", context->instruction_pointer, context->code_segment);
-        printk("EFLAGS: 0x%x\n", context->flags);
-        
+        /* 内核态 PF 不可恢复: 直接 halt. present/write 已在 err 中. */
         for (;;) {
             jlos_hal_halt();
         }
     }
 
     if (!g_current_task_ptr || !g_current_task_ptr->mm) {
-        printk("page fault: no current task or mm\n");
         for (;;) {
             jlos_hal_halt();
         }
@@ -442,6 +473,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     jlos_task_t *task = g_current_task_ptr;
     jlos_paging_context_t *ctx = task->mm;
 
+    /* demand paging: brk 堆区按需映射 (经典 Linux expand_stack/mmap 语义) */
     if (!present && task->brk_start && fault_addr >= task->brk_start && fault_addr <task->brk_limit) {
         uint32_t page_dir = JLOS_PAGE_ALIGN_DOWN(fault_addr);
         if (page_dir < JLOS_PAGE_ALIGN_UP(task->brk_end)) {
@@ -451,7 +483,6 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
             }
             jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
             if (!jlos_paging_map(ctx, page_dir, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW)) {
-                printk("brk pf: map failed at 0x%x\n", fault_addr);
                 jlos_page_frame_free(frame);
                 goto page_fault_kill;
             }
@@ -459,6 +490,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         }
         goto page_fault_kill;
     }
+    /* demand paging: 用户栈向下生长, 顶部 guard 之下按需映射 */
     if (!present && task->user_stack && task->user_stack_size
     && fault_addr >= (uint32_t)task->user_stack - JLOS_PAGE_FRAME_SIZE && fault_addr < JLOS_TASK_USER_STACK_TOP) {
         uint32_t page_addr = JLOS_PAGE_ALIGN_DOWN(fault_addr);

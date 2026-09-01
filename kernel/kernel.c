@@ -109,7 +109,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printf("Initializing network stack...\n");
 #endif
-    network_stack_t *network_stack = (network_stack_t *)jlos_malloc(sizeof(network_stack_t));
+    network_stack_t *network_stack = (network_stack_t *)jlos_kalloc(sizeof(network_stack_t));
     network_init(network_stack, &driver_manager_);
 
 #if KERNEL_CONFIG_ENABLE_TESTS

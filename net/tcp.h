@@ -66,26 +66,26 @@ struct jlos_tcp_handler {
 };
 
 struct jlos_tcp_socket {
-    uint16_t remote_port;
-    uint32_t remote_ip;
-    uint16_t local_port;
-    uint32_t local_ip;
-    uint32_t sequence_number;
-    uint32_t acknowledgement_number;
-    jlos_tcp_provider_t *backend;
-    jlos_tcp_handler_t *handler;
+    uint16_t                remote_port;
+    uint32_t                remote_ip;
+    uint16_t                local_port;
+    uint32_t                local_ip;
+    uint32_t                sequence_number;
+    uint32_t                acknowledgement_number;
+    jlos_tcp_provider_t     *backend;
+    jlos_tcp_handler_t      *handler;
     jlos_tcp_socket_state_t state;
-    jlos_hash_node_t hash_node;
+    jlos_hash_node_t        hash_node;
     bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*send)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*disconnect)(struct jlos_tcp_socket* self);
 };
 
 struct jlos_tcp_provider {
-    jlos_internet_protocol_handler_t base_handler;
-    jlos_hash_chain_t sockets;
-    uint16_t num_sockets;
-    uint16_t free_port;
+    jlos_internet_protocol_handler_t    base_handler;
+    jlos_hash_chain_t                   sockets;
+    uint16_t                            num_sockets;
+    uint16_t                            free_port;
 };
 
 typedef struct {

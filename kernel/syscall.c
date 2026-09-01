@@ -36,14 +36,14 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (alloc_len <= sizeof(stack_buf)) {
         buf = stack_buf;
     } else {
-        buf = (uint8_t *)jlos_malloc(len);
+        buf = (uint8_t *)jlos_kalloc(len);
         if (!buf) {
             return -SYSCALL_ENOMEM;
         }
     }
     if (!jlos_copy_from_user(buf, user_buf, len)) {
         if (buf != stack_buf) {
-            jlos_free(buf);
+            jlos_kfree(buf);
         }
         return -SYSCALL_EFAULT;
     }
@@ -51,7 +51,7 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         buf[len - 1] = '\0';
         printk("%s", (const char *)buf);
         if (buf != stack_buf) {
-            jlos_free(buf);
+            jlos_kfree(buf);
         }
         return len;
     }
@@ -59,12 +59,12 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
         uint32_t written = jlos_pipe_write(pipe, buf, len);
         if (buf != stack_buf) {
-            jlos_free(buf);
+            jlos_kfree(buf);
         }
         return written;
     }
     if (buf != stack_buf) {
-        jlos_free(buf);
+        jlos_kfree(buf);
     }
     return -SYSCALL_ENINVAL;
 }
@@ -88,7 +88,7 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         if (len <= sizeof(stack_buf)) {
             buf = stack_buf;
         } else {
-            buf = (uint8_t *)jlos_malloc(len);
+            buf = (uint8_t *)jlos_kalloc(len);
             if (!buf) {
                 return -SYSCALL_ENOMEM;
             }
@@ -96,12 +96,12 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         uint32_t read = jlos_pipe_read(pipe, buf, len);
         if (!jlos_copy_to_user(user_buf, buf, read)) {
             if (buf != stack_buf) {
-                jlos_free(buf);
+                jlos_kfree(buf);
             }
             return -SYSCALL_EFAULT;
         }
         if (buf != stack_buf) {
-            jlos_free(buf);
+            jlos_kfree(buf);
         }
         return read;
     }
@@ -113,7 +113,7 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr || !g_current_task_ptr->fds) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_pipe_t *pipe = (jlos_pipe_t *)jlos_malloc(sizeof(jlos_pipe_t));
+    jlos_pipe_t *pipe = (jlos_pipe_t *)jlos_kalloc(sizeof(jlos_pipe_t));
     if (!pipe) {
         return -SYSCALL_ENOMEM;
     }

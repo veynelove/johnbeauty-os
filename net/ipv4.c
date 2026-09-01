@@ -122,7 +122,7 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
 
 void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* self, uint32_t dstIP_BE, uint8_t protocol, uint8_t *data, uint32_t size)
 {
-    uint8_t *buffer = (uint8_t *)jlos_malloc(sizeof(jlos_ipv4_message_t) + size);
+    uint8_t *buffer = (uint8_t *)jlos_kalloc(sizeof(jlos_ipv4_message_t) + size);
     jlos_ipv4_message_t *message = (jlos_ipv4_message_t *)buffer;
     uint8_t ihl = sizeof(jlos_ipv4_message_t) / 4;
     JLOS_IPV4_SET_VERSION_IHL(message, 4, ihl);
@@ -154,11 +154,11 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
         printf_hex32(route);
         printf(", packet dropped\n");
 #endif
-        jlos_free(buffer);
+        jlos_kfree(buffer);
         return;
     }
     jlos_ether_frame_handler_send(&self->base_handler, dst_mac, self->base_handler.etherType_BE, buffer, sizeof(jlos_ipv4_message_t) + size);
-    jlos_free(buffer);
+    jlos_kfree(buffer);
 }
 
 uint16_t jlos_internet_protocol_provider_check_sum(uint16_t *data, uint32_t length_in_bytes)

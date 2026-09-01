@@ -77,7 +77,7 @@ typedef struct {
 
 typedef struct jlos_paging_context {
     jlos_page_dir_t *page_dir;
-    uint32_t num_page_tables;
+    uint32_t        num_page_tables;
     jlos_spinlock_t lock;
 } jlos_paging_context_t;
 

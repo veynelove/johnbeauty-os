@@ -20,7 +20,6 @@ typedef unsigned char               bool;
 
 typedef const char *               string;
 typedef uint32_t                   size_t;
-typedef uint32_t                   uintptr_t;
 
 #define JLOS_HEAP_START ((uint8_t)(10 * 1024 * 1024))
 #define JLOS_HEAP_RESERVED_SIZE ((size_t)(10 * 1024))
@@ -34,7 +33,8 @@ typedef uint32_t                   uintptr_t;
       ((uint32_t)(x1) & 0xFF))
 
 #define JLOS_EXCEPT_CEIL(a, b) (((a) + (b) - 1) / (b))
-
 #define JLOS_ARRAY_LIMIT_RANGE(idx, range) (((idx) + 1) % (range))
+#define JLOS_ALIGN_UP(addr, align) (((addr) + (align) - 1) & ~((align) - 1))
+#define JLOS_ALIGN_DOWN(addr, align) ((uint32_t)(addr) & ~((align) - 1))
 
 #endif

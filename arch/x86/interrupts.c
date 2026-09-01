@@ -4,10 +4,12 @@
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
+#include <hal/hal.h>
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);
+extern jlos_task_t *g_current_task_ptr;
 
 jlos_interrupt_manager_t *jlos_active_interrupt_manager = NULL;
 
@@ -255,6 +257,32 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         jlos_irq_context_init(&context, esp);
         jlos_paging_page_fault_handler(&context);
         return esp;
+    }
+    
+    if (interrupt < 0x20 && interrupt != 0x07 && interrupt != 0x00 && interrupt != 0x02 &&
+        self->handles[interrupt + self->hardware_interrupt_offset] == NULL) {
+        jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
+        uint32_t err = cpu->padding;   /* offset 32 = CPU 压入的真实 error code */
+        printk("[EXC] num=0x%x err=0x%x eip=0x%x cs=0x%x efl=0x%x uesp=0x%x uss=0x%x pid=%u\n",
+               interrupt, err, cpu->eip, cpu->cs, cpu->eflags,
+               cpu->user_esp, cpu->user_ss,
+               g_current_task_ptr ? g_current_task_ptr->pid : 0);
+        if (interrupt == 0x0D) {  /* #GP: error code 非零时为触犯的段选择子 */
+            if (err) {
+                printk("[GP] sel=0x%x idx=%u TI=%u RPL=%u ext=%u\n",
+                       err & 0xFFF8, (err >> 3) & 0x1FF,
+                       (err >> 2) & 1, err & 3, (err >> 0) & 1 ? 0 : 1);
+            } else {
+                printk("[GP] err=0\n");
+            }
+        }
+        if (interrupt == 0x08) {  /* #DF 双重错误 → 即将 triple fault 关闭 CPU */
+            printk("[DF] DOUBLE FAULT -> triple fault imminent\n");
+        }
+        /* #GP/#DF 为不可恢复致命错误, halt 以便读日志; 其余异常也 halt 避免雪崩 */
+        for (;;) {
+            jlos_hal_halt();
+        }
     }
 
     if (interrupt == 0x07) {

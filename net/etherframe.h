@@ -9,9 +9,9 @@
 #define JLOS_SWAP_ENDIAN_32(x) ((((x) & 0xFF000000) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | (((x) & 0x000000FF) << 24))
 
 typedef struct {
-    uint8_t dstMAC[6];
-    uint8_t srcMAC[6];
-    uint16_t etherType_BE;
+    uint8_t     dstMAC[6];
+    uint8_t     srcMAC[6];
+    uint16_t    etherType_BE;
 } __attribute__((packed)) jlos_ether_frame_header_t;
 
 typedef uint32_t jlos_ether_frame_footer_t;
@@ -21,14 +21,14 @@ typedef struct jlos_ether_frame_handler jlos_ether_frame_handler_t;
 
 struct jlos_ether_frame_handler {
     jlos_ether_frame_provider_t *backend;
-    uint16_t etherType_BE;
-    jlos_hash_node_t hash_node;
+    uint16_t                    etherType_BE;
+    jlos_hash_node_t            hash_node;
     bool (*on_ether_frame_received)(jlos_ether_frame_handler_t* self, uint8_t *etherframe_payload, uint32_t size);
 };
 
 struct jlos_ether_frame_provider {
-    jlos_rawdata_handler_t base_handler;
-    jlos_hash_chain_t handlers;
+    jlos_rawdata_handler_t  base_handler;
+    jlos_hash_chain_t       handlers;
 };
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t etherType_BE);

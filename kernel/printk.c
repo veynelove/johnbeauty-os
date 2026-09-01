@@ -238,8 +238,3 @@ void printk(const char *fmt, ...)
     }
     jlos_spin_unlock_irqrestore(&s_printf_lock, flags);
 }
-
-void sysprintf(char *str)
-{
-    __asm__ __volatile__("int $0x80" : : "a" (4), "b" (str));
-}

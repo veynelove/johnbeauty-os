@@ -21,24 +21,24 @@ struct jlos_udp_handler {
 };
 
 struct jlos_udp_socket {
-    uint16_t remote_port;
-    uint32_t remote_ip;
-    uint16_t local_port;
-    uint32_t local_ip;
-    jlos_udp_provider_t *backend;
-    jlos_udp_handler_t *handler;
-    jlos_hash_node_t hash_node;
-    bool listening;
+    uint16_t                remote_port;
+    uint32_t                remote_ip;
+    uint16_t                local_port;
+    uint32_t                local_ip;
+    jlos_udp_provider_t     *backend;
+    jlos_udp_handler_t      *handler;
+    jlos_hash_node_t        hash_node;
+    bool                    listening;
     void (*handle_udp_message)(struct jlos_udp_socket* self, uint8_t *data, uint16_t size);
     void (*send)(struct jlos_udp_socket* self, uint8_t *data, uint16_t size);
     void (*disconnect)(struct jlos_udp_socket* self);
 };
 
 struct jlos_udp_provider {
-    jlos_internet_protocol_handler_t base_handler;
-    jlos_hash_chain_t sockets;
-    uint16_t num_sockets;
-    uint16_t free_port;
+    jlos_internet_protocol_handler_t    base_handler;
+    jlos_hash_chain_t                   sockets;
+    uint16_t                            num_sockets;
+    uint16_t                            free_port;
 };
 
 typedef struct {

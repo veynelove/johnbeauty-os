@@ -32,7 +32,7 @@ $(OBJ_DIR)/%.o: %.s
 	@as $(ASPARAMS) -o $@ $<
 
 $(JLOS).bin: arch/$(ARCH)/linker.ld  $(OBJS)
-	@ld $(LDPARAMS) -T $< -o $@  $(OBJS)
+	@ld $(LDPARAMS) -T $< -o $(JLOS).bin $(OBJS)
 
 install: $(JLOS).bin
 	@sudo cp $< /boot/$(JLOS).bin

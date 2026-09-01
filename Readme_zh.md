@@ -13,6 +13,7 @@
 | 📁 **文件系统** | 块设备 HAL 抽象、FAT16/FAT32 BPB 解析、8.3 目录项、簇链、MS-DOS 风格路径解析（兼容 Unix `/` 和 DOS `\`） |
 | 🖼️ **GUI** | Desktop 根容器 → Window 可拖动窗口 → Button/Label/EditBox Widget 组合模式；hit-test 鼠标事件分发 |
 | 🔧 **工具** | memory_test / multitask_test / hard_driver_test / http_server_test / udp_server_test 5 个测试用例 + debug_console |
+| 🧪 **测试基线** | MEMORY ALL PASSED (boundary/slab/contig/kvheap/roundtrip) + MULTITASK ALL PASSED (调度交替/fork-wait/10子并发/ring3 冒烟)；按需分页 PF 一行总览 |
 
 ---
 
@@ -80,6 +81,9 @@ POST-START CSR0=0x01F3  STRT=01 INEA=01 INTR=01 RXON=01 TXON=01
 Starting HTTP server on port 1234...
 UDP server listening on port 5678
 task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
+[MEMORY] ALL PASSED :)             # TEST 1~5 全 PASS (boundary/slab/contig/kvheap/roundtrip)
+[MULTITASK] ALL PASSED :)           # TEST 1~4 全 PASS (调度交替/fork-wait/10子并发/ring3 冒烟)
+[PF] addr=0x... err=0x.. user=1 ip=0x.. pid=N   # 用户栈 demand paging 一行总览
 ```
 
 ---
