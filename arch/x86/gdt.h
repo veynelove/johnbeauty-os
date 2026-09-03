@@ -1,5 +1,5 @@
-#ifndef __GDT_H
-#define __GDT_H
+#ifndef _GDT_H
+#define _GDT_H
 
 #include <common/types.h>
 

@@ -7,6 +7,16 @@
 #include <kernel/multitask.h>
 #include <kernel/paging.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "arch"
+
+jlos_task_t *g_current_task_ptr = NULL;
+uint32_t jlos_arch_tss_base_addr = 0;
+
+static jlos_x86_tss_t s_tss;
+
+extern uint8_t kernel_stack_bottom[];
+extern uint8_t kernel_stack[];
+
 extern void ret_from_fork(void);
 
 void jlos_arch_task_set_sp(void *task, uint32_t real_on_stack_cpustate)
@@ -45,12 +55,6 @@ uint32_t jlos_arch_task_copy_sp(void *parent_v, void *child_v,
     c->sp.value = c_sp;
     return c_sp;
 }
-
-jlos_task_t *g_current_task_ptr = NULL;
-uint32_t jlos_arch_tss_base_addr = 0;
-
-static jlos_x86_tss_t s_tss;
-static uint8_t s_kernel_stack[4096];
 
 __attribute__((noreturn)) void jlos_task_do_exit(void)
 {
@@ -117,7 +121,7 @@ void jlos_arch_tss_init(uint16_t kernel_data_selector)
     jlos_gdt_t *gdt = jlos_gdt_get_kernel();
     uint16_t tss_sel = jlos_gdt_tss_selector(gdt);
     jlos_gdt_set_tss(gdt, (uint32_t)&s_tss, sizeof(jlos_x86_tss_t) - 1);
-    jlos_x86_tss_init(&s_tss, (uint32_t)(s_kernel_stack + 4096), kernel_data_selector);
+    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, kernel_data_selector);
     jlos_x86_tss_load(tss_sel);
 }
 
@@ -126,23 +130,17 @@ void jlos_arch_tss_set_ctx(uint32_t ctx)
     s_tss.esp0 = ctx;
 }
 
+void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size)
+{
+    *base = kernel_stack_bottom;
+    *size = (uint32_t)(kernel_stack - kernel_stack_bottom);
+}
+
 void jlos_arch_tss_init_for_asm(void)
 {
     jlos_arch_tss_base_addr = (uint32_t)&s_tss;
 }
 
-/* x86 fork 子任务上下文调整 — 经典 Linux copy_thread + ret_from_fork 范式.
- *
- * 高层 multitask.c 已完成: *child=*parent (task_struct 复制) + memcpy 子栈.
- * ring0_task_return 从 NEW child->cpustate 读 GPR/iret frame, 故本函数对
- * child cpustate 的覆写即子任务初始 CPU 寄存器值.
- *
- * 关键 4 步:
- *   (1) eax = 0          fork 子返回值 (跳板再 mov $0,%eax 为最终防线)
- *   (2) ebx = resume_pc  跳板 jmp *%ebx 跳过 fork 尾部 return child (防 eax 被改写)
- *   (3) eip = resume_pc  iret 直达 fork_stub asm label1: addl$24,%esp
- *   (4) user_esp 平移   子栈 esp 与父对齐
- * 跳板 3 字节窗口 (mov$0 + jmp*ebx) 在 μs 级 IRQ 物理上不可能插入, 经典安全. */
 void jlos_arch_task_fork_prepare_child(
     jlos_cpu_state_t *child_cpustate,
     bool is_user_process,
@@ -157,17 +155,7 @@ void jlos_arch_task_fork_prepare_child(
 {
     (void)parent_stack_size;
     jlos_x86_regs_t *c = (jlos_x86_regs_t *)child_cpustate;
-
-    /* (1) eax = 0: fork 子返回值. kernel task fork 走 inline-asm 非 syscall,
-     * parent cpustate 是被抢占时 stale 快照, 不能 iret 到父 eip (会重跑→递归).
-     * 子 kstack = 父 kstack memcpy, 已含完整调用链帧, 故 eip=fork_resume_pc
-     * (asm label1: addl$24,%esp) 直达 fork_stub 清栈点, eax=0 让子走子分支. */
     c->eax = 0;
-
-    /* (4) 锚点法求子栈 iret_sp: fork_stub asm 首句 movl %esp,%ecx 抓硬件 esp
-     * 作 fork_esp_ref, 6 args + call retaddr = 28B 深度, addl$24 清栈后 esp =
-     * esp_ref - 4, 故 K_DEAD = -24 (0 方差硬编码, -fomit-frame-pointer 也命中).
-     * 帧链法 (use_chain) 仅开帧指针编译时作为 O(1) 精确路径, 一般不命中. */
     uint32_t p_base = (uint32_t)parent_stack;
     uint32_t c_base = (uint32_t)child_stack;
     uint32_t p_top  = p_base + parent_stack_size;
@@ -250,17 +238,13 @@ DONE_SET_IRET:
         c->user_esp = iret_sp;
     }
 
-    /* memcpy 整个 pt_regs 到子栈 (经典 copy_thread: onstack 与 cpustate 同步).
-     * kernel task: 覆写 eip=fork_resume_pc/cs=0x10/eflags=0x10246(IF=1)/user_esp=iret_sp,
-     *   跳过 fork 尾部 return child (防 eax=0 被改写), eflags 必开中断防 halt 死锁.
-     * user process: 全部保持父值 (syscall handler 已存 ring3 上下文). */
     {
         const uint32_t OFF_EIP = 36u;
         uint8_t *dst56 = (uint8_t *)iret_sp - OFF_EIP;
         bool     memcpy_ok = (dst56 >= (uint8_t *)c_base &&
                               dst56 + sizeof(jlos_x86_regs_t) <= (uint8_t *)c_top);
         if (!memcpy_ok) {
-            printk("[af-MEMCPY-OOB] dst56=%x sz=%u overflow\n",
+            printk_err("fork prepare child: memcpy oob dst56=%x sz=%u\n",
                    (unsigned)dst56, (unsigned)sizeof(jlos_x86_regs_t));
             jlos_hal_halt();
         }
@@ -284,5 +268,6 @@ DONE_SET_IRET:
 
     (void)parent_task;
     (void)child_task;
+    (void)parent_cpustate;
 }
 

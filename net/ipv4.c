@@ -1,10 +1,9 @@
 #include <net/ipv4.h>
 #include <kernel/memory_manager.h>
+#include <kernel/printk.h>
 #include <tools/config.h>
 
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#define JLOS_KERNEL_LOG_SUBSYS "ipv4"
 
 void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self, jlos_internet_protocol_provider_t *backend, uint8_t protocol)
 {
@@ -43,7 +42,6 @@ void jlos_internet_protocol_provider_init(jlos_internet_protocol_provider_t* sel
     self->arp = arp;
     self->gateway_ip = gateway_ip;
     self->subnet_mask = subnet_mask;
-    
     for (int i = 0; i < 255; i++) {
         self->handlers[i] = NULL;
     }
@@ -56,63 +54,38 @@ void jlos_internet_protocol_provider_destroy(jlos_internet_protocol_provider_t* 
 
 bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_protocol_provider_t* self, uint8_t *etherframe_payload, uint32_t size)
 {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("IP: Received IPv4 packet, size=");
-    printf_hex((size >> 0) & 0xFF);
-    printf_hex((size >> 8) & 0xFF);
-    printf("\n");
-#endif
-    
+    printk_debug("received IPv4 packet, size=%x%x\n", size & 0xFF, (size >> 8) & 0xFF);
     if (size < sizeof(jlos_ipv4_message_t)) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("IP: Packet too small\n");
-#endif
+        printk_debug("packet too small\n");
         return false;
     }
     jlos_ipv4_message_t *ip_message = (jlos_ipv4_message_t *)etherframe_payload;
     bool send_back = false;
-    
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
-    
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("IP: Protocol=");
-    printf_hex(ip_message->protocol);
-    printf("\n");
-#endif
-    
+    printk_debug("protocol=%x\n", ip_message->protocol);
     if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("IP: Packet is for us\n");
-#endif
+        printk_debug("packet is for us\n");
         int length = JLOS_SWAP_ENDIAN_16(ip_message->total_length);
         if (length > (int)size) {
             length = size;
         }
         if (self->handlers[ip_message->protocol]) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("IP: Handler found, calling it\n");
-#endif
+            printk_debug("handler found, calling it\n");
             send_back = self->handlers[ip_message->protocol]->on_internet_protocol_received(
                 self->handlers[ip_message->protocol], ip_message->src_ip, ip_message->dst_ip,
                 etherframe_payload + 4 * header_length, length - 4 * header_length);
         }
-#if KERNEL_CONFIG_DEBUG_NETWORK
         else {
-            printf("IP: No handler for this protocol\n");
+            printk_debug("no handler for this protocol\n");
         }
-#endif
     }
-#if KERNEL_CONFIG_DEBUG_NETWORK
     else {
-        printf("IP: Packet not for us\n");
+        printk_debug("packet not for us\n");
     }
-#endif
-    
     if (send_back) {
         uint32_t temp = ip_message->dst_ip;
         ip_message->dst_ip = ip_message->src_ip;
         ip_message->src_ip = temp;
-
         ip_message->time_to_live = 0x40;
         ip_message->checksum = 0;
         ip_message->checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)ip_message, 4 * header_length);
@@ -132,13 +105,10 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     message->flags_and_offset = 0x0040;
     message->time_to_live = 0x40;
     message->protocol = protocol;
-    
     message->dst_ip = dstIP_BE;
     message->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
-
     message->checksum = 0;
     message->checksum = jlos_internet_protocol_provider_check_sum((uint16_t *)message, sizeof(jlos_ipv4_message_t));
-
     uint8_t *data_buffer = buffer + sizeof(jlos_ipv4_message_t);
     for (int i = 0; i < (int)size; i++) {
         data_buffer[i] = data[i];
@@ -149,11 +119,7 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     }
     uint64_t dst_mac = jlos_arp_lookup_or_request(self->arp, route);
     if (dst_mac == 0xFFFFFFFFFFFF) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("IP4: ARP pending for route=");
-        printf_hex32(route);
-        printf(", packet dropped\n");
-#endif
+        printk_warn("ARP pending for route=%x, packet dropped\n", route);
         jlos_kfree(buffer);
         return;
     }

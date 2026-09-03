@@ -1,5 +1,5 @@
-#ifndef JLOS_KERNEL_DEVICE_H
-#define JLOS_KERNEL_DEVICE_H
+#ifndef _JLOS_KERNEL_DEVICE_H
+#define _JLOS_KERNEL_DEVICE_H
 
 #include <common/types.h>
 #include <common/multiboot.h>

@@ -1,12 +1,9 @@
 #include <hal/hal.h>
 #include <hal/device.h>
 #include <hal/kernel_syscall.h>
+#include <kernel/printk.h>
 
-/* hal.c 不依赖 kernel 头；直接 extern 用的输出函数 */
-extern void printf(const char *str);
-extern void printf_hex32(uint32_t value);
-extern void printf_hex16(uint16_t value);
-extern void printf_char(char c);
+#define JLOS_KERNEL_LOG_SUBSYS "hal"
 
 /* 前向声明：io ranges / irq table，后面定义，给前面的 sanity_check / claim 用 */
 static jlos_hal_io_range_t  s_io_ranges[JLOS_HAL_IO_RANGES_MAX];
@@ -178,19 +175,6 @@ const jlos_hal_io_ops_t *jlos_hal_io_ops = &jlos_hal_x86_fast_io_ops;
 static int ranges_overlap(uint16_t a_s, uint16_t a_e, uint16_t b_s, uint16_t b_e)
 { return !(a_e < b_s || b_e < a_s); }
 
-/* 小 helper：把 32-bit 无符号数以 10 进制打印（不依赖 sprintf） */
-static void hal_print_u32_dec(uint32_t v)
-{
-    char buf[11];
-    int i = 0;
-    if (v == 0) { printf_char('0'); return; }
-    while (v > 0) {
-        buf[i++] = '0' + (v % 10);
-        v /= 10;
-    }
-    while (i > 0) printf_char(buf[--i]);
-}
-
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
 {
     (void)is_write;
@@ -203,11 +187,8 @@ int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
             }
         }
         if (!found) {
-            printf("[HAL] io_sanity: WARN PCI config port 0x");
-            printf_hex16(port);
-            printf(" accessed without registered owner (caller=");
-            printf(owner ? owner : "(null)");
-            printf(")\n");
+            printk_warn("io_sanity: pci config port 0x%x accessed without owner (caller=%s)\n",
+                port, owner ? owner : "(null)");
         }
     }
     return 0;
@@ -229,13 +210,9 @@ int jlos_hal_register_io_range(uint16_t start, uint16_t end, const char *owner)
     for (int i = 0; i < JLOS_HAL_IO_RANGES_MAX; i++) {
         if (s_io_ranges[i].claimed &&
             ranges_overlap(start, end, s_io_ranges[i].start, s_io_ranges[i].end)) {
-            printf("[HAL] io_ranges: CONFLICT [0x");
-            printf_hex16(start); printf("-0x"); printf_hex16(end);
-            printf(" owner="); printf(owner ? owner : "(null)");
-            printf("] overlaps existing [0x");
-            printf_hex16(s_io_ranges[i].start); printf("-0x"); printf_hex16(s_io_ranges[i].end);
-            printf(" owner="); printf(s_io_ranges[i].owner);
-            printf("]\n");
+            printk_warn("io_ranges: conflict [0x%x-0x%x owner=%s] overlaps [0x%x-0x%x owner=%s]\n",
+                start, end, owner ? owner : "(null)",
+                s_io_ranges[i].start, s_io_ranges[i].end, s_io_ranges[i].owner);
             return -1;
         }
     }
@@ -248,9 +225,7 @@ int jlos_hal_register_io_range(uint16_t start, uint16_t end, const char *owner)
             return 0;
         }
     }
-    printf("[HAL] io_ranges: table full, cannot register [0x");
-    printf_hex16(start); printf("-0x"); printf_hex16(end);
-    printf("]\n");
+    printk_err("io_ranges: table full, cannot register [0x%x-0x%x]\n", start, end);
     return -1;
 }
 
@@ -278,13 +253,8 @@ const jlos_hal_io_range_t *jlos_hal_get_io_ranges(int *out_count)
 int jlos_hal_irq_claim(uint8_t irq, const char *owner)
 {
     if (s_irq_table[irq].claimed) {
-        printf("[HAL] irq_claim: CONFLICT IRQ");
-        hal_print_u32_dec(irq);
-        printf(" already claimed by '");
-        printf(s_irq_table[irq].owner);
-        printf("', new requester=");
-        printf(owner ? owner : "(null)");
-        printf("\n");
+        printk_warn("irq_claim: conflict irq%u already claimed by '%s', new requester=%s\n",
+            irq, s_irq_table[irq].owner, owner ? owner : "(null)");
         return -1;
     }
     s_irq_table[irq].claimed = 1;

@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_SPINLOCK_H
-#define __JLOS_HAL_SPINLOCK_H
+#ifndef _JLOS_HAL_SPINLOCK_H
+#define _JLOS_HAL_SPINLOCK_H
 
 #include <tools/config.h>
 #include <common/types.h>

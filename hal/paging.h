@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_PAGING_H
-#define __JLOS_HAL_PAGING_H
+#ifndef _JLOS_HAL_PAGING_H
+#define _JLOS_HAL_PAGING_H
 
 #include <common/types.h>
 

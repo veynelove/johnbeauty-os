@@ -1,5 +1,5 @@
-#ifndef __JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
-#define __JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
+#ifndef _JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
+#define _JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
 
 #include <common/types.h>
 #include <kernel/paging.h>

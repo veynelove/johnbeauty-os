@@ -1,5 +1,5 @@
-#ifndef __DRIVER_H
-#define __DRIVER_H
+#ifndef _DRIVER_H
+#define _DRIVER_H
 
 #include <common/types.h>
 

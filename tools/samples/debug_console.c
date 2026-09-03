@@ -3,18 +3,15 @@
 #include <drivers/mouse.h>
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
-
-extern void printf(const char *);
+#include <kernel/printk.h>
 
 #define JLOS_VGA_TEXT_BUFFER_VA  ((uint16_t *)PHYS_TO_VIRT(0xB8000))
 
-#define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
-
 typedef struct {
     jlos_keyboard_event_handler_t base;
-} printf_keyboard_event_handler_t;
+} console_keyboard_handler_t;
 
-static void printf_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c)
+static void console_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c)
 {
     (void)self;
     char foo[2] = {c, '\0'};
@@ -30,7 +27,7 @@ typedef struct {
 static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)
 {
     uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
-    mouse_console_t* console = (mouse_console_t*)((char*)self - offsetof(mouse_console_t, base));
+    mouse_console_t* console = container_of(self, mouse_console_t, base);
 
     video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
         | ((video_memory[80 * console->y + console->x] & 0x0F00) << 4)
@@ -61,9 +58,9 @@ void mouse_console_init(mouse_console_t *mouse_handler)
 
 void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
-    printf_keyboard_event_handler_t *kbhandler = (printf_keyboard_event_handler_t *)jlos_kalloc(sizeof(printf_keyboard_event_handler_t));
+    console_keyboard_handler_t *kbhandler = (console_keyboard_handler_t *)jlos_kalloc(sizeof(console_keyboard_handler_t));
     jlos_keyboard_event_handler_init(&kbhandler->base);
-    kbhandler->base.key_down = printf_keyboard_key_down;
+    kbhandler->base.key_down = console_keyboard_key_down;
 
     jlos_keyboard_driver_t *keyboard = (jlos_keyboard_driver_t *)jlos_kalloc(sizeof(jlos_keyboard_driver_t));
     jlos_keyboard_driver_init(keyboard, interrupts, &kbhandler->base);

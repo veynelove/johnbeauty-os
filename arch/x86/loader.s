@@ -123,5 +123,8 @@ high_half:
 /* 永久内核栈 (BSS) */
 .section .bss, "aw", @nobits
 .align 16
+.global kernel_stack_bottom
+kernel_stack_bottom:
     .space 4 * 1024 * 1024
+.global kernel_stack
 kernel_stack:

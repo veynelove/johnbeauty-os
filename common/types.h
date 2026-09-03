@@ -1,5 +1,5 @@
-#ifndef __COMMON_TYPES_H
-#define __COMMON_TYPES_H
+#ifndef _COMMON_TYPES_H
+#define _COMMON_TYPES_H
 
 #include <tools/config.h>
 
@@ -36,5 +36,12 @@ typedef uint32_t                   size_t;
 #define JLOS_ARRAY_LIMIT_RANGE(idx, range) (((idx) + 1) % (range))
 #define JLOS_ALIGN_UP(addr, align) (((addr) + (align) - 1) & ~((align) - 1))
 #define JLOS_ALIGN_DOWN(addr, align) ((uint32_t)(addr) & ~((align) - 1))
+
+#define offsetof(type, member) ((size_t)&((type *)0)->member)
+
+#define container_of(ptr, type, member) ({ \
+    const __typeof__(((type *)0)->member) *__mptr = (ptr); \
+    (type *)((char *)__mptr - offsetof(type, member)); \
+})
 
 #endif

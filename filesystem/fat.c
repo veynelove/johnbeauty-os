@@ -1,14 +1,14 @@
 #include <filesystem/fat.h>
 #include <kernel/printk.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "fs"
+
 void jlos_read_bios_block(jlos_ata_t *hd, uint32_t partition_offset)
 {
     jlos_bios_parameter_block32_t bpb;
     jlos_ata_read28(hd, partition_offset, (uint8_t *)&bpb, sizeof(jlos_bios_parameter_block32_t));
-    
-    printf("sector per cluster: ");
-    printf_hex(bpb.sectors_per_cluster);
-    printf("\n");
+
+    printk_debug("sector per cluster: %x\n", bpb.sectors_per_cluster);
     uint32_t fat_start = partition_offset + bpb.reserved_sectors;
     uint32_t fat_size = bpb.table_size;
     uint32_t data_start = fat_start + fat_size * bpb.fat_copies;

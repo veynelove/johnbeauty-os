@@ -1,5 +1,5 @@
-#ifndef JLOS_HAL_CPU_STATE_H
-#define JLOS_HAL_CPU_STATE_H
+#ifndef _JLOS_HAL_CPU_STATE_H
+#define _JLOS_HAL_CPU_STATE_H
 
 #include <common/types.h>   /* uint32_t bool */
 

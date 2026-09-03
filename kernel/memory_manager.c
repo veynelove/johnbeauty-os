@@ -6,6 +6,8 @@
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "mm"
+
 jlos_memory_manager_t *jlos_active_memory_manager = NULL;
 static jlos_memory_slab_cache_t *s_kalloc_caches[JLOS_MM_CLASS_COUNT];
 
@@ -123,7 +125,7 @@ void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
     for (uint32_t i = 0; i < initial_pages; i++) {
         void *pf = jlos_page_frame_malloc();
         if (!pf) {
-            printk("out of memory: initial heap page %u / %u\n", i, initial_pages);
+            printk_err("out of memory: initial heap page %u / %u\n", i, initial_pages);
             for (;;) {
                 jlos_hal_halt();
             }
@@ -131,7 +133,7 @@ void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
         uint32_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
         uint32_t phys = (uint32_t)VIRT_TO_PHYS(pf);
         if (!jlos_paging_map(jlos_active_paging_context, va, phys, JLOS_PTE_KERNEL_RW)) {
-            printk("out of memory: paging map faild at page %u\n", i);
+            printk_err("out of memory: paging map failed at page %u\n", i);
             jlos_page_frame_free(pf);
             for (;;) {
                 jlos_hal_halt();
@@ -141,7 +143,7 @@ void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
         jlos_page_frame_refcount_inc(phys);
     }
     jlos_memory_manager_init(self, heap_start, KERNEL_MAIN_MEMORY_MIN_SIZE);
-    printk("init_main: first=%p size=%u heap=[%p,%p) current=%p\n",
+    printk_info("init_main: first=%p size=%u heap=[%p,%p) current=%p\n",
         self->first, self->first ? (unsigned)self->first->size : 0,
         self->heap_start, self->heap_end, self->heap_current);
 }
@@ -453,11 +455,11 @@ void jlos_kvalloc_stats(jlos_memory_manager_t *self)
         }
     }
 
-    printk("Memory Manager Stats:\n");
-    printk("  Total chunks: %u\n", total);
-    printk("  Allocated: %u chunks, %u bytes\n", alloc, alloc_bytes);
-    printk("  Free: %u chunks, %u bytes\n", free, free_bytes);
-    printk("  Free bitmap: 0x%x\n", self->size_bitmap);
+    printk_info("memory manager stats:\n");
+    printk_info("total chunks: %u\n", total);
+    printk_info("allocated: %u chunks, %u bytes\n", alloc, alloc_bytes);
+    printk_info("free: %u chunks, %u bytes\n", free, free_bytes);
+    printk_info("free bitmap: 0x%x\n", self->size_bitmap);
 
     for (int i = 0; i <= self->max_class; i++) {
         uint32_t count = 0;
@@ -466,7 +468,7 @@ void jlos_kvalloc_stats(jlos_memory_manager_t *self)
         }
         if (count > 0) {
             uint32_t sz = JLOS_MM_MIN_ALLOC << i;
-            printk("  Class %2u (%7uB): %u free\n", i, sz, count);
+            printk_info("class %u (%uB): %u free\n", i, sz, count);
         }
     }
 

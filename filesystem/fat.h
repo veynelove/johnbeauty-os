@@ -1,5 +1,5 @@
-#ifndef __JLOS_FILESYSTEM_FAT_H
-#define __JLOS_FILESYSTEM_FAT_H
+#ifndef _JLOS_FILESYSTEM_FAT_H
+#define _JLOS_FILESYSTEM_FAT_H
 
 #include <drivers/ata.h>
 

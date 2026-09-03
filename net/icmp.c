@@ -1,7 +1,7 @@
 #include <net/icmp.h>
+#include <kernel/printk.h>
 
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#define JLOS_KERNEL_LOG_SUBSYS "icmp"
 
 void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend)
 {
@@ -18,41 +18,25 @@ bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_B
 {
     (void)self;
     (void)dstIP_BE;
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("ICMP: Received packet from ");
-    printf_hex(srcIP_BE & 0xFF);
-    printf(".");
-    printf_hex((srcIP_BE >> 8) & 0xFF);
-    printf(".");
-    printf_hex((srcIP_BE >> 16) & 0xFF);
-    printf(".");
-    printf_hex((srcIP_BE >> 24) & 0xFF);
-    printf("\n");
-#endif
-    
+    printk_debug("received packet from %x.%x.%x.%x\n",
+        srcIP_BE & 0xFF,
+        (srcIP_BE >> 8) & 0xFF,
+        (srcIP_BE >> 16) & 0xFF,
+        (srcIP_BE >> 24) & 0xFF);
     if (size < sizeof(jlos_icmp_message_t)) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("ICMP: Packet too small\n");
-#endif
+        printk_debug("packet too small\n");
         return false;
     }
     jlos_icmp_message_t *msg = (jlos_icmp_message_t *)internet_protocol_payload;
     switch (msg->type) {
-        case 0: // Echo Reply
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("ICMP: Echo Reply received\n");
-#endif
+        case 0:
+            printk_debug("echo reply received\n");
             break;
-        case 8: // Echo Request (ping)
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("ICMP: Echo Request received, sending reply...\n");
-#endif
+        case 8:
+            printk_debug("echo request received, sending reply\n");
             msg->type = 0;
             msg->check_sum = 0;
             msg->check_sum = jlos_internet_protocol_provider_check_sum((uint16_t *)msg, size);
-#if KERNEL_CONFIG_DEBUG_NETWORK
-            printf("ICMP: Reply prepared, returning true to send\n");
-#endif
             return true;
     }
     return false;

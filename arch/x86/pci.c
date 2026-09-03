@@ -2,11 +2,9 @@
 #include <drivers/driver.h>
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <arch/x86/pci.h>
+#include <kernel/printk.h>
 
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#define JLOS_KERNEL_LOG_SUBSYS "pci"
 
 void jlos_pci_controller_init(jlos_pci_controller_t* self)
 {
@@ -140,23 +138,15 @@ jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, j
             jlos_pci_controller_write16(self, dev.bus, dev.device, dev.function, 0x04, command);
             switch (dev.device_id) {
                 case 0x2000: {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                    printf("AMD am79c973 PCI command: 0x");
-                    printf_hex32(command);
-                    printf("\n");
-                    printf("Allocating AMD am79c973 driver structure...\n");
-#endif
+                    printk_debug("amd am79c973 pci command: 0x%x\n", command);
+                    printk_debug("allocating amd am79c973 driver structure\n");
                     driver = (jlos_driver_t *)jlos_kalloc(sizeof(jlos_amd_am79c973_t));
                     if (driver) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                        printf("AMD am79c973 driver allocated at: 0x");
-                        printf_hex32((uint32_t)driver);
-                        printf("\n");
-#endif
+                        printk_debug("amd am79c973 driver allocated at: 0x%x\n", (uint32_t)driver);
                         jlos_amd_am79c973_init((jlos_amd_am79c973_t*)driver, &dev, interrupts);
                         return driver;
                     }
-                    printf("AMD am79c973 allocation FAILED\n");
+                    printk_err("amd am79c973 allocation failed\n");
                     break;
                 }
             }
@@ -165,7 +155,7 @@ jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, j
         case 0x8086:
             break;
     }
-    printf("NO network driver!\n");
+    printk_warn("no network driver\n");
     return driver;
 }
 

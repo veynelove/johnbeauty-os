@@ -1,35 +1,35 @@
 # JohnBeauty OS (JLOS)
 
----
+***
 
 ## ✨ 功能亮点一览
 
-| 类别 | 已实现功能 |
-| --- | --- |
-| 🧠 **内核核心** | 32-bit 保护模式 flat 段、分页/堆 malloc/free(双堆切换)、PIT 100Hz 抢占调度、IDT+双8259 PIC 动态屏蔽 |
-| 🧩 **HAL 层 (6级完成)** | IO ops 运行时多态 + jlos_hal_info_t 只读硬件信息 + 统一设备模型(资源冲突检测+回滚) + 可重入自旋锁irqsave + mfence/lfence/sfence 内存屏障 + 环形I/O诊断 Trace |
-| 🚗 **驱动** | AMD am79c973 PCI 网卡(20 RX + 8 TX desc 环)、ATA PIO-28 硬盘、PS/2 键盘、PS/2 鼠标、VGA 字符/图形模式、16550 UART COM1、8237 DMA |
-| 🌐 **网络** | Ethernet II ⇄ ARP(128 cache + timeout) ⇄ IPv4(路由 + checksum) ⇄ ICMP(ping reply) ⇄ UDP/TCP Socket ⇄ HTTP 1234 + UDP 5678 echo server |
-| 📁 **文件系统** | 块设备 HAL 抽象、FAT16/FAT32 BPB 解析、8.3 目录项、簇链、MS-DOS 风格路径解析（兼容 Unix `/` 和 DOS `\`） |
-| 🖼️ **GUI** | Desktop 根容器 → Window 可拖动窗口 → Button/Label/EditBox Widget 组合模式；hit-test 鼠标事件分发 |
-| 🔧 **工具** | memory_test / multitask_test / hard_driver_test / http_server_test / udp_server_test 5 个测试用例 + debug_console |
-| 🧪 **测试基线** | MEMORY ALL PASSED (boundary/slab/contig/kvheap/roundtrip) + MULTITASK ALL PASSED (调度交替/fork-wait/10子并发/ring3 冒烟)；按需分页 PF 一行总览 |
+| 类别                   | 已实现功能                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 🧠 **内核核心**         | 32-bit 保护模式 flat 段、分页/堆 malloc/free(双堆切换)、PIT 100Hz 抢占调度、IDT+双8259 PIC 动态屏蔽                                                                            |
+| 🧩 **HAL 层 (6级完成)** | IO ops 运行时多态 + jlos_hal_info_t 只读硬件信息 + 统一设备模型(资源冲突检测+回滚) + 可重入自旋锁irqsave + mfence/lfence/sfence 内存屏障 + 环形I/O诊断 Trace                   |
+| 🚗 **驱动**             | AMD am79c973 PCI 网卡(20 RX + 8 TX desc 环)、ATA PIO-28 硬盘、PS/2 键盘、PS/2 鼠标、VGA 字符/图形模式、16550 UART COM1、8237 DMA                                               |
+| 🌐 **网络**             | Ethernet II ⇄ ARP(128 cache + timeout) ⇄ IPv4(路由 + checksum) ⇄ ICMP(ping reply) ⇄ UDP/TCP Socket ⇄ HTTP 1234 + UDP 5678 echo server                                          |
+| 📁 **文件系统**         | 块设备 HAL 抽象、FAT16/FAT32 BPB 解析、8.3 目录项、簇链、MS-DOS 风格路径解析（兼容 Unix `/` 和 DOS `\`）                                                                       |
+| 🖼️ **GUI**              | Desktop 根容器 → Window 可拖动窗口 → Button/Label/EditBox Widget 组合模式；hit-test 鼠标事件分发                                                                               |
+| 🔧 **工具**             | memory_test / multitask_test / hard_driver_test / http_server_test / udp_server_test 5 个测试用例 + debug_console                                                              |
+| 🧪 **测试基线**         | MEMORY ALL PASSED (boundary/slab/contig/kvheap/roundtrip) + MULTITASK ALL PASSED (调度交替/fork-wait/10子并发/ring3 冒烟, v2.9 调度稳定性修复后两次稳定)；按需分页 PF 一行总览 |
 
----
+***
 
----
+***
 
 ## 关键硬约束（踩坑总结）
 
 1. `am79c973 INIT 块` 必须 **32 字节对齐**；`CSR3/CSR5` 禁止手动写，硬件从 INIT 块读
-2. 网卡初始化序列：`STOP → CSR4 → CSR1/CSR2 → INIT → STRT(0x42=STRT\|INEA)`；`CSR0.IENA(0x0400)=1`
+2. 网卡初始化序列：`STOP → CSR4 → CSR1/CSR2 → INIT → STRT(0x42=STRT|INEA)`；`CSR0.IENA(0x0400)=1`
 3. `sti()` 必须在 `network_init()` 之前（ARP resolve 要收中断包）
-4. 中断 stub 用 **`movl/pushl` 4 字节 int#**，不能用 `movb/pushb` 1 字节（栈错位 → EIP 垃圾）
+4. 中断 stub 用 **`movl/pushl`** **4 字节 int#**，不能用 `movb/pushb` 1 字节（栈错位 → EIP 垃圾）
 5. `jlos_cpu_state_t` 成员顺序 100% 匹配 interruptstubs.s push：`eax ebx ecx edx esi edi ebp error eip cs eflags`
 6. `cpustate` **嵌入 jlos_task_t**，不能放 task 栈上（否则中断 pusha 覆盖下次调度现场）
 7. VMware 环境：忽略 IRQ13 (int 0x0D) / int 0x2E 伪中断；ATA 测试简化模式防 #GP
 
----
+***
 
 ## 🔧 编译与运行
 
@@ -59,6 +59,7 @@ make clean      # 清理 obj / johnkernel.bin / johnkernel.iso
 ```
 
 1. 另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如
+
 2. "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
 
 3. 开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
@@ -81,12 +82,12 @@ POST-START CSR0=0x01F3  STRT=01 INEA=01 INTR=01 RXON=01 TXON=01
 Starting HTTP server on port 1234...
 UDP server listening on port 5678
 task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
-[MEMORY] ALL PASSED :)             # TEST 1~5 全 PASS (boundary/slab/contig/kvheap/roundtrip)
-[MULTITASK] ALL PASSED :)           # TEST 1~4 全 PASS (调度交替/fork-wait/10子并发/ring3 冒烟)
+[MEMORY] ALL PASSED             # TEST 1~5 全 PASS (boundary/slab/contig/kvheap/roundtrip)
+[MULTITASK] ALL PASSED           # TEST 1~4 全 PASS (调度交替/fork-wait/10子并发/ring3 冒烟)
 [PF] addr=0x... err=0x.. user=1 ip=0x.. pid=N   # 用户栈 demand paging 一行总览
 ```
 
----
+***
 
 ## 🏗️ 整体架构图
 
@@ -154,3 +155,4 @@ task: A  task: B  ... × 10 轮      # PIT 100Hz 抢占调度正常
 ## 💡 Tips
 
 > 公主平安开心 🌸
+

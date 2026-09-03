@@ -1,5 +1,5 @@
-#ifndef __HTTP_SERVER_TE_H
-#define __HTTP_SERVER_TE_H
+#ifndef _HTTP_SERVER_TE_H
+#define _HTTP_SERVER_TE_H
 
 #include <net/tcp.h>
 
