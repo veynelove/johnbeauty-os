@@ -1,5 +1,5 @@
-#ifndef __JLOS_NET_ETHERFRAME_H
-#define __JLOS_NET_ETHERFRAME_H
+#ifndef _JLOS_NET_ETHERFRAME_H
+#define _JLOS_NET_ETHERFRAME_H
 
 #include <common/types.h>
 #include <drivers/amd_am79c973.h>

@@ -1,5 +1,5 @@
-#ifndef __HDC_PORT_H
-#define __HDC_PORT_H
+#ifndef _HDC_PORT_H
+#define _HDC_PORT_H
 
 #include <common/types.h>
 

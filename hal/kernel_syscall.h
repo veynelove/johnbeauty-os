@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_KERNEL_SYSCALL_H
-#define __JLOS_HAL_KERNEL_SYSCALL_H
+#ifndef _JLOS_HAL_KERNEL_SYSCALL_H
+#define _JLOS_HAL_KERNEL_SYSCALL_H
 
 #include <common/types.h>
 

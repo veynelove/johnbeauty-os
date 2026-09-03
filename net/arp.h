@@ -1,5 +1,5 @@
-#ifndef __JLOS_NET_ARP_H
-#define __JLOS_NET_ARP_H
+#ifndef _JLOS_NET_ARP_H
+#define _JLOS_NET_ARP_H
 
 #include <net/etherframe.h>
 

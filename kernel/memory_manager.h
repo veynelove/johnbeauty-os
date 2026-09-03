@@ -1,5 +1,5 @@
-#ifndef __JLOS_KERNEL_MEMORY_MANAGER_H
-#define __JLOS_KERNEL_MEMORY_MANAGER_H
+#ifndef _JLOS_KERNEL_MEMORY_MANAGER_H
+#define _JLOS_KERNEL_MEMORY_MANAGER_H
 
 #include <common/types.h>
 #include <hal/smp.h>

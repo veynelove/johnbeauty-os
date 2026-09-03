@@ -1,6 +1,6 @@
 # JohnBeauty OS 内核架构升级计划
 
-版本: v2.8 | 日期: 2026-09-01 | 作者: JohnLove
+版本: v2.9 | 日期: 2026-09-03 | 作者: JohnLove
 
 ***
 
@@ -16,24 +16,24 @@
 
 ## 里程碑总览
 
-| 模块      | 完成项                                                                               | 验证                                          |
-| ------- | --------------------------------------------------------------------------------- | ------------------------------------------- |
-| 网络驱动    | AMD AM79C973 初始化（CSR/BCR 配置、描述符环、IRQ 处理）                                          | ERR=0，收发稳定                                  |
-| ARP     | 请求/响应 + 非阻塞查找缓存                                                                   | ARP 缓存正常更新                                  |
-| IPv4    | 路由 + 校验和 + 收发封装                                                                   | 正常收发                                        |
-| ICMP    | Echo Request/Reply（完整 payload 校验）                                                 | ping 可正常工作                                  |
-| UDP     | 非阻塞 send/recv + Socket 管理                                                         | 收发正常，无 ERR=1 循环                             |
-| TCP     | 完整状态机 + 三次握手/四次挥手 + SYN/FIN 序列号处理                                                 | curl 直连成功                                   |
-| HTTP    | HTTP/1.1 响应 + Content-Length + 正确 header                                          | curl -v 原生解析 200 OK                         |
-| 虚拟内存    | 3:1 高半核分页 + 内核/用户地址空间隔离 + per-context lock + COW + context\_clone 浅拷贝             | 动态映射，ring3 用户进程正常运行                         |
-| 内存管理    | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向   | 256MB QEMU 全流程通过                            |
-| 系统调用    | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close | per-thread errno + wait\_pid 退出码            |
-| 多任务调度   | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 + pid hash table + O(1) zombie 清理                   | 时间片轮转正常，交互型优先                               |
-| 同步原语    | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                       | spinlock 关中断保护                              |
-| IPC     | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组)                                                     | FIFO 顺序，close/destroy 分离                    |
-| 用户进程    | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork COW + exit stub 修复                 | Hello from ring3 + Wake up 验证通过             |
-| FPU/SSE | Lazy 上下文切换 (CR0.TS + #NM handler) + FXSAVE/FXRSTOR + HAL ext\_state 抽象层 + 干净模板初始化 | multitask\_test + ring3 正常运行                |
-| 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页    | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
+| 模块           | 完成项                                                                                           | 验证                                         |
+| -------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| 网络驱动       | AMD AM79C973 初始化（CSR/BCR 配置、描述符环、IRQ 处理）                                          | ERR=0，收发稳定                              |
+| ARP            | 请求/响应 + 非阻塞查找缓存                                                                       | ARP 缓存正常更新                             |
+| IPv4           | 路由 + 校验和 + 收发封装                                                                         | 正常收发                                     |
+| ICMP           | Echo Request/Reply（完整 payload 校验）                                                          | ping 可正常工作                              |
+| UDP            | 非阻塞 send/recv + Socket 管理                                                                   | 收发正常，无 ERR=1 循环                      |
+| TCP            | 完整状态机 + 三次握手/四次挥手 + SYN/FIN 序列号处理                                              | curl 直连成功                                |
+| HTTP           | HTTP/1.1 响应 + Content-Length + 正确 header                                                     | curl -v 原生解析 200 OK                      |
+| 虚拟内存       | 3:1 高半核分页 + 内核/用户地址空间隔离 + per-context lock + COW + context\_clone 浅拷贝          | 动态映射，ring3 用户进程正常运行             |
+| 内存管理       | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向    | 256MB QEMU 全流程通过                        |
+| 系统调用       | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close                | per-thread errno + wait\_pid 退出码          |
+| 多任务调度     | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 + pid hash table + O(1) zombie 清理               | 时间片轮转正常，交互型优先                   |
+| 同步原语       | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                    | spinlock 关中断保护                          |
+| IPC            | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组)                                               | FIFO 顺序，close/destroy 分离                |
+| 用户进程       | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork COW + exit stub 修复             | Hello from ring3 + Wake up 验证通过          |
+| FPU/SSE        | Lazy 上下文切换 (CR0.TS + #NM handler) + FXSAVE/FXRSTOR + HAL ext\_state 抽象层 + 干净模板初始化 | multitask\_test + ring3 正常运行             |
+| 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页   | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
 
 ***
 
@@ -60,25 +60,25 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 实施结果
 
-| 项                                             | 状态 | 说明                                             |
-| --------------------------------------------- | -- | ---------------------------------------------- |
-| Buddy 分配器 (MAX\_ORDER=10, free\_area\[0..10]) | ✅  | 空闲链表节点嵌入物理帧前 8 字节                              |
-| Bootstrap Allocator (boot\_alloc)             | ✅  | 按字节分配，page\_alloc 为薄 wrapper                   |
-| 两阶段初始化 (boot\_alloc → paging → PFA init)      | ✅  | 经典方案 A                                         |
-| 元数据按字节分配 (bitmap/refcount/buddy\_order)       | ✅  | 不再固定 1 页，按实际大小                                 |
-| mark\_occupied 语义统一                           | ✅  | bitmap=1 + refcount=1 + buddy\_order=INVALID   |
-| reserve\_bulk 从 buddy 分配                      | ✅  | 修复 mark\_reserve 循环变量 bug (frame+i)            |
-| Linux 风格虚拟布局                                  | ✅  | DIRECT\_MAP\_SIZE=896MB, HEAP\_BASE=0xF8000000 |
-| 内核堆逐帧映射                                       | ✅  | init\_main + expand\_heap 同构 (物理散、虚拟连)         |
-| spinlock 保护                                   | ✅  | s\_pfa\_lock                                   |
-| 验证                                            | ✅  | 256MB QEMU 全流程通过: ring3 + fork COW + 网络 + 多任务  |
+| 项                                               | 状态 | 说明                                                    |
+| ------------------------------------------------ | ---- | ------------------------------------------------------- |
+| Buddy 分配器 (MAX\_ORDER=10, free\_area\[0..10]) | ✅    | 空闲链表节点嵌入物理帧前 8 字节                         |
+| Bootstrap Allocator (boot\_alloc)                | ✅    | 按字节分配，page\_alloc 为薄 wrapper                    |
+| 两阶段初始化 (boot\_alloc → paging → PFA init)   | ✅    | 经典方案 A                                              |
+| 元数据按字节分配 (bitmap/refcount/buddy\_order)  | ✅    | 不再固定 1 页，按实际大小                               |
+| mark\_occupied 语义统一                          | ✅    | bitmap=1 + refcount=1 + buddy\_order=INVALID            |
+| reserve\_bulk 从 buddy 分配                      | ✅    | 修复 mark\_reserve 循环变量 bug (frame+i)               |
+| Linux 风格虚拟布局                               | ✅    | DIRECT\_MAP\_SIZE=896MB, HEAP\_BASE=0xF8000000          |
+| 内核堆逐帧映射                                   | ✅    | init\_main + expand\_heap 同构 (物理散、虚拟连)         |
+| spinlock 保护                                    | ✅    | s\_pfa\_lock                                            |
+| 验证                                             | ✅    | 256MB QEMU 全流程通过: ring3 + fork COW + 网络 + 多任务 |
 
 ### 已知遗留
 
-| #      | 问题                  | 说明                               | 优先级 |
-| ------ | ------------------- | -------------------------------- | --- |
-| PFA-R1 | 全局单 spinlock → 多核瓶颈 | 留给 Phase 4 per-CPU cache         | 低   |
-| PFA-R2 | boot\_alloc 用完不释放指针 | s\_boot\_heap\_ptr 后续不再被引用，无实际影响 | 极低  |
+| #      | 问题                       | 说明                                          | 优先级 |
+| ------ | -------------------------- | --------------------------------------------- | ------ |
+| PFA-R1 | 全局单 spinlock → 多核瓶颈 | 留给 Phase 4 per-CPU cache                    | 低     |
+| PFA-R2 | boot\_alloc 用完不释放指针 | s\_boot\_heap\_ptr 后续不再被引用，无实际影响 | 极低   |
 
 ***
 
@@ -86,30 +86,30 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 已完成修复
 
-| #      | 项                                                     | 状态 | 位置                     |
-| ------ | ----------------------------------------------------- | -- | ---------------------- |
-| PAG-D1 | PSE 4MB flag 保留 (change\_flags\_1 保留 PS 位)            | ✅  | paging.c               |
-| PAG-D2 | TLB 刷新策略 (非 active context 不刷, active 按 threshold 批量) | ✅  | paging.c               |
-| PAG-D3 | Boot allocator 集成 (paging\_init 接收 alloc\_fn)         | ✅  | paging.c               |
-| PAG-D4 | Linux 风格虚拟布局 (DIRECT\_MAP\_SIZE=896MB)                | ✅  | paging.h               |
-| PAG-D5 | 内核段权限分离 (.text RO, .data/.bss RW)                     | ✅  | paging.c               |
-| PAG-D6 | access\_ok 地址范围 fast check                            | ✅  | paging.c               |
-| PAG-1  | map\_range 回滚用 unmap\_nolock 锁内完成                     | ✅  | paging.c               |
-| PAG-2  | Per-context spinlock 替代全局锁                            | ✅  | paging.h + paging.c    |
-| PAG-3  | access\_ok 仅范围检查，删掉页表遍历                               | ✅  | paging.c               |
-| PAG-4  | context\_clone 内核 PDE 浅拷贝 (共享)                        | ✅  | paging.c               |
-| PAG-5  | context\_destroy 用 used\_pde\_count 优化                | ✅  | paging.c               |
-| PAG-8  | COW fault handler 一次锁内完成                              | ✅  | paging.c               |
-| PAG-9  | context\_clone malloc 失败处理                            | ✅  | paging.c               |
-| PAG-11 | fork COW 只遍历 present PDE                              | ✅  | paging.c + multitask.c |
+| #      | 项                                                              | 状态 | 位置                   |
+| ------ | --------------------------------------------------------------- | ---- | ---------------------- |
+| PAG-D1 | PSE 4MB flag 保留 (change\_flags\_1 保留 PS 位)                 | ✅    | paging.c               |
+| PAG-D2 | TLB 刷新策略 (非 active context 不刷, active 按 threshold 批量) | ✅    | paging.c               |
+| PAG-D3 | Boot allocator 集成 (paging\_init 接收 alloc\_fn)               | ✅    | paging.c               |
+| PAG-D4 | Linux 风格虚拟布局 (DIRECT\_MAP\_SIZE=896MB)                    | ✅    | paging.h               |
+| PAG-D5 | 内核段权限分离 (.text RO, .data/.bss RW)                        | ✅    | paging.c               |
+| PAG-D6 | access\_ok 地址范围 fast check                                  | ✅    | paging.c               |
+| PAG-1  | map\_range 回滚用 unmap\_nolock 锁内完成                        | ✅    | paging.c               |
+| PAG-2  | Per-context spinlock 替代全局锁                                 | ✅    | paging.h + paging.c    |
+| PAG-3  | access\_ok 仅范围检查，删掉页表遍历                             | ✅    | paging.c               |
+| PAG-4  | context\_clone 内核 PDE 浅拷贝 (共享)                           | ✅    | paging.c               |
+| PAG-5  | context\_destroy 用 used\_pde\_count 优化                       | ✅    | paging.c               |
+| PAG-8  | COW fault handler 一次锁内完成                                  | ✅    | paging.c               |
+| PAG-9  | context\_clone malloc 失败处理                                  | ✅    | paging.c               |
+| PAG-11 | fork COW 只遍历 present PDE                                     | ✅    | paging.c + multitask.c |
 
 ### 已知遗留（低优先级）
 
-| #      | 问题                           | 说明                   | 优先级 |
-| ------ | ---------------------------- | -------------------- | --- |
-| PAG-6  | 4MB PDE unmap 循环 1024 次 free | 可批量 refcount\_dec 优化 | 低   |
-| PAG-7  | 无 page table slab cache      | 预分配 PT 池             | 低   |
-| PAG-10 | change\_flags 双重 TLB 刷新      | 内部不刷外层统一刷            | 低   |
+| #      | 问题                            | 说明                      | 优先级 |
+| ------ | ------------------------------- | ------------------------- | ------ |
+| PAG-6  | 4MB PDE unmap 循环 1024 次 free | 可批量 refcount\_dec 优化 | 低     |
+| PAG-7  | 无 page table slab cache        | 预分配 PT 池              | 低     |
+| PAG-10 | change\_flags 双重 TLB 刷新     | 内部不刷外层统一刷        | 低     |
 
 ***
 
@@ -117,20 +117,20 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 已完成修复
 
-| #       | 项                                                         | 状态 | 位置                       |
-| ------- | --------------------------------------------------------- | -- | ------------------------ |
-| MM-Bug1 | **prev 合并方向错误**（严重 Bug）：header 留在 chunk 地址，size 虚增 → 内存越界 | ✅  | memory\_manager.c free() |
-| MM-Bug2 | **next 合并后 self->tail 未更新**：tail 指向被吸收的 chunk → 野指针       | ✅  | memory\_manager.c free() |
-| MM-2    | expand\_heap 从逐页 malloc 改为 reserve\_bulk + 批量 map         | ✅  | memory\_manager.c        |
-| MM-2b   | expand\_heap 分配后与 tail 空闲 chunk 合并（减少碎片）                  | ✅  | memory\_manager.c        |
+| #       | 项                                                                              | 状态 | 位置                     |
+| ------- | ------------------------------------------------------------------------------- | ---- | ------------------------ |
+| MM-Bug1 | **prev 合并方向错误**（严重 Bug）：header 留在 chunk 地址，size 虚增 → 内存越界 | ✅    | memory\_manager.c free() |
+| MM-Bug2 | **next 合并后 self->tail 未更新**：tail 指向被吸收的 chunk → 野指针             | ✅    | memory\_manager.c free() |
+| MM-2    | expand\_heap 从逐页 malloc 改为 reserve\_bulk + 批量 map                        | ✅    | memory\_manager.c        |
+| MM-2b   | expand\_heap 分配后与 tail 空闲 chunk 合并（减少碎片）                          | ✅    | memory\_manager.c        |
 
 ### 已知遗留（Phase 4 SMP 范畴）
 
-| #    | 问题                                 | 说明                             | 优先级 |
-| ---- | ---------------------------------- | ------------------------------ | --- |
-| MM-1 | 全局 `s_mm_lock` → 多核瓶颈              | Per-CPU freelists (SLUB style) | 低   |
-| MM-3 | 无 per-type cache                   | kmem\_cache（task / fd / pipe）  | 低   |
-| MM-5 | 16B min alloc + 24B header → 小对象开销 | 调整 size classes                | 低   |
+| #    | 问题                                    | 说明                            | 优先级 |
+| ---- | --------------------------------------- | ------------------------------- | ------ |
+| MM-1 | 全局 `s_mm_lock` → 多核瓶颈             | Per-CPU freelists (SLUB style)  | 低     |
+| MM-3 | 无 per-type cache                       | kmem\_cache（task / fd / pipe） | 低     |
+| MM-5 | 16B min alloc + 24B header → 小对象开销 | 调整 size classes               | 低     |
 
 ***
 
@@ -138,29 +138,33 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 已完成修复
 
-| #       | 项                                                                                | 状态   | 位置                        |
-| ------- | -------------------------------------------------------------------------------- | ---- | ------------------------- |
-| MT-Exit | **exit stub 修复**：asm → C 函数 + cli/sti 原子写 ZOMBIE + 清空 g\_current\_task\_ptr 防野指针 | ✅    | context\_switch.c         |
-| MT-1/5  | **pid hash table**（256 桶，链地址法）：zombie parent 查找 O(n)→O(1)，wait\_pid 查找 O(n)→O(1) | ✅    | multitask.h + multitask.c |
-| MT-Wait | WAITING 唤醒用 pid hash 替代 O(n) 扫表                                                  | ✅    | multitask.c schedule()    |
-| MT-7    | exec init\_user 失败已正确 return -1（确认无需改动）                                          | ✅ 确认 | multitask.c               |
-| MT-8    | fork COW 已 skip non-present PDE（确认无需改动）                                          | ✅ 确认 | multitask.c               |
+| #           | 项                                                                                                                                                                                                                                                                                                              | 状态   | 位置                      |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
+| MT-Exit     | **exit stub 修复**：asm → C 函数 + cli/sti 原子写 ZOMBIE + 清空 g\_current\_task\_ptr 防野指针                                                                                                                                                                                                                  | ✅      | context\_switch.c         |
+| MT-1/5      | **pid hash table**（256 桶，链地址法）：zombie parent 查找 O(n)→O(1)，wait\_pid 查找 O(n)→O(1)                                                                                                                                                                                                                  | ✅      | multitask.h + multitask.c |
+| MT-Wait     | WAITING 唤醒用 pid hash 替代 O(n) 扫表                                                                                                                                                                                                                                                                          | ✅      | multitask.c schedule()    |
+| MT-7        | exec init\_user 失败已正确 return -1（确认无需改动）                                                                                                                                                                                                                                                            | ✅ 确认 | multitask.c               |
+| MT-8        | fork COW 已 skip non-present PDE（确认无需改动）                                                                                                                                                                                                                                                                | ✅ 确认 | multitask.c               |
+| MT-SlotIdx  | **slot\_idx 维护 UAF 修复**：free 紧凑删除（末尾搬到被删位置）未更新被搬任务的 slot\_idx → 该任务 slot\_idx 失效 → schedule fallback 失败 → 越界写入错误位置 → tasks\[] stale 指针 → UAF。加 `tasks[idx]==task` 校验 + 搬移后更新被搬任务 slot\_idx                                                             | ✅      | multitask.c               |
+| MT-RqUB     | **rq\_dequeue** **`__builtin_ctz(0)`** **UB 修复**：先 ctz 后判空, GCC 在 UB 假设下可能优化掉判空 → runqueue 真空时 ctz 返回垃圾值 → `rq[l]` 越界 → `first=&head`（自指）→ `list_del(head)` 删 head 自己 → runqueue 彻底损坏 → schedule `return cpustate` 死循环卡死。调换为先判空再 ctz                        | ✅      | multitask.c               |
+| MT-ForkList | **fork 浅拷贝链表节点修复**：`*child=*parent` 复制了 `rq_node`/`zombie_node`（指向 parent 节点地址, 非 child 自己）只重置了 `pid_hash_node` → `task_on_rq(child)` enqueue 前误判 true + `jlos_task_free` 误判 child 在 zombie 链表。补 `jlos_list_init` 重置两个链表节点                                        | ✅      | multitask.c               |
+| MT-Cleanup  | **冗余字段/死代码清理**：删 `jlos_task_t.fds_size`（边界检查全用 `JLOS_TASK_FDS_NUM` 常量, 该字段仅写不读）+ 删 `set_blocked`/`set_waiting` 中 `yield=true` 死赋值（两函数同时改 status, 进不了 schedule 的 RUNNING 分支读 yield）。`yield` 字段本身保留（`syscall_yield`/`need_resched`/降优先级判断真实使用） | ✅      | multitask.h + multitask.c |
 
 ### 设计决策
 
-| 决策                                    | 理由                                                                   |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 NULL，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针    |
-| task struct 仅加 1 个字段 (`next_hash`)    | 不加 `parent`/`children_head`/`next_sibling`/`prev_sibling`，将来加信号系统时再补 |
-| 保持 swap-with-last O(1) 删除             | 倒序遍历 + swap 不会跳过元素（已确认正确）                                            |
+| 决策                                         | 理由                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 NULL，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
+| task struct 仅加 1 个字段 (`next_hash`)      | 不加 `parent`/`children_head`/`next_sibling`/`prev_sibling`，将来加信号系统时再补           |
+| 保持 swap-with-last O(1) 删除                | 倒序遍历 + swap 不会跳过元素（已确认正确）                                                  |
 
 ### 已知遗留（低优先级）
 
-| #    | 问题                    | 说明                           | 优先级 |
-| ---- | --------------------- | ---------------------------- | --- |
-| MT-3 | O(n) 调度选择（4 层 × n 任务） | per-level runqueue 可优化为 O(1) | 低   |
-| MT-4 | 静态 256 task 数组        | 256 上限对当前足够                  | 低   |
-| MT-6 | 单全局 runqueue          | per-CPU runqueue 留给 Phase 4  | 低   |
+| #    | 问题                           | 说明                             | 优先级 |
+| ---- | ------------------------------ | -------------------------------- | ------ |
+| MT-3 | O(n) 调度选择（4 层 × n 任务） | per-level runqueue 可优化为 O(1) | 低     |
+| MT-4 | 静态 256 task 数组             | 256 上限对当前足够               | 低     |
+| MT-6 | 单全局 runqueue                | per-CPU runqueue 留给 Phase 4    | 低     |
 
 ***
 
@@ -168,58 +172,58 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 本阶段不实现 SMP，而是为 SMP 预留清晰的扩展点。当前单核实现中就把架构搭好，避免未来重写。
 
-| 序号  | 任务                                                                             | 涉及文件                       | 复杂度 |
-| --- | ------------------------------------------------------------------------------ | -------------------------- | --- |
-| 4.1 | PFA: per-CPU frame cache (order-0 batch refill/drain)                          | page\_frame\_allocator.c/h | 中   |
-| 4.2 | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位        | 低   |
-| 4.3 | MM: per-CPU freelist + batch drain to global                                   | memory\_manager.c          | 中   |
-| 4.4 | Multitask: per-CPU runqueue + task->cpu + task->cpumask                        | multitask.h + multitask.c  | 高   |
-| 4.5 | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                        | hal/cpu.h                  | 低   |
-| 4.6 | Spinlock: ticket lock 替换当前实现（为多核公平性）                                           | hal/spinlock.c             | 中   |
+| 序号 | 任务                                                                               | 涉及文件                   | 复杂度 |
+| ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ |
+| 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     |
+| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     |
+| 4.3  | MM: per-CPU freelist + batch drain to global                                       | memory\_manager.c          | 中     |
+| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     |
+| 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/cpu.h                  | 低     |
+| 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     |
 
 ***
 
 ## 实施优先级
 
-| 优先级    | Phase | 任务                                                             | 依赖          |
-| ------ | ----- | -------------------------------------------------------------- | ----------- |
-| **P0** | 0     | Buddy Page Frame Allocator                                     | ✅ 已完成       |
-| **P0** | 1     | Paging 全部修复 (per-context lock + clone 浅拷贝 + COW 锁合并等)          | ✅ 已完成       |
-| **P0** | 2     | Memory Manager 修复 (prev 合并方向 + tail 更新 + 批量 expand\_heap)      | ✅ 已完成       |
-| **P0** | 3     | Multitask 升级 (exit stub 修复 + pid hash + O(1) zombie/wait\_pid) | ✅ 已完成       |
-| **P3** | 4.x   | SMP 全部预留                                                       | Phase 0-3 ✅ |
+| 优先级 | Phase | 任务                                                                | 依赖        |
+| ------ | ----- | ------------------------------------------------------------------- | ----------- |
+| **P0** | 0     | Buddy Page Frame Allocator                                          | ✅ 已完成    |
+| **P0** | 1     | Paging 全部修复 (per-context lock + clone 浅拷贝 + COW 锁合并等)    | ✅ 已完成    |
+| **P0** | 2     | Memory Manager 修复 (prev 合并方向 + tail 更新 + 批量 expand\_heap) | ✅ 已完成    |
+| **P0** | 3     | Multitask 升级 (exit stub 修复 + pid hash + O(1) zombie/wait\_pid)  | ✅ 已完成    |
+| **P3** | 4.x   | SMP 全部预留                                                        | Phase 0-3 ✅ |
 
 ***
 
 ## 待实现功能（按经典路线图）
 
-| 编号  | 功能                                                  | 模块                                | 依赖          |
-| --- | --------------------------------------------------- | --------------------------------- | ----------- |
-| F1  | 按需分页 (demand paging, 已实现 brk + stack)               | paging.c                          | 无           |
-| F2  | COW 写时复制 (已实现)                                      | paging.c + multitask.c            | —           |
-| F3  | 用户态 malloc/free                                     | user                              | 依赖 brk（已完成） |
-| F4  | FAT32 完善 (mount/open/close/read/write/seek/readdir) | filesystem                        | 依赖块设备完善     |
-| F5  | open/close 系统调用                                     | syscall.c                         | 依赖 F4       |
-| F6  | ELF 用户态程序加载                                         | user                              | 依赖 F4       |
-| F7  | signal/kill 信号机制                                    | syscall.c + multitask.c           | 无           |
-| F8  | 线程支持（共享地址空间）                                        | multitask.c                       | 依赖 COW (F2) |
-| F9  | DHCP 自动获取 IP                                        | net                               | 无           |
-| F10 | DNS 域名解析                                            | net                               | 依赖 F9       |
-| F11 | mmap 内存映射                                           | paging.c + syscall.c              | 依赖 F4       |
-| F12 | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成      | arch/x86/fpu.c + hal/ext\_state.h | —           |
-| F13 | O(1) 调度选择（per-level runqueue + bitmap）              | kernel/multitask.c                | 无           |
+| 编号 | 功能                                                     | 模块                              | 依赖               |
+| ---- | -------------------------------------------------------- | --------------------------------- | ------------------ |
+| F1   | 按需分页 (demand paging, 已实现 brk + stack)             | paging.c                          | 无                 |
+| F2   | COW 写时复制 (已实现)                                    | paging.c + multitask.c            | —                  |
+| F3   | 用户态 malloc/free                                       | user                              | 依赖 brk（已完成） |
+| F4   | FAT32 完善 (mount/open/close/read/write/seek/readdir)    | filesystem                        | 依赖块设备完善     |
+| F5   | open/close 系统调用                                      | syscall.c                         | 依赖 F4            |
+| F6   | ELF 用户态程序加载                                       | user                              | 依赖 F4            |
+| F7   | signal/kill 信号机制                                     | syscall.c + multitask.c           | 无                 |
+| F8   | 线程支持（共享地址空间）                                 | multitask.c                       | 依赖 COW (F2)      |
+| F9   | DHCP 自动获取 IP                                         | net                               | 无                 |
+| F10  | DNS 域名解析                                             | net                               | 依赖 F9            |
+| F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4            |
+| F12  | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成 | arch/x86/fpu.c + hal/ext\_state.h | —                  |
+| F13  | O(1) 调度选择（per-level runqueue + bitmap）             | kernel/multitask.c                | 无                 |
 
 ***
 
 ## 已知遗留（低优先或需更大重构）
 
-| #  | 问题                     | 说明                                                        |
-| -- | ---------------------- | --------------------------------------------------------- |
-| A1 | 用户态代码与内核混编             | 经典做法用户态独立 ELF + 加载器；当前靠 PTE\_USER 共享 .text/.rodata；安全隔离性弱 |
-| A2 | 0\~1MB 恒等映射残留          | GRUB 退出后不再需要，经典做法移除                                       |
-| A3 | boot\_page\_dir 内存未释放  | 切到内核页表后 4KB 无法回收                                          |
-| A4 | MLFQ 不 starvation-free | CFS weighted fair queuing 更经典但复杂度高；当前可接受                  |
-| A5 | 任务表硬编码 256 上限          | Phase 3.4 改为动态数组                                          |
+| #   | 问题                       | 说明                                                                               |
+| --- | -------------------------- | ---------------------------------------------------------------------------------- |
+| A1  | 用户态代码与内核混编       | 经典做法用户态独立 ELF + 加载器；当前靠 PTE\_USER 共享 .text/.rodata；安全隔离性弱 |
+| A2  | 0\~1MB 恒等映射残留        | GRUB 退出后不再需要，经典做法移除                                                  |
+| A3  | boot\_page\_dir 内存未释放 | 切到内核页表后 4KB 无法回收                                                        |
+| A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
+| A5  | 任务表硬编码 256 上限      | Phase 3.4 改为动态数组                                                             |
 
 ***
 
@@ -227,30 +231,76 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 已完成里程碑（历史）
 
-| 模块    | 完成项                                                                               | 验证                               |
-| ----- | --------------------------------------------------------------------------------- | -------------------------------- |
-| 虚拟内存  | 3:1 高半核分页 + 内核/用户地址空间隔离 + 页表深拷贝                                                   | 动态映射，ring3 用户进程正常运行              |
-| 内存管理  | 动态物理内存探测（GRUB mmap） + 页帧分配器 + 低内存堆(0x50000) + 主堆(动态 4\~64MB) + 16字节最小分配           | 支持不同物理内存大小，MMIO 保留区自动标记          |
-| 系统调用  | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close | per-thread errno + wait\_pid 退出码 |
-| 多任务调度 | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换                                                     | 时间片轮转正常，交互型优先                    |
-| 同步原语  | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                       | spinlock 关中断保护                   |
-| IPC   | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组)                                                     | FIFO 顺序，close/destroy 分离         |
-| 用户进程  | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork 用户栈复制                              | Hello from ring3 + Wake up 验证通过  |
+| 模块       | 完成项                                                                                               | 验证                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 虚拟内存   | 3:1 高半核分页 + 内核/用户地址空间隔离 + 页表深拷贝                                                  | 动态映射，ring3 用户进程正常运行          |
+| 内存管理   | 动态物理内存探测（GRUB mmap） + 页帧分配器 + 低内存堆(0x50000) + 主堆(动态 4\~64MB) + 16字节最小分配 | 支持不同物理内存大小，MMIO 保留区自动标记 |
+| 系统调用   | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close                    | per-thread errno + wait\_pid 退出码       |
+| 多任务调度 | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换                                                       | 时间片轮转正常，交互型优先                |
+| 同步原语   | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                        | spinlock 关中断保护                       |
+| IPC        | 管道(堆分配环形缓冲+引用计数) + 消息队列(柔性数组)                                                   | FIFO 顺序，close/destroy 分离             |
+| 用户进程   | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork 用户栈复制                           | Hello from ring3 + Wake up 验证通过       |
 
 ### 已解决问题（历史）
 
-| 编号 | 问题                             | 解决版本 | 修复方式                                               |
-| -- | ------------------------------ | ---- | -------------------------------------------------- |
-| S1 | syscall\_write printf 格式化漏洞    | v2.2 | 改为 `printk("%s", buf)`，格式化符不再被解释                   |
-| S3 | fd < 3 魔法数字判断                  | v2.2 | 改为 `fd_entry->type == JLOS_TASK_FD_CONSOLE` 显式类型判断 |
-| S4 | jlos\_task\_fd\_close pipe 未实现 | v2.2 | 补充引用计数递减 + destroy 完整逻辑                            |
-| M1 | 用户栈固定单页（4KB）                   | v2.2 | 扩展为 64KB（`JLOS_TASK_USER_STACK_SIZE = 0x10000`）    |
-| M2 | fork 用户栈未复制                    | v2.2 | 子进程分配新物理帧 + memcpy 用户栈内容                           |
-| —  | 栈切换导致 multiboot 参数丢失           | v2.2 | .boot 段全局变量保存参数，不受切栈和 BSS 清零影响                     |
-| —  | 连续物理帧分配不验证碎片                   | v2.2 | reserve\_bulk 重写为遍历 bitmap 找真正连续空闲帧                |
-| —  | 页帧分配器无 OOM 防护                  | v2.2 | init\_main 逐级回退 heap\_size，极端情况 halt               |
+| 编号 | 问题                              | 解决版本 | 修复方式                                                   |
+| ---- | --------------------------------- | -------- | ---------------------------------------------------------- |
+| S1   | syscall\_write printf 格式化漏洞  | v2.2     | 改为 `printk("%s", buf)`，格式化符不再被解释               |
+| S3   | fd < 3 魔法数字判断               | v2.2     | 改为 `fd_entry->type == JLOS_TASK_FD_CONSOLE` 显式类型判断 |
+| S4   | jlos\_task\_fd\_close pipe 未实现 | v2.2     | 补充引用计数递减 + destroy 完整逻辑                        |
+| M1   | 用户栈固定单页（4KB）             | v2.2     | 扩展为 64KB（`JLOS_TASK_USER_STACK_SIZE = 0x10000`）       |
+| M2   | fork 用户栈未复制                 | v2.2     | 子进程分配新物理帧 + memcpy 用户栈内容                     |
+| —    | 栈切换导致 multiboot 参数丢失     | v2.2     | .boot 段全局变量保存参数，不受切栈和 BSS 清零影响          |
+| —    | 连续物理帧分配不验证碎片          | v2.2     | reserve\_bulk 重写为遍历 bitmap 找真正连续空闲帧           |
+| —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-03（v2.9）
+
+- **multitask 字段冗余清理 + 3 个调度稳定性 bug 修复**（解决"首次运行卡死、二次通过"的调度顺序敏感问题, 两次运行 ALL PASSED 稳定）
+
+- **冗余字段/死代码清理**（经典结构优先, 删冗余不允许）:
+
+  - 删除 `jlos_task_t.fds_size` 字段: 边界检查全用 `JLOS_TASK_FDS_NUM` 常量, 该字段仅写不读（唯一"读"处 `i < 3 && i < self->fds_size` 是恒真冗余判断）
+
+  - 删除 `jlos_task_set_blocked`/`jlos_task_set_waiting` 中 `t->yield = true` 死赋值: 两函数同时改 status 为 BLOCKED/WAITING, schedule 读 yield 的唯一位置在 `if (prev->status == JLOS_TASK_RUNNING)` 分支内, BLOCKED/WAITING 进不去, 永远不会被读到
+
+  - `yield` 字段本身保留: `syscall_yield` 系统调用 + `jlos_syscall_need_resched` 检查 + schedule 降优先级判断均真实使用
+
+  - 文件: kernel/multitask.h, kernel/multitask.c
+
+- **Bug 1: slot\_idx 维护 UAF（卡死根因之一）**:
+
+  - 根因: `jlos_task_free` 用"末尾任务搬到被删位置"的紧凑删除, 但**没更新被搬任务的 slot\_idx** → 该任务 slot\_idx 失效 → 下次 `schedule` 用失效 slot\_idx 索引 → `tasks[idx] != next` → 走 O(n) fallback → 若再 free 该任务, idx 越界写入错误位置 → tasks\[] 出现 stale 指针 → UAF
+
+  - 场景验证: `tasks=[idle(s=0), A(s=1), B(s=2), C(s=3)]`, free(A) 后 C 搬到 \[1] 但 C->slot\_idx 仍=3; free(C) 时 idx=3 越界, tasks\[3]=tasks\[2]=B, tasks\[1] 仍指向已 free 的 C → UAF
+
+  - 修复: 加 `tasks[idx]==task` 校验（防失效）+ 搬移后 `tasks[idx]->slot_idx = idx`（维护被搬任务 slot\_idx）
+
+  - 文件: kernel/multitask.c
+
+- **Bug 2: rq\_dequeue** **`__builtin_ctz(0)`** **UB（卡死根因之二）**:
+
+  - 根因: `int l = __builtin_ctz(self->rq_nonempty); if (!self->rq_nonempty) return NULL;` —— `__builtin_ctz(0)` 是未定义行为, GCC 在 UB 假设下可能优化掉后面的判空检查 → runqueue 真空时 ctz 返回垃圾值 → `self->rq[l]` 越界 → `first=&head`（自指）→ `jlos_list_del(head)` 删 head 自己 → runqueue 链表彻底损坏 → 后续 rq\_dequeue 返回野指针 → schedule `return cpustate` 不切换 → ZOMBIE prev 恢复 halt → 死循环卡死
+
+  - 修复: 调换顺序, 先 `if (!rq_nonempty) return NULL;` 再 `__builtin_ctz`
+
+  - 文件: kernel/multitask.c
+
+- **Bug 3: fork 浅拷贝链表节点（潜在链表损坏）**:
+
+  - 根因: `jlos_process_fork` 中 `*child = *parent` 整 struct 浅拷贝, 复制了 parent 的 `rq_node` 和 `zombie_node`（指向 parent 的节点地址, 非 child 自己）, 但只重置了 `pid_hash_node`, 没重置 `rq_node`/`zombie_node`
+
+  - 后果: child->rq\_node.next = \&parent->rq\_node → `task_on_rq(child)` 在 enqueue 前误判 true; child->zombie\_node.next = \&parent->zombie\_node → `jlos_task_free` 误判 child 在 zombie 链表执行 list\_del（虽然 list\_del 对自指态 no-op, 但语义错误, 且 parent 之后真进 zombie 链表时 child 的 stale 指针会干扰）
+
+  - 修复: `*child = *parent` 后补 `jlos_list_init(&child->rq_node); jlos_list_init(&child->zombie_node);`
+
+  - 文件: kernel/multitask.c
+
+- 验证: 两次运行 multitask ALL PASSED (TEST1-4 全 PASS), 首次运行卡死问题根除, 调度顺序敏感性消除
+
+- 更新计划至 v2.9
 
 #### 2026-09-01（v2.8）
 
@@ -300,7 +350,7 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
   - memory\_te.c: 统一 K\&R 大括号风格, 删冗余空行, 简化日志上下文标签
 
-  - multitask\_te.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child*, 子返回 NULL, 调用方据此判 is_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
+  - multitask\_te.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child\*, 子返回 NULL, 调用方据此判 is\_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
 
 - **HAL 层架构合规重构** (HAL 不含汇编, 汇编全在 arch/):
 
@@ -364,7 +414,7 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
   - IDT 注册：#NM(0x07) 和 #PF(0x0E) 都在 IRQ 向量转换前分发；均用 IDT\_INTERRUPT\_GATE（IF 自动清零，irqrestore 安全）
 
-  - Boot 初始化：loader.s CR0=PG|MP|NE(EM=0)，CR4=PSE|OSFXSR
+  - Boot 初始化：loader.s `CR0=PG|MP|NE(EM=0)`，`CR4=PSE|OSFXSR`
 
   - 编译选项：Makefile 加 `-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx` 防编译器生成 SSE
 
@@ -554,4 +604,3 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 4. 《Modern Operating Systems》 - Andrew Tanenbaum
 5. Linux kernel source (buddy allocator, SLUB, scheduler)
 6. FreeBSD VM system design
-

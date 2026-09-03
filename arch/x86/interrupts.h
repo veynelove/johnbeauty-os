@@ -1,5 +1,5 @@
-#ifndef __HDC_INTERUPTS_H
-#define __HDC_INTERUPTS_H
+#ifndef _HDC_INTERUPTS_H
+#define _HDC_INTERUPTS_H
 
 #include <common/types.h>
 #include <arch/x86/port.h>

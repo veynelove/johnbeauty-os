@@ -5,6 +5,9 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/printk.h>
 #include <kernel/device.h>
+#include <kernel/multitask.h>
+
+#define JLOS_KERNEL_LOG_SUBSYS "paging"
 
 extern uint32_t _boot_end_phys;
 extern jlos_task_t *g_current_task_ptr;
@@ -186,7 +189,10 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         }
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
         if (*pte & JLOS_PTE_PRESENT) {
-            jlos_page_frame_free((void *)PHYS_TO_VIRT(*pte & JLOS_PAGE_ADDR_MASK));
+            printk_err("remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
+            for (;;) {
+                jlos_hal_halt();
+            }
         }
         *pte = (physical_addr & JLOS_PAGE_ADDR_MASK) | flags;
         virtual_addr += JLOS_PAGE_SIZE;
@@ -452,13 +458,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     bool present = error_code & 0x01;
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
-    /* PF 总览: 仅一行核心定位信息 (addr/err/user/ip/pid) */
-    printk("[PF] addr=0x%x err=0x%x user=%d ip=0x%x pid=%u\n",
-           fault_addr, error_code, user,
-           context->instruction_pointer,
-           g_current_task_ptr ? g_current_task_ptr->pid : 0);
     if (!user) {
-        /* 内核态 PF 不可恢复: 直接 halt. present/write 已在 err 中. */
         for (;;) {
             jlos_hal_halt();
         }
@@ -492,7 +492,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     }
     /* demand paging: 用户栈向下生长, 顶部 guard 之下按需映射 */
     if (!present && task->user_stack && task->user_stack_size
-    && fault_addr >= (uint32_t)task->user_stack - JLOS_PAGE_FRAME_SIZE && fault_addr < JLOS_TASK_USER_STACK_TOP) {
+    && fault_addr >= (uint32_t)task->user_stack && fault_addr < (uint32_t)(task->user_stack + task->user_stack_size)) {
         uint32_t page_addr = JLOS_PAGE_ALIGN_DOWN(fault_addr);
         void *frame = jlos_page_frame_malloc();
         if (!frame) {
@@ -523,12 +523,12 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
                 goto page_fault_oom;
             }
             jlos_memcpy(new_frame, (void *)PHYS_TO_VIRT(old_phys), JLOS_PAGE_FRAME_SIZE);
+            jlos_paging_unmap_nolock(ctx, page_addr);
             if (!jlos_paging_map_nolock(ctx, page_addr, VIRT_TO_PHYS(new_frame), JLOS_PTE_USER_RW)) {
                 jlos_page_frame_free(new_frame);
                 jlos_spin_unlock_irqrestore(&ctx->lock, fl);
                 goto page_fault_kill;
             }
-            jlos_page_frame_refcount_dec(old_phys);
             jlos_spin_unlock_irqrestore(&ctx->lock, fl);
             jlos_hal_paging_flush_tlb(page_addr);
             return;
@@ -536,24 +536,18 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     }
 
 page_fault_kill:
-    printk("user page fault. pid = %u, addr = 0x%x, present = %u, write = %u, ins_pointer = 0x%x\n",
+    printk_err("user page fault. pid = %u, addr = 0x%x, present = %u, write = %u, ins_pointer = 0x%x\n",
         task->pid, fault_addr, present, write, context->instruction_pointer);
-    JLOS_TASK_SET_ZOMBIE(task, TASK_EXIT_PAGE_FAULT);
-    for (;;) {
-        jlos_hal_halt();
-    }
+    jlos_process_exit(task, TASK_EXIT_PAGE_FAULT);
 page_fault_oom:
-    printk("page fault oom. pid = %u, addr = 0x%x\n", task->pid, fault_addr);
-    JLOS_TASK_SET_ZOMBIE(task, TASK_EXIT_PAGE_FAULT);
-    for (;;) {
-        jlos_hal_halt();
-    }
+    printk_err("page fault oom. pid = %u, addr = 0x%x\n", task->pid, fault_addr);
+    jlos_process_exit(task, TASK_EXIT_PAGE_FAULT);
 }
 
 void jlos_paging_print_states(jlos_paging_context_t *self)
 {
     if (!self->page_dir) {
-        printk("page context not initialized\n");
+        printk_info("page context not initialized\n");
         return;
     }
     uint32_t mapped_pages = 0;
@@ -574,10 +568,10 @@ void jlos_paging_print_states(jlos_paging_context_t *self)
         }
     }
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    printk("page states:\n");
-    printk("  - page directory: 0x%x\n", self->page_dir);
-    printk("  - page tables: %u\n", self->num_page_tables);
-    printk("  - mapped pages: %u (%u KB)\n", mapped_pages, mapped_pages * 4);
-    printk("  - total physical memory: %u KB\n", jlos_page_frame_get_total() * 4);
-    printk("  - free physical memory: %u KB\n", jlos_page_frame_get_free() * 4);
+    printk_info("page states:\n");
+    printk_info("- page directory: 0x%x\n", self->page_dir);
+    printk_info("- page tables: %u\n", self->num_page_tables);
+    printk_info("- mapped pages: %u (%u KB)\n", mapped_pages, mapped_pages * 4);
+    printk_info("- total physical memory: %u KB\n", jlos_page_frame_get_total() * 4);
+    printk_info("- free physical memory: %u KB\n", jlos_page_frame_get_free() * 4);
 }

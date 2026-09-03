@@ -1,5 +1,5 @@
-#ifndef JLOS_DSA_HASH_CHAIN_H
-#define JLOS_DSA_HASH_CHAIN_H
+#ifndef _JLOS_DSA_HASH_CHAIN_H
+#define _JLOS_DSA_HASH_CHAIN_H
 
 #include <common/types.h>
 #include <hal/spinlock.h>
@@ -23,13 +23,6 @@ typedef struct {
 } jlos_hash_chain_t;
 
 typedef int (*jlos_hash_chain_match_t)(jlos_hash_node_t *node, void *args);
-
-#define offsetof(type, member) ((size_t)&((type *)0)->member)
-
-#define container_of(ptr, type, member) ({ \
-    const __typeof__(((type *)0)->member) *__mptr = (ptr); \
-    (type *)((char *)__mptr - offsetof(type, member)); \
-})
 
 void jlos_hash_chain_init(jlos_hash_chain_t *self, uint32_t bucket_count,
     uint32_t (*hash)(const void *key), int (*cmp)(const void *key, const void *node));

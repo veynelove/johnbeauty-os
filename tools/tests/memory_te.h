@@ -1,5 +1,5 @@
-#ifndef __JLOS_TESTS_TEST_MEMORY_H
-#define __JLOS_TESTS_TEST_MEMORY_H
+#ifndef _JLOS_TESTS_TEST_MEMORY_H
+#define _JLOS_TESTS_TEST_MEMORY_H
 
 #include <common/types.h>
 

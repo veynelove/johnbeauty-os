@@ -1,5 +1,5 @@
-#ifndef __JLOS_KERNEL_PAGING_H
-#define __JLOS_KERNEL_PAGING_H
+#ifndef _JLOS_KERNEL_PAGING_H
+#define _JLOS_KERNEL_PAGING_H
 
 #include <common/types.h>
 #include <hal/irq.h>

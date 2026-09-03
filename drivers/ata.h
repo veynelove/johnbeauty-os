@@ -1,5 +1,5 @@
-#ifndef __JLOS__DRIVERS_ATA_H
-#define __JLOS__DRIVERS_ATA_H
+#ifndef _JLOS__DRIVERS_ATA_H
+#define _JLOS__DRIVERS_ATA_H
 
 #include <common/types.h>
 #include <hal/io.h>

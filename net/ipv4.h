@@ -1,5 +1,5 @@
-#ifndef __JLOS_NET_IPV4_H
-#define __JLOS_NET_IPV4_H
+#ifndef _JLOS_NET_IPV4_H
+#define _JLOS_NET_IPV4_H
 
 #include <net/etherframe.h>
 #include <net/arp.h>

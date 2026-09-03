@@ -1,20 +1,17 @@
 #include <tools/tests/http_server_te.h>
 #include <kernel/memory_manager.h>
+#include <kernel/printk.h>
 
-extern void printf(const char *str);
+#define JLOS_KERNEL_LOG_SUBSYS "test"
 
 typedef struct {
     jlos_tcp_handler_t base;
-} printf_tcp_handler_t;
+} http_tcp_handler_t;
 
-static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
+static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
 {
     (void)self;
-    char foo[2] = " ";
-    for (int i = 0; i < size; i++) {
-        foo[0] = data[i];
-        printf(foo);
-    }
+    printk_debug("tcp received: %u bytes\n", size);
     if (size > 9
         && data[0] == 'G' && data[1] == 'E'
         && data[2] == 'T' && data[3] == ' '
@@ -54,11 +51,11 @@ static bool printf_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos
 
 void http_server_test(jlos_tcp_provider_t *tcp)
 {
-    printf_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(printf_tcp_handler_t));
+    http_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(http_tcp_handler_t));
     jlos_tcp_handler_init(&tcphandler->base);
-    tcphandler->base.handle_tcp_message = printf_tcp_handler_handle_tcp_message;
+    tcphandler->base.handle_tcp_message = http_tcp_handler_handle_tcp_message;
 
     jlos_tcp_socket_t *tcpsocket = jlos_tcp_provider_listen(tcp, 1234);
     jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler->base);
-    printf("TCP server listening on port 1234\n");
+    printk_info("tcp server listening on port 1234\n");
 }

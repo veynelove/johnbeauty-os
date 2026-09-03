@@ -1,7 +1,7 @@
 #include <drivers/keyboard.h>
+#include <kernel/printk.h>
 
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
+#define JLOS_KERNEL_LOG_SUBSYS "kbd"
 
 void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self)
 {
@@ -58,9 +58,8 @@ void jlos_keyboard_driver_activate(jlos_keyboard_driver_t* self)
 
 uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uint32_t esp)
 {
-#define offsetof(type, member) ((size_t)((char*)&((type*)0)->member))
-    jlos_keyboard_driver_t* keyboard = (jlos_keyboard_driver_t*)((char*)self - offsetof(jlos_keyboard_driver_t, base_handler));
-
+    jlos_keyboard_driver_t* keyboard = container_of((jlos_irq_handler_t *)self, jlos_keyboard_driver_t, base_handler);
+    
     uint8_t status = jlos_io8_read(&keyboard->commandport);
     if (!(status & 0x01)) {
         return esp;

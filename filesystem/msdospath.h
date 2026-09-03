@@ -1,5 +1,5 @@
-#ifndef __JLOS_FILESYSTEM_MSDOSPATH_H
-#define __JLOS_FILESYSTEM_MSDOSPATH_H
+#ifndef _JLOS_FILESYSTEM_MSDOSPATH_H
+#define _JLOS_FILESYSTEM_MSDOSPATH_H
 
 #include <drivers/ata.h>
 

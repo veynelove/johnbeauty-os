@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_SYSCALL_ABI_H
-#define __JLOS_HAL_SYSCALL_ABI_H
+#ifndef _JLOS_HAL_SYSCALL_ABI_H
+#define _JLOS_HAL_SYSCALL_ABI_H
 
 #include <common/types.h>
 

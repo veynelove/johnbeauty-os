@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_MMU_H
-#define __JLOS_HAL_MMU_H
+#ifndef _JLOS_HAL_MMU_H
+#define _JLOS_HAL_MMU_H
 
 #include <tools/config.h>
 #include <common/types.h>

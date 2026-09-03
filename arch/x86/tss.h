@@ -1,5 +1,5 @@
-#ifndef __JLOS_ARCH_X86_TSS_H
-#define __JLOS_ARCH_X86_TSS_H
+#ifndef _JLOS_ARCH_X86_TSS_H
+#define _JLOS_ARCH_X86_TSS_H
 
 #include <common/types.h>
 
