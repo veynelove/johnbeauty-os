@@ -6,6 +6,8 @@
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "pfa"
+
 extern uint32_t             _boot_end_phys;
 extern uint32_t             _kernel_end_phys;
 
@@ -88,23 +90,23 @@ static void buddy_insert(uint32_t frame, uint32_t order)
     uint32_t block = order_to_frames(order);
     /* 防 double insert: 确保帧 free 且不在任何 free list, 块不跨越物理边界 */
     if (frame >= s_total_frames || frame + block > s_total_frames) {
-        printk("[buddy-OOB] insert frame=%u order=%u block=%u total=%u (cross phys boundary)\n",
+        printk_emerg("[buddy-OOB] insert frame=%u order=%u block=%u total=%u (cross phys boundary)\n",
                frame, order, block, s_total_frames);
         for (;;) jlos_hal_halt();
     }
     if (frame & (block - 1)) {
-        printk("[buddy-ALIGN] insert frame=%u order=%u (frame not aligned to order)\n", frame, order);
+        printk_emerg("[buddy-ALIGN] insert frame=%u order=%u (frame not aligned to order)\n", frame, order);
         for (;;) jlos_hal_halt();
     }
     if (frame < s_total_frames) {
         bool is_reserved = JLOS_PFA_BIT_MAP_FRAME_VALUE(frame);
         uint8_t cur_order = s_buddy_order[frame];
         if (is_reserved) {
-            printk("[buddy-ASSERT] insert frame=%u order=%u FAIL: bitmap=1 (reserved)!\n", frame, order);
+            printk_emerg("[buddy-ASSERT] insert frame=%u order=%u FAIL: bitmap=1 (reserved)!\n", frame, order);
             for (;;) jlos_hal_halt();
         }
         if (cur_order != JLOS_PFA_BUDDY_ORDER_INVALID && cur_order != order) {
-            printk("[buddy-ASSERT] insert frame=%u order=%u FAIL: buddy_order=%u (already in free list)!\n",
+            printk_emerg("[buddy-ASSERT] insert frame=%u order=%u FAIL: buddy_order=%u (already in free list)!\n",
                    frame, order, cur_order);
             for (;;) jlos_hal_halt();
         }
@@ -127,7 +129,7 @@ static void buddy_remove(uint32_t frame, uint32_t order)
 {
     uint32_t block = order_to_frames(order);
     if (frame >= s_total_frames || frame + block > s_total_frames) {
-        printk("[buddy-PANIC] frame=%u order=%u block=%u s_total=%u (frame/block OOB)\n",
+        printk_emerg("[buddy-PANIC] frame=%u order=%u block=%u s_total=%u (frame/block OOB)\n",
                frame, order, block, s_total_frames);
         for (;;) jlos_hal_halt();
     }
@@ -137,7 +139,7 @@ static void buddy_remove(uint32_t frame, uint32_t order)
     if (node->phys_frame != frame)             bad |= 2;
     if (!(node->next || node->prev || s_free_area[order] == node)) bad |= 4;
     if (bad) {
-        printk("[buddy-PANIC] remove frame=%u order=%u bad=%u node=%p "
+        printk_emerg("[buddy-PANIC] remove frame=%u order=%u bad=%u node=%p "
                "next=%p prev=%p phys=0x%x magic=0x%x\n",
                frame, order, bad, node,
                node->next, node->prev, node->phys_frame, node->magic);
@@ -504,7 +506,7 @@ void jlos_page_frame_print_buddy(void)
         free_order_node_t *n = s_free_area[o];
         while (n) { count++; n = n->next; }
         if (count) {
-            printk("order: %d, frames: %u, blocks: %u\n", o, order_to_frames(o), count);
+            printk_debug("order: %d, frames: %u, blocks: %u\n", o, order_to_frames(o), count);
         }
     }
 }

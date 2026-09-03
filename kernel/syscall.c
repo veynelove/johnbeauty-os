@@ -7,6 +7,8 @@
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "syscall"
+
 extern jlos_task_manager_t *g_task_manager_ptr;
 extern jlos_task_t *g_current_task_ptr;
 
@@ -49,7 +51,7 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     }
     if (fd_entry->type == JLOS_TASK_FD_CONSOLE) {
         buf[len - 1] = '\0';
-        printk("%s", (const char *)buf);
+        printf((const char *)buf);
         if (buf != stack_buf) {
             jlos_kfree(buf);
         }
@@ -208,7 +210,7 @@ static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, arg1);
+    jlos_process_exit(g_current_task_ptr, arg1);
     (void)arg2;
     (void)arg3;
     return 0;
@@ -273,15 +275,15 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
     if (!g_task_manager_ptr) {
         return - SYSCALL_ENOMEM;
     }
-    printf("=== task list ===\n");
+    printk_info("--- task list ---\n");
     for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
         if (t) {
-            printk("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->name,
+            printk_info("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->name,
                 t->pid, t->status, t->is_user_process ? "user" : "kernel");
         }
     }
-    printf("================\n");
+    printk_info("---\n");
     (void)arg1;
     (void)arg2;
     (void)arg3;
@@ -390,6 +392,9 @@ bool jlos_syscall_need_resched()
 {
     if (!g_current_task_ptr) {
         return false;
+    }
+    if (g_task_manager_ptr && g_task_manager_ptr->need_resched) {
+        return true;
     }
     if (g_current_task_ptr->status == JLOS_TASK_ZOMBIE || g_current_task_ptr->status == JLOS_TASK_WAITING
     || g_current_task_ptr->sleeping || g_current_task_ptr->yield) {

@@ -1,5 +1,5 @@
-#ifndef __DRIVERS_MOUSE_H
-#define __DRIVERS_MOUSE_H
+#ifndef _DRIVERS_MOUSE_H
+#define _DRIVERS_MOUSE_H
 
 #include <common/types.h>
 #include <hal/irq.h>

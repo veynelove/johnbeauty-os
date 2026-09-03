@@ -1,5 +1,5 @@
-#ifndef __HDC_PCI_H
-#define __HDC_PCI_H
+#ifndef _HDC_PCI_H
+#define _HDC_PCI_H
 
 #include <arch/x86/port.h>
 #include <common/types.h>

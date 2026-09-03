@@ -1,5 +1,5 @@
-#ifndef __JLOS_NET_ICMP_H
-#define __JLOS_NET_ICMP_H
+#ifndef _JLOS_NET_ICMP_H
+#define _JLOS_NET_ICMP_H
 
 #include <net/ipv4.h>
 

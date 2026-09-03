@@ -1,5 +1,5 @@
-#ifndef __JLOS_KERNEL_IPC_H
-#define __JLOS_KERNEL_IPC_H
+#ifndef _JLOS_KERNEL_IPC_H
+#define _JLOS_KERNEL_IPC_H
 
 #include <common/types.h>
 #include <kernel/sync.h>

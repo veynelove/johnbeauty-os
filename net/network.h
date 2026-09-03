@@ -1,5 +1,5 @@
-#ifndef __NETWORK_H
-#define __NETWORK_H
+#ifndef _NETWORK_H
+#define _NETWORK_H
 
 #include <net/etherframe.h>
 #include <net/arp.h>

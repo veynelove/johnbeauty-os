@@ -1,5 +1,5 @@
-#ifndef __JLOS_DEBUG_CONSOLE_H
-#define __JLOS_DEBUG_CONSOLE_H
+#ifndef _JLOS_DEBUG_CONSOLE_H
+#define _JLOS_DEBUG_CONSOLE_H
 
 #include <hal/irq.h>
 #include <drivers/driver.h>

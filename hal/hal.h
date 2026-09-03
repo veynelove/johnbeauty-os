@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_H
-#define __JLOS_HAL_H
+#ifndef _JLOS_HAL_H
+#define _JLOS_HAL_H
 
 #include <tools/config.h>
 #include <common/types.h>
@@ -41,6 +41,7 @@ extern const jlos_hal_io_ops_t  jlos_hal_x86_slow_io_ops;   /* 带 jmp $+2 延�
 void jlos_hal_arch_init(void);
 void jlos_hal_kernel_segments_init(void);
 void jlos_hal_halt(void);
+void jlos_hal_enable_interrupts(void);
 
 /* -------------------- IO sanity check -------------------- */
 

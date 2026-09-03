@@ -1,9 +1,8 @@
 #include <net/tcp.h>
 #include <kernel/memory_manager.h>
+#include <kernel/printk.h>
 
-extern void printf(const char *str);
-extern void printf_hex(uint8_t);
-extern void printf_hex32(uint32_t);
+#define JLOS_KERNEL_LOG_SUBSYS "tcp"
 
 void jlos_tcp_handler_init(jlos_tcp_handler_t* self)
 {
@@ -83,7 +82,6 @@ void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_pr
         (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_tcp_provider_on_internet_protocol_received;
     self->num_sockets = 0;
     self->free_port = 1024;
-
     jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, tcp_hash_ip_port, tcp_cmp_ip_port);
 }
 
@@ -124,28 +122,14 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
     jlos_tcp_header_t *msg = (jlos_tcp_header_t *)internet_protocol_payload;
     uint16_t flags = JLOS_TCP_GET_FLAGS(msg);
     uint8_t data_offset = JLOS_TCP_GET_DATA_OFFSET(msg);
-
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("TCP: ");
-    printf_hex((JLOS_SWAP_ENDIAN_16(msg->src_port) >> 8) & 0xFF);
-    printf_hex(JLOS_SWAP_ENDIAN_16(msg->src_port) & 0xFF);
-    printf("->");
-    printf_hex((JLOS_SWAP_ENDIAN_16(msg->dst_port) >> 8) & 0xFF);
-    printf_hex(JLOS_SWAP_ENDIAN_16(msg->dst_port) & 0xFF);
-    printf(" flags=");
-    if (flags & JLOS_TCP_FIN) printf("F");
-    if (flags & JLOS_TCP_SYN) printf("S");
-    if (flags & JLOS_TCP_RST) printf("R");
-    if (flags & JLOS_TCP_PSH) printf("P");
-    if (flags & JLOS_TCP_ACK) printf("A");
-    if (flags & JLOS_TCP_URG) printf("U");
-    printf(" seq=");
-    printf_hex32(JLOS_SWAP_ENDIAN_32(msg->sequence_number));
-    printf(" ack=");
-    printf_hex32(JLOS_SWAP_ENDIAN_32(msg->acknowledgement_number));
-    printf("\n");
-#endif
-
+    printk_debug("recv %x%x->%x%x flags=%x seq=%x ack=%x\n",
+        (JLOS_SWAP_ENDIAN_16(msg->src_port) >> 8) & 0xFF,
+        JLOS_SWAP_ENDIAN_16(msg->src_port) & 0xFF,
+        (JLOS_SWAP_ENDIAN_16(msg->dst_port) >> 8) & 0xFF,
+        JLOS_SWAP_ENDIAN_16(msg->dst_port) & 0xFF,
+        flags,
+        JLOS_SWAP_ENDIAN_32(msg->sequence_number),
+        JLOS_SWAP_ENDIAN_32(msg->acknowledgement_number));
     jlos_tcp_socket_t *socket = NULL;
     jlos_tcp_key_t key = {dstIP_BE, msg->dst_port};
     uint32_t args[] = {srcIP_BE, msg->src_port, flags, dstIP_BE, msg->dst_port};
@@ -153,28 +137,19 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
     if (node) {
         socket = container_of(node, jlos_tcp_socket_t, hash_node);
     }
-
     bool reset = false;
     if (socket && (flags & JLOS_TCP_RST)) {
         socket->state = JLOS_TCP_CLOSED;
     }
     if (socket && socket->state != JLOS_TCP_CLOSED) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("TCP: socket state=0x");
-        printf_hex(socket->state);
-        printf(" remote=");
-        printf_hex((socket->remote_ip >> 0) & 0xFF);
-        printf_hex((socket->remote_ip >> 8) & 0xFF);
-        printf_hex((socket->remote_ip >> 16) & 0xFF);
-        printf_hex((socket->remote_ip >> 24) & 0xFF);
-        printf(":");
-        {
-            uint16_t rp = JLOS_SWAP_ENDIAN_16(socket->remote_port);
-            printf_hex((rp >> 8) & 0xFF);
-            printf_hex(rp & 0xFF);
-        }
-        printf("\n");
-#endif
+        printk_debug("socket state=%x remote=%x.%x.%x.%x:%x%x\n",
+            socket->state,
+            socket->remote_ip & 0xFF,
+            (socket->remote_ip >> 8) & 0xFF,
+            (socket->remote_ip >> 16) & 0xFF,
+            (socket->remote_ip >> 24) & 0xFF,
+            (JLOS_SWAP_ENDIAN_16(socket->remote_port) >> 8) & 0xFF,
+            JLOS_SWAP_ENDIAN_16(socket->remote_port) & 0xFF);
         switch (flags & (JLOS_TCP_SYN | JLOS_TCP_ACK | JLOS_TCP_FIN)) {
             case JLOS_TCP_SYN:
                 if (socket->state == JLOS_TCP_LISTEN) {
@@ -183,14 +158,10 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                     socket->remote_ip = srcIP_BE;
                     socket->acknowledgement_number = JLOS_SWAP_ENDIAN_32(msg->sequence_number) + 1;
                     socket->sequence_number = 0xbeefcafe;
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                    printf("TCP: LISTEN -> SYN_RCVD, sending SYN-ACK\n");
-#endif
+                    printk_debug("listen -> syn_rcvd, sending syn-ack\n");
                     jlos_tcp_provider_send(self, socket, 0, 0, (JLOS_TCP_SYN | JLOS_TCP_ACK));
                 } else if (socket->state == JLOS_TCP_SYN_RECEIVED) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                    printf("TCP: SYN_RCVD retransmitting SYN-ACK (lost?)\n");
-#endif
+                    printk_debug("syn_rcvd retransmitting syn-ack (lost?)\n");
                     jlos_tcp_provider_send(self, socket, 0, 0, (JLOS_TCP_SYN | JLOS_TCP_ACK));
                 } else {
                     reset = true;
@@ -243,9 +214,7 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                     case JLOS_TCP_SYN_RECEIVED:
                         socket->state = JLOS_TCP_ESTABLISHED;
                         socket->sequence_number = JLOS_SWAP_ENDIAN_32(msg->acknowledgement_number);
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                        printf("TCP: 3-way handshake complete, state=ESTABLISHED\n");
-#endif
+                        printk_debug("3-way handshake complete, state=established\n");
                         return false;
                     case JLOS_TCP_FIN_WAIT1:
                         socket->state = JLOS_TCP_FIN_WAIT2;
@@ -261,12 +230,8 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
                 if (JLOS_SWAP_ENDIAN_32(msg->sequence_number) == socket->acknowledgement_number) {
                     uint32_t header_bytes = data_offset * 4;
                     uint32_t payload_len = size - header_bytes;
-#if KERNEL_CONFIG_DEBUG_NETWORK
-                    printf("TCP: payload len=");
-                    printf_hex((payload_len >> 8) & 0xFF);
-                    printf_hex(payload_len & 0xFF);
-                    printf(" bytes, calling handler\n");
-#endif
+                    printk_debug("payload len=%x%x bytes, calling handler\n",
+                        (payload_len >> 8) & 0xFF, payload_len & 0xFF);
                     reset = !socket->handle_tcp_message(socket, (internet_protocol_payload + header_bytes), payload_len);
                     if (!reset) {
                         socket->acknowledgement_number += payload_len;
@@ -278,9 +243,7 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
         }
     }
     if (reset) {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-        printf("TCP: sending RST (reset)\n");
-#endif
+        printk_debug("sending rst (reset)\n");
         if (socket) {
             jlos_tcp_provider_send(self, socket, 0, 0, JLOS_TCP_RST);
         } else {
@@ -310,45 +273,16 @@ bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, 
 
 void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, uint8_t *data, uint16_t size, uint16_t flags)
 {
-#if KERNEL_CONFIG_DEBUG_NETWORK
-    printf("TCP_SEND: ");
-    printf_hex((JLOS_SWAP_ENDIAN_16(socket->local_port) >> 8) & 0xFF);
-    printf_hex(JLOS_SWAP_ENDIAN_16(socket->local_port) & 0xFF);
-    printf("->");
-    printf_hex((JLOS_SWAP_ENDIAN_16(socket->remote_port) >> 8) & 0xFF);
-    printf_hex(JLOS_SWAP_ENDIAN_16(socket->remote_port) & 0xFF);
-    printf(" flags=");
-    if (flags & JLOS_TCP_FIN) printf("F");
-    if (flags & JLOS_TCP_SYN) printf("S");
-    if (flags & JLOS_TCP_RST) printf("R");
-    if (flags & JLOS_TCP_PSH) printf("P");
-    if (flags & JLOS_TCP_ACK) printf("A");
-    if (flags & JLOS_TCP_URG) printf("U");
-    printf(" size=");
-    printf_hex((size >> 8) & 0xFF);
-    printf_hex(size & 0xFF);
-    printf(" seq=");
-    printf_hex32(socket->sequence_number);
-    printf(" ack=");
-    printf_hex32(socket->acknowledgement_number);
-    printf("\n");
-    if (size > 0 && data) {
-        uint16_t dump = size > 40 ? 40 : size;
-        printf("TCP_DATA: [HEX] ");
-        for (uint16_t i = 0; i < dump; i++) { printf_hex(data[i]); printf(" "); }
-        printf("\nTCP_DATA: [ASC] ");
-        char foo[2] = " ";
-        for (uint16_t i = 0; i < dump; i++) {
-            uint8_t c = data[i];
-            if (c >= 32 && c < 127) { foo[0] = c; printf(foo); }
-            else if (c == 0x0D) printf(".");
-            else if (c == 0x0A) printf("\\n\n        ");
-            else printf(".");
-        }
-        printf("\n");
-    }
-#endif
-
+    printk_debug("send %x%x->%x%x flags=%x size=%x%x seq=%x ack=%x\n",
+        (JLOS_SWAP_ENDIAN_16(socket->local_port) >> 8) & 0xFF,
+        JLOS_SWAP_ENDIAN_16(socket->local_port) & 0xFF,
+        (JLOS_SWAP_ENDIAN_16(socket->remote_port) >> 8) & 0xFF,
+        JLOS_SWAP_ENDIAN_16(socket->remote_port) & 0xFF,
+        flags,
+        (size >> 8) & 0xFF,
+        size & 0xFF,
+        socket->sequence_number,
+        socket->acknowledgement_number);
     uint8_t doff;
     uint16_t tcp_hdr_len;
     if ((flags & JLOS_TCP_SYN) != 0) {
@@ -358,17 +292,12 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
         doff = 5;
         tcp_hdr_len = 20;
     }
-
     uint16_t total_length = size + tcp_hdr_len;
     uint16_t length_incl_p_hdr = total_length + sizeof(jlos_tcp_pseudo_header_t);
-
     uint8_t *buffer = (uint8_t *)jlos_kalloc(length_incl_p_hdr);
-    
     jlos_tcp_pseudo_header_t *phdr = (jlos_tcp_pseudo_header_t *)buffer;
     jlos_tcp_header_t *msg = (jlos_tcp_header_t *)(buffer + sizeof(jlos_tcp_pseudo_header_t));
-    
     uint8_t *buffer2 = (uint8_t *)msg + (doff * 4);
-
     JLOS_TCP_SET_DATA_OFFSET_FLAGS(msg, doff, flags);
     msg->src_port = socket->local_port;
     msg->dst_port = socket->remote_port;
@@ -377,9 +306,7 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
     msg->window_size = JLOS_SWAP_ENDIAN_16(0xFFFF);
     msg->urgent_ptr = 0;
     msg->options = ((flags & JLOS_TCP_SYN) != 0) ? JLOS_SWAP_ENDIAN_32(0x020405B4) : 0;
-    
     socket->sequence_number += size;
-
     for (int i = 0; i < size; i++) {
         buffer2[i] = data[i];
     }
@@ -405,7 +332,6 @@ jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t
         socket->local_ip = jlos_internet_protocol_provider_get_ip_address(self->base_handler.backend);
         socket->state = JLOS_TCP_SYN_SENT;
         socket->sequence_number = 0xbeefcafe;
-
         jlos_tcp_key_t key = {socket->local_ip, socket->local_port};
         jlos_hash_chain_insert(&self->sockets, &key, &socket->hash_node);
         self->num_sockets++;

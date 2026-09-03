@@ -1,5 +1,5 @@
-#ifndef __JLOS_NET_UDP_H
-#define __JLOS_NET_UDP_H
+#ifndef _JLOS_NET_UDP_H
+#define _JLOS_NET_UDP_H
 
 #include <net/ipv4.h>
 #include <dsa/hash_chain.h>

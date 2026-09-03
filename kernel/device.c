@@ -3,6 +3,8 @@
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "dev"
+
 uint32_t jlos_device_physical_memory_end = 0;
 uint32_t jlos_device_available_ram_bytes = 0;
 
@@ -14,7 +16,7 @@ void jlos_device_init(const multiboot_info_t *mb)
     uint32_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
     uint32_t phys_end = phys_start;
     if (!(mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        printf("mmap not available, using mem_upper\n");
+        printk_warn("mmap not available, using mem_upper\n");
         phys_end = phys_start + mb->mem_upper * 1024;
         if (phys_end > KERNEL_PHYSICAL_MAX) {
             phys_end = KERNEL_PHYSICAL_MAX;
@@ -44,6 +46,6 @@ void jlos_device_init(const multiboot_info_t *mb)
     }
     jlos_device_physical_memory_end = (uint32_t)max_end;
     jlos_device_available_ram_bytes = (uint32_t)total_ram;
-    printk("mmap: %u entires, max ram end = 0x%x, total available = %u KB\n",
+    printk_info("mmap: %u entries, max ram end = 0x%x, total available = %u KB\n",
         count, (uint32_t)jlos_device_physical_memory_end, (uint32_t)(jlos_device_available_ram_bytes / 1024));
 }

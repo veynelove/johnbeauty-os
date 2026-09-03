@@ -8,6 +8,8 @@
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "irq"
+
 extern void jlos_arch_tss_init_for_asm(void);
 extern jlos_task_t *g_current_task_ptr;
 
@@ -263,21 +265,21 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         self->handles[interrupt + self->hardware_interrupt_offset] == NULL) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
         uint32_t err = cpu->padding;   /* offset 32 = CPU 压入的真实 error code */
-        printk("[EXC] num=0x%x err=0x%x eip=0x%x cs=0x%x efl=0x%x uesp=0x%x uss=0x%x pid=%u\n",
+        printk_err("exception num=0x%x err=0x%x eip=0x%x cs=0x%x efl=0x%x uesp=0x%x uss=0x%x pid=%u\n",
                interrupt, err, cpu->eip, cpu->cs, cpu->eflags,
                cpu->user_esp, cpu->user_ss,
                g_current_task_ptr ? g_current_task_ptr->pid : 0);
         if (interrupt == 0x0D) {  /* #GP: error code 非零时为触犯的段选择子 */
             if (err) {
-                printk("[GP] sel=0x%x idx=%u TI=%u RPL=%u ext=%u\n",
+                printk_err("#GP sel=0x%x idx=%u TI=%u RPL=%u ext=%u\n",
                        err & 0xFFF8, (err >> 3) & 0x1FF,
                        (err >> 2) & 1, err & 3, (err >> 0) & 1 ? 0 : 1);
             } else {
-                printk("[GP] err=0\n");
+                printk_err("#GP err=0\n");
             }
         }
         if (interrupt == 0x08) {  /* #DF 双重错误 → 即将 triple fault 关闭 CPU */
-            printk("[DF] DOUBLE FAULT -> triple fault imminent\n");
+            printk_err("#DF double fault -> triple fault imminent\n");
         }
         /* #GP/#DF 为不可恢复致命错误, halt 以便读日志; 其余异常也 halt 避免雪崩 */
         for (;;) {
@@ -301,23 +303,22 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     }
     else if (interrupt >= 16) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
-        printk("unhandled interrupt 0x%x, err = 0x%x, eip = %x, cs = %x, eflags = %x\n",
+        printk_err("unhandled interrupt 0x%x err=0x%x eip=0x%x cs=0x%x eflags=0x%x\n",
             interrupt, cpu->error, cpu->eip, cpu->cs, cpu->eflags);
     }
 
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
-    if (interrupt == 0 && self != NULL && self->task_manager != NULL && self->task_manager->num_tasks > 0) {
+    if (interrupt == 0 && self && self->task_manager) {
         jlos_hal_timer_on_tick();
         jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
-#if KERNEL_CONFIG_PREEMPTIVE
-        if (!curr || curr->remain_slice == 0 || curr->status != JLOS_TASK_RUNNING) {
+        
+        bool resched = self->task_manager->need_resched;
+        if (!curr || curr->status != JLOS_TASK_RUNNING || (KERNEL_CONFIG_PREEMPTIVE && !curr->remain_slice)) {
+            resched = true;
+        }
+        if (resched) {
             esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)esp);
         }
-#else
-        if (!curr || curr->status != JLOS_TASK_RUNNING) {
-            esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)esp);
-        }
-#endif
     }
     if (vector >= 0x20 && vector < 0x30) {
         jlos_port8_bit_slow_write(&self->pic_master_command, 0x20);

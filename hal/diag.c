@@ -1,16 +1,12 @@
 #include <hal/diag.h>
 #include <hal/timer.h>
+#include <kernel/printk.h>
+
+#define JLOS_KERNEL_LOG_SUBSYS "diag"
 
 #if HAL_CONFIG_TRACE_IO
 
 #define JLOS_HAL_TRACE_CAPACITY  512
-
-extern void printf(const char *str);
-extern void printf_hex32(uint32_t value);
-extern void printf_hex16(uint16_t value);
-extern void printf_hex8(uint8_t value);
-extern void printf_char(char c);
-extern void printf_uint(uint32_t value);
 
 typedef struct {
     const char *file;
@@ -98,56 +94,48 @@ int jlos_hal_trace_count(void)
 static const char *op_name(uint8_t op)
 {
     switch (op) {
-    case JLOS_HAL_TRACE_OP_WR8:  return "WR8 ";
-    case JLOS_HAL_TRACE_OP_RD8:  return "RD8 ";
+    case JLOS_HAL_TRACE_OP_WR8:  return "WR8";
+    case JLOS_HAL_TRACE_OP_RD8:  return "RD8";
     case JLOS_HAL_TRACE_OP_WR16: return "WR16";
     case JLOS_HAL_TRACE_OP_RD16: return "RD16";
     case JLOS_HAL_TRACE_OP_WR32: return "WR32";
     case JLOS_HAL_TRACE_OP_RD32: return "RD32";
-    case JLOS_HAL_TRACE_OP_MSG:  return "MSG ";
-    default:                     return "?   ";
+    case JLOS_HAL_TRACE_OP_MSG:  return "MSG";
+    default:                     return "?";
     }
 }
 
-static void print_basename(const char *path)
+static const char *basename_of(const char *path)
 {
-    if (!path) { printf("(null)"); return; }
+    if (!path) return "(null)";
     const char *base = path;
     for (const char *p = path; *p; p++) {
         if (*p == '/' || *p == '\\') base = p + 1;
     }
-    printf(base);
+    return base;
 }
 
 static void print_rec(const jlos_hal_trace_rec_t *r, int idx)
 {
-    printf("["); printf_uint((uint32_t)idx); printf("] t=");
-    printf_hex32(r->tick); printf(" ");
-    printf(op_name(r->op)); printf(" port=0x");
-    printf_hex16(r->port); printf(" val=0x");
+    uint32_t val = r->value;
     if (r->op == JLOS_HAL_TRACE_OP_WR8 || r->op == JLOS_HAL_TRACE_OP_RD8)
-        printf_hex8((uint8_t)r->value);
+        val &= 0xFF;
     else if (r->op == JLOS_HAL_TRACE_OP_WR16 || r->op == JLOS_HAL_TRACE_OP_RD16)
-        printf_hex16((uint16_t)r->value);
-    else
-        printf_hex32(r->value);
-    printf("  ");
-    print_basename(r->file);
-    printf(":"); printf_uint((uint32_t)r->line);
-    printf_char('\n');
+        val &= 0xFFFF;
+    printk_debug("[%u] t=%x %s port=0x%x val=0x%x %s:%u\n",
+        (uint32_t)idx, r->tick, op_name(r->op), r->port, val,
+        basename_of(r->file), (uint32_t)r->line);
 }
 
 void jlos_hal_trace_dump(int last_n)
 {
     trace_ensure_init();
     int total = jlos_hal_trace_count();
-    if (total <= 0) { printf("HAL trace: empty\n"); return; }
+    if (total <= 0) { printk_debug("trace: empty\n"); return; }
     int n = last_n;
     if (n <= 0 || n > total) n = total;
-    printf("HAL trace: last "); printf_uint((uint32_t)n);
-    printf(" of ");           printf_uint((uint32_t)total);
-    printf(" (wrap=");        printf_uint(s_trace_wrap ? 1u : 0u);
-    printf(")\n");
+    printk_debug("trace: last %u of %u (wrap=%u)\n",
+        (uint32_t)n, (uint32_t)total, s_trace_wrap ? 1u : 0u);
 
     uint32_t start_idx;
     if (s_trace_wrap) {

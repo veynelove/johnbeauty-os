@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_CONTEXT_H
-#define __JLOS_HAL_CONTEXT_H
+#ifndef _JLOS_HAL_CONTEXT_H
+#define _JLOS_HAL_CONTEXT_H
 
 #include <tools/config.h>
 #include <common/types.h>
@@ -31,6 +31,7 @@ extern void jlos_arch_task_fork_prepare_child(
     void *child_task);
 extern void jlos_arch_tss_init(uint16_t kernel_data_selector);
 extern void jlos_arch_tss_set_ctx(uint32_t ctx);
+extern void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size);
 
 /* fork_invoke: 父返回 child* (非 NULL), 子返回 NULL. asm 输出约束 &=a 绑 eax,
  * GCC 不会 spill 父残留. 调用方据此判 is_child = (ret == NULL). */

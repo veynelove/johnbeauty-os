@@ -1,5 +1,5 @@
-#ifndef __JLOS_CONFIG_H
-#define __JLOS_CONFIG_H
+#ifndef _JLOS_CONFIG_H
+#define _JLOS_CONFIG_H
 
 #define KERNEL_CONFIG_ARCH_X86    0
 #define KERNEL_CONFIG_ARCH_ARM    1
@@ -16,5 +16,10 @@
 #define KERNEL_CONFIG_DEBUG_MEMORY      1
 #define KERNEL_CONFIG_ENABLE_TESTS      1
 #define KERNEL_CONFIG_DEBUG_LOG         1
+
+#define JLOS_KERNEL_DEBUG               1
+#define JLOS_KERNEL_LOG_FUNC            0
+#define JLOS_KERNEL_LOG_PRINT_LEVEL     0
+#define JLOS_KERNEL_LOG_PRINT_SUBSYS    0
 
 #endif

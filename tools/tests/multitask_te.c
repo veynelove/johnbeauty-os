@@ -9,6 +9,8 @@
 #include <hal/timer.h>
 #include <hal/user_syscall.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "test"
+
 static jlos_task_manager_t *s_mgr;
 
 static volatile int v_t1_a = 0, v_t1_b = 0;
@@ -202,10 +204,8 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
 {
     s_mgr = task_manager_;
 
-    printk("========================================================\n");
-    printk("[MULTITASK] unified test START\n");
-    printk("========================================================\n");
-    printk("  MAX_TASKS=%u  KSTACK=%uB  USTACK=%uKB  MLFQ=%u lv\n",
+    printk_info("=== multitask test start ===\n");
+    printk_info("MAX_TASKS=%u KSTACK=%uB USTACK=%uKB MLFQ=%u lv\n",
            JLOS_TASK_MAX_NUM, JLOS_TASK_STACK_SIZE,
            JLOS_TASK_USER_STACK_SIZE / 1024, JLOS_TASK_MLFQ_LEVELS);
 
@@ -218,24 +218,23 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     v_t4_ring3_exited = 0;
 
     int spawn_fails = 0;
-    jlos_task_t *t1a = NULL, *t1b = NULL, *t2p = NULL, *t3p = NULL, *t4r = NULL;
 
-    printk("\n[TEST 1] schedule alternation (2 kernel tasks)\n");
-    t1a = spawn_kernel_task(mmu, test1_entry_a, "t1_a", &spawn_fails);
-    t1b = spawn_kernel_task(mmu, test1_entry_b, "t1_b", &spawn_fails);
-    printk("\n[TEST 2] fork -> wait -> exit_code (1 child, magic=%u)\n", T2_MAGIC_EXIT);
-    t2p = spawn_kernel_task(mmu, test2_parent_entry, "t2_parent", &spawn_fails);
-    printk("\n[TEST 3] fork %u children (exit_code = 100..%u)\n",
+    printk_info("[test 1] schedule alternation (2 kernel tasks)\n");
+    spawn_kernel_task(mmu, test1_entry_a, "t1_a", &spawn_fails);
+    spawn_kernel_task(mmu, test1_entry_b, "t1_b", &spawn_fails);
+    printk_info("[test 2] fork -> wait -> exit_code (1 child, magic=%u)\n", T2_MAGIC_EXIT);
+    spawn_kernel_task(mmu, test2_parent_entry, "t2_parent", &spawn_fails);
+    printk_info("[test 3] fork %u children (exit_code = 100..%u)\n",
            T3_CHILDREN, 100u + T3_CHILDREN - 1);
-    t3p = spawn_kernel_task(mmu, test3_parent_entry, "t3_parent", &spawn_fails);
-    printk("\n[TEST 4] ring3 user task smoke\n");
-    t4r = spawn_user_task(mmu, test4_ring3_entry, "t4_ring3", &spawn_fails);
+    spawn_kernel_task(mmu, test3_parent_entry, "t3_parent", &spawn_fails);
+    printk_info("[test 4] ring3 user task smoke\n");
+    spawn_user_task(mmu, test4_ring3_entry, "t4_ring3", &spawn_fails);
 
     if (spawn_fails) {
-        printk("  FAIL: spawn stage %d subtask(s) failed. Aborting.\n", spawn_fails);
+        printk_err("FAIL: spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
         goto teardown;
     }
-    printk("  OK  : 5 seed tasks spawned. Run schedule budget...\n");
+    printk_info("OK: 5 seed tasks spawned, run schedule budget...\n");
 
     uint32_t t0 = jlos_hal_timer_get_ticks();
     const uint32_t TIMEOUT_TICKS = 5000;
@@ -250,48 +249,52 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
         if (now - t0 >= TIMEOUT_TICKS) break;
         for (volatile int k = 0; k < 20000; k++);
     }
-    printk("  budget: elapsed=%u ticks (start=%u now=%u)\n",
+    printk_info("budget: elapsed=%u ticks (start=%u now=%u)\n",
            (unsigned)(now - t0), (unsigned)t0, (unsigned)now);
 
     int fails = 0;
-    printk("\n---- subcase results ----\n");
+    printk_info("subcase results:\n");
 
-    printk("[1] alternation: A=%d B=%d  -> ", v_t1_a, v_t1_b);
-    if (v_t1_a >= 500 && v_t1_b >= 500)  printk("PASS\n");
-    else { printk("FAIL (both >= 500)\n"); fails++; }
+    printk_info("[1] alternation: A=%d B=%d -> ", v_t1_a, v_t1_b);
+    if (v_t1_a >= 500 && v_t1_b >= 500)  printk_info("PASS\n");
+    else { printk_err("FAIL (both >= 500)\n"); fails++; }
 
-    printk("[2] fork-wait: status=%d pid=%u exit=%u  -> ",
+    printk_info("[2] fork-wait: status=%d pid=%u exit=%u -> ",
            v_t2_parent_done, (unsigned)v_t2_child_pid, (unsigned)v_t2_exit_code);
     if (v_t2_parent_done == 1 && v_t2_child_pid > 0
-        && v_t2_exit_code == T2_MAGIC_EXIT)  printk("PASS\n");
-    else { printk("FAIL (want status=1, pid>0, exit=%u)\n", T2_MAGIC_EXIT); fails++; }
+        && v_t2_exit_code == T2_MAGIC_EXIT)  printk_info("PASS\n");
+    else { printk_err("FAIL (want status=1, pid>0, exit=%u)\n", T2_MAGIC_EXIT); fails++; }
 
-    printk("[3] 10-child pressure: status=%d\n", v_t3_done);
+    printk_info("[3] 10-child pressure: status=%d\n", v_t3_done);
     if (v_t3_done == 1) {
         int bad = 0;
         for (int i = 0; i < T3_CHILDREN; i++) {
             if (v_t3_codes[i] != 100u + (uint32_t)i) {
-                printk("    !! i=%u exit=%u expect %u\n",
+                printk_err("mismatch i=%u exit=%u expect=%u\n",
                        i, (unsigned)v_t3_codes[i], 100u + i);
                 bad++;
             }
         }
-        if (!bad)  printk("    all 10 exit_codes matched. PASS\n");
-        else { printk("    %u mismatch. FAIL\n", bad); fails++; }
-    } else { printk("    FAIL status=%d\n", v_t3_done); fails++; }
+        if (!bad)  printk_info("all 10 exit_codes matched, PASS\n");
+        else { printk_err("%u mismatch, FAIL\n", bad); fails++; }
+    } else { printk_err("FAIL status=%d\n", v_t3_done); fails++; }
 
-    printk("[4] ring3 smoke: exited=%d  -> ", v_t4_ring3_exited);
-    if (v_t4_ring3_exited >= 1)  printk("PASS\n");
-    else { printk("FAIL\n"); fails++; }
+    printk_info("[4] ring3 smoke: exited=%d -> ", v_t4_ring3_exited);
+    if (v_t4_ring3_exited >= 1)  printk_info("PASS\n");
+    else { printk_err("FAIL\n"); fails++; }
 
-    printk("\n--------------------------------------------------------\n");
-    if (!fails) printk("[MULTITASK] ALL PASSED :)\n");
-    else        printk("[MULTITASK] FAILS: %d. Check above !!\n", fails);
-    printk("--------------------------------------------------------\n");
+    if (!fails) printk_info("multitask: ALL PASSED\n");
+    else        printk_err("multitask: FAILS: %d, check above\n", fails);
 
 teardown:
-    jlos_task_manager_destroy(s_mgr);
-    jlos_kfree(t1a);  jlos_kfree(t1b);
-    jlos_kfree(t2p);  jlos_kfree(t3p);
-    jlos_kfree(t4r);
+    ;
+    int i = 0;
+    while ((i = s_mgr->num_tasks - 1) > 0) {
+        jlos_task_t *t = s_mgr->tasks[i];
+        if (!t || t == s_mgr->idle_task) continue;
+        if (!jlos_list_empty(&t->zombie_node)) {
+            jlos_list_del_init(&t->zombie_node);
+        }
+        jlos_task_free(s_mgr, t);
+    }
 }

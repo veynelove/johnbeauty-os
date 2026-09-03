@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_EXT_STATE_H
-#define __JLOS_HAL_EXT_STATE_H
+#ifndef _JLOS_HAL_EXT_STATE_H
+#define _JLOS_HAL_EXT_STATE_H
 
 #include <tools/config.h>
 #include <common/types.h>

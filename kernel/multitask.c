@@ -9,37 +9,71 @@
 #include <kernel/printk.h>
 #include <kernel/ipc.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "sched"
+
 extern jlos_task_t *g_current_task_ptr;
 extern jlos_paging_context_t s_kernel_paging_context;
-extern uint32_t _kernel_end;   /* linker 符号: 内核 image 结束虚拟地址 (multitask.h 已声明, 此处保留供本 TU 早期引用) */
+extern uint32_t _kernel_end;
 
 jlos_task_manager_t *g_task_manager_ptr = NULL;
 
 static uint32_t s_next_pid = 1;
 
-static inline uint32_t pid_hash_fn(uint32_t pid)
+static inline bool task_on_rq(jlos_task_t *t)
 {
-    return pid % jLOS_TASK_PID_HASH_SIZE;
+    return t->rq_node.next && t->rq_node.next != &t->rq_node;
 }
 
-static void pid_hash_insert(jlos_task_manager_t *self, jlos_task_t *task)
+static inline uint32_t clamp_pri(uint32_t p)
 {
-    uint32_t b = pid_hash_fn(task->pid);
-    task->next_hash = self->pid_hash[b];
-    self->pid_hash[b] = task;
+    return p < JLOS_TASK_MLFQ_LEVELS ? p : (JLOS_TASK_MLFQ_LEVELS - 1);
 }
 
-static void pid_hash_remove(jlos_task_manager_t *self, jlos_task_t *task)
+static int pid_hash_cmp(const void *key, const void *node)
 {
-    uint32_t b = pid_hash_fn(task->pid);
-    jlos_task_t **pp = &self->pid_hash[b];
-    while (*pp) {
-        if (*pp == task) {
-            *pp = task->next_hash;
-            task->next_hash = NULL;
-            return;
-        }
-        pp = &(*pp)->next_hash;
+    uint32_t pid = *(const uint32_t *)key;
+    const jlos_task_t *t = container_of(node, const jlos_task_t, pid_hash_node);
+    return (t->pid == pid) ? 0 : 1;
+}
+
+static void rq_enqueue(jlos_task_manager_t *self, jlos_task_t *t)
+{
+    uint32_t l = clamp_pri(t->priority);
+    jlos_list_add_tail(&t->rq_node, &self->rq[l].head);
+    self->rq[l].count++;
+    self->rq_nonempty |= (1U << l);
+}
+
+static jlos_task_t *rq_dequeue(jlos_task_manager_t *self)
+{
+    if (!self->rq_nonempty) {
+        return NULL;
+    }
+    int l = __builtin_ctz(self->rq_nonempty);
+    jlos_list_head_t *first = self->rq[l].head.next;
+    jlos_list_del(first);
+    if (--self->rq[l].count == 0) {
+        self->rq_nonempty &= ~(1U << l);
+    }
+    jlos_task_t *t = container_of(first, jlos_task_t, rq_node);
+    uint32_t now = jlos_hal_timer_get_ticks();
+    while(l > 0 && (now - t->last_ready_tick) > JLOS_TASK_MLFQ_AGING_TICKS) {
+        t->priority = (uint32_t)(--l);
+        t->default_slice = (2U << l);
+        t->last_ready_tick = now;
+    }
+    return t;
+}
+
+static void rq_remove_specific(jlos_task_manager_t *self, jlos_task_t *t)
+{
+    if (!t || !task_on_rq(t)) {
+        return;
+    }
+    uint32_t l = clamp_pri(t->priority);
+    jlos_list_del(&t->rq_node);
+    if (--self->rq[l].count == 0) {
+        self->rq_nonempty &= ~(1U << l);
     }
 }
 
@@ -69,7 +103,9 @@ void jlos_task_set_blocked(jlos_task_t *t)
         return;
     }
     t->status = JLOS_TASK_BLOCKED;
-    t->yield = true;
+    if (g_task_manager_ptr && task_on_rq(t)) {
+        rq_remove_specific(g_task_manager_ptr, t);
+    }
 }
 
 /* 进程退出 → ZOMBIE: 保留 PCB 等待父进程通过 wait_pid 收割 */
@@ -80,6 +116,9 @@ void jlos_task_set_zombie(jlos_task_t *t, uint32_t exit_code)
     }
     t->status = JLOS_TASK_ZOMBIE;
     t->exit_code = exit_code;
+    if (g_task_manager_ptr && task_on_rq(t)) {
+        rq_remove_specific(g_task_manager_ptr, t);
+    }
 }
 
 void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid)
@@ -89,7 +128,9 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid)
     }
     t->status = JLOS_TASK_WAITING;
     t->waiting_pid = pid;
-    t->yield = true;
+    if (g_task_manager_ptr && task_on_rq(t)) {
+        rq_remove_specific(g_task_manager_ptr, t);
+    }
 }
 
 void jlos_task_init_1(jlos_task_t *self, const char *name)
@@ -116,7 +157,11 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->priority = 0;
     self->default_slice = (2 << self->priority);
     self->remain_slice = self->default_slice;
-    self->next_hash = NULL;
+    self->pid_hash_node.next = NULL;
+    self->pid_hash_node.pprev = NULL;
+    jlos_list_init(&self->zombie_node);
+    jlos_list_init(&self->rq_node);
+    self->slot_idx = -1;
     jlos_arch_task_ext_init(self);
 }
 
@@ -132,7 +177,6 @@ int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(vo
     self->user_stack = NULL;
     self->user_stack_size = 0;
     self->fds = NULL;
-    self->fds_size = 0;
     self->brk_start = 0;
     self->brk_end = 0;
     self->brk_limit = 0;
@@ -196,7 +240,7 @@ static int32_t jlos_task_create_user_stack(jlos_task_t *self)
             /* 仅映射栈底1页; user_esp=栈顶, 首次push依赖#PF demand-map自愈 */
             (void)self;
         } else {
-            printk("[ustack] pid=%u frame alloc FAILED\n", self->pid);
+            printk_err("[ustack] pid=%u frame alloc FAILED\n", self->pid);
         }
     }
     return 0;
@@ -217,11 +261,8 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
             self->fds[i].obj = NULL;
             self->fds[i].flags = 0;
         }
-        self->fds_size = JLOS_TASK_FDS_NUM;
-    } else {
-        self->fds_size = 0;
     }
-    for (uint32_t i = 0; i < 3 && i < self->fds_size; i++) {
+    for (uint32_t i = 0; i < 3 && i < JLOS_TASK_FDS_NUM; i++) {
         self->fds[i].type = JLOS_TASK_FD_CONSOLE;
         self->fds[i].obj = NULL;
         self->fds[i].flags = i ? JLOS_TASK_FD_WRITE_ONLY : JLOS_TASK_FD_READ_ONLY;
@@ -275,9 +316,12 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
     if (!self || !task) {
         return;
     }
-    pid_hash_remove(self, task);
+    jlos_hash_chain_remove(&self->pid_hash, &task->pid_hash_node);
+    if (task->zombie_node.next && task->zombie_node.next != &task->zombie_node) {
+        jlos_list_del(&task->zombie_node);
+    }
     jlos_arch_task_ext_destroy(task);
-    if (task->stack) {
+    if (task->stack && task->pid != 0) {
         jlos_kfree(task->stack);
         task->stack = NULL;
     }
@@ -292,17 +336,19 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
         jlos_kfree(task->fds);
         task->fds = NULL;
     }
-    for (int i = 0; i < self->num_tasks; i++) {
-        if (self->tasks[i] == task) {
-            self->tasks[i] = self->tasks[self->num_tasks - 1];
-            self->tasks[self->num_tasks - 1] = NULL;
-            self->num_tasks--;
-            break;
+    int32_t idx = task->slot_idx;
+    if (idx >= 0 && idx < self->num_tasks && self->tasks[idx] == task) {
+        self->tasks[idx] = self->tasks[self->num_tasks - 1];
+        if (self->tasks[idx]) {
+            self->tasks[idx]->slot_idx = idx;
         }
+        self->tasks[self->num_tasks - 1] = NULL;
+        self->num_tasks--;
     }
     if (g_current_task_ptr == task) {
         g_current_task_ptr = NULL;
     }
+    task->slot_idx = -1;
     jlos_kfree(task);
 }
 
@@ -339,35 +385,64 @@ void jlos_task_fd_free(jlos_task_t *task, int32_t fd)
 
 void jlos_task_manager_init(jlos_task_manager_t* self)
 {
-    self->num_tasks = 0;
-    self->current_task = -1;
-    self->main_thread_saved = false;
-    for (int i = 0; i < jLOS_TASK_PID_HASH_SIZE; i++) {
-        self->pid_hash[i] = NULL;
+    jlos_hash_chain_init(&self->pid_hash, jLOS_TASK_PID_HASH_SIZE, jlos_hash_uint32, pid_hash_cmp);
+    for (uint32_t l = 0; l < JLOS_TASK_MLFQ_LEVELS; l++) {
+        jlos_list_init(&self->rq[l].head);
+        self->rq[l].count = 0;
     }
+    jlos_list_init(&self->zombie_head);
+    self->need_resched = false;
+    self->rq_nonempty = 0;
+    self->idle_task = (jlos_task_t *)jlos_kalloc(sizeof(jlos_task_t));
+    if (!self->idle_task) {
+        for (;;) {
+            jlos_hal_halt();
+        }
+    }
+    jlos_task_init_1(self->idle_task, "idle");
+    self->idle_task->pid = 0;
+    self->idle_task->waiting_pid = 0;
+    self->idle_task->mm = NULL;
+    self->idle_task->is_user_process = false;
+    self->idle_task->fds = NULL;
+    self->idle_task->user_stack = NULL;
+    self->idle_task->user_stack_size = 0;
+    uint8_t *boot_base = NULL;
+    uint32_t boot_size = 0;
+    jlos_arch_boot_stack_info(&boot_base, &boot_size);
+    self->idle_task->stack = boot_base;
+    self->idle_task->stack_size = boot_size;
+    self->tasks[0] = self->idle_task;
+    self->idle_task->slot_idx = 0;
+    self->num_tasks = 1;
+    self->current_task = 0;
+    JLOS_TASK_SET_RUNNING(self->idle_task);
+    jlos_hash_chain_insert(&self->pid_hash, &self->idle_task->pid, &self->idle_task->pid_hash_node);
+    g_current_task_ptr = self->idle_task;
     g_task_manager_ptr = self;
 }
 
 void jlos_task_manager_destroy(jlos_task_manager_t* self)
 {
-    for (int i = self->num_tasks - 1; i >= 0; i--) {
-        jlos_task_free(self, self->tasks[i]);
+    while (self->num_tasks) {
+        jlos_task_free(self, self->tasks[self->num_tasks - 1]);
     }
+    jlos_hash_chain_destroy(&self->pid_hash);
     self->num_tasks = 0;
     self->current_task = -1;
-    self->main_thread_saved =false;
     g_task_manager_ptr = NULL;
 }
 
 jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid)
 {
-    uint32_t b = pid_hash_fn(pid);
-    for (jlos_task_t *t = self->pid_hash[b]; t; t = t->next_hash) {
-        if (t->pid == pid) {
-            return t;
-        }
+    if (!self) {
+        return NULL;
     }
-    return NULL;
+    jlos_hash_node_t *node = jlos_hash_chain_see(&self->pid_hash, &pid);
+    if (!node) {
+        return NULL;
+    }
+    return container_of(node, jlos_task_t, pid_hash_node);
 }
 
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task)
@@ -376,81 +451,59 @@ bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task)
         return false;
     }
     self->tasks[self->num_tasks] = task;
+    task->slot_idx = self->num_tasks;
     self->num_tasks++;
-    pid_hash_insert(self, task);
+    if (task->status == JLOS_TASK_READY) {
+        rq_enqueue(self, task);
+    }
+    jlos_hash_chain_insert(&self->pid_hash, &task->pid, &task->pid_hash_node);
     return true;
 }
 
 jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu_state_t *cpustate)
 {
-    if (self == NULL || cpustate == NULL) return cpustate;
-
-    /* 经典 Linux task_struct.thread.sp 显式存取: 入口把 cpustate (= on-stack
-     * pt_regs 基指针, 100% ∈ [stack, +size)) 存进 current->sp.value, fork 子栈
-     * 平移 delta 唯一参考此 sp 值, 不用 cpustate (heap 成员) + N 派生物. */
-    if (self->current_task >= 0 && self->current_task < (int)self->num_tasks) {
-        jlos_task_t *curr = self->tasks[self->current_task];
-        if (curr) {
-            jlos_arch_task_set_sp(curr, (uint32_t)cpustate);
-        }
-    }
-
-    if (self->num_tasks <= 0) {
-        g_current_task_ptr = NULL;
+    if (!self) {
         return cpustate;
     }
-    /* 仅回收孤儿 ZOMBIE：无父、或父也已 ZOMBIE。
-     * 父存活的 ZOMBIE 必须保留给父 wait/reap，否则父 find_pid 收割不到 exit_code。 */
-    for (int i = self->num_tasks - 1; i >= 0; i--) {
-        jlos_task_t *t = self->tasks[i];
-        if (!t || t->status != JLOS_TASK_ZOMBIE) {
-            continue;
-        }
-        if (t == g_current_task_ptr) {
-            g_current_task_ptr = NULL;
-            continue;
-        }
-        jlos_task_t *parent = jlos_task_manager_find_pid(self, t->parent_pid);
-        if (!parent || parent->status == JLOS_TASK_ZOMBIE) {
-            jlos_task_free(self, t);
+    jlos_task_t *prev = NULL;
+    if (self->current_task < (int)self->num_tasks) {
+        prev = self->tasks[self->current_task];
+        if (prev) {
+            jlos_arch_task_set_sp(prev, (uint32_t)cpustate);
         }
     }
-    if (self->current_task >= self->num_tasks) {
-        self->current_task = -1;
-    }
-    /* 如果当前是主线程（current_task == -1），保存主线程的状态 */
-    if (self->current_task == -1) {
-        if (!self->main_thread_saved) {
-            jlos_memcpy(&self->main_thread_state, cpustate, sizeof(jlos_cpu_state_t));
-            if (!jlos_cpu_state_is_user_mode(cpustate)) {
-                jlos_cpu_state_record_user_stack(&self->main_thread_state, cpustate);
-            }
-            self->main_thread_saved = true;
+    if (prev) {
+        jlos_memcpy(&prev->cpustate, cpustate, sizeof(jlos_cpu_state_t));
+        if (!jlos_cpu_state_is_user_mode(cpustate)) {
+            jlos_cpu_state_record_user_stack(&prev->cpustate, cpustate);
         }
-    } else if (self->current_task < (int)self->num_tasks) {
-        jlos_task_t *current = self->tasks[self->current_task];
-        if (current) {
-            /* 无论 status 是什么(RUNNING/WAITING/READY/...), 都保存 cpustate.
-             * 原代码只在 RUNNING 时 save — 若 task 设 WAITING 后被抢占,
-             * cpustate 不更新 → 下次恢复时 eip/eflags 是旧垃圾值 → ip=0x6/0x38. */
-            if (current->status == JLOS_TASK_RUNNING) {
-                if (current->yield || current->sleeping) {
-                    JLOS_TASK_SET_READY(current);
-                } else
-                if (current->remain_slice == 0) {
-                    if (current->priority < JLOS_TASK_MLFQ_LEVELS - 1) {
-                        current->priority++;
-                        current->default_slice = 2 << current->priority;
-                    }
-                    JLOS_TASK_SET_READY(current);
+        if (prev->status == JLOS_TASK_RUNNING) {
+            if (prev->sleeping) {
+                JLOS_TASK_SET_BLOCKED(prev);
+            } else if (prev->yield || !prev->remain_slice) {
+                if (!prev->remain_slice && prev->priority < JLOS_TASK_MLFQ_LEVELS - 1) {
+                    prev->priority++;
+                    prev->default_slice = (2U << prev->priority);
                 }
-            }
-            jlos_memcpy(&current->cpustate, cpustate, sizeof(jlos_cpu_state_t));
-            if (!jlos_cpu_state_is_user_mode(cpustate)) {
-                jlos_cpu_state_record_user_stack(&current->cpustate, cpustate);
+                JLOS_TASK_SET_READY(prev);
+                rq_enqueue(self, prev);
+            } else {
+                JLOS_TASK_SET_READY(prev);
+                rq_enqueue(self, prev);
             }
         }
     }
+
+    if (!jlos_list_empty(&self->zombie_head)) {
+        jlos_list_head_t *pos, *n;
+        jlos_list_for_each_safe(pos, n, &self->zombie_head) {
+            jlos_task_t *z = container_of(pos, jlos_task_t, zombie_node);
+            if (z == prev) continue;
+            jlos_list_del_init(pos);
+            jlos_task_free(self, z);
+        }
+    }
+
     uint32_t now_tick = jlos_hal_timer_get_ticks();
     for (int i = 0; i < self->num_tasks; i++) {
         jlos_task_t *t = self->tasks[i];
@@ -459,51 +512,55 @@ jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu
         }
         if (t->sleeping && t->wake_tick <= now_tick) {
             t->sleeping = false;
-            t->wake_tick = now_tick;
-        }
-        if (t->status == JLOS_TASK_WAITING && t->waiting_pid != t->pid) {
-            jlos_task_t *child = jlos_task_manager_find_pid(self, t->waiting_pid);
-            if (child && child->status == JLOS_TASK_ZOMBIE) {
-                t->waiting_pid = t->pid;
+            if (t->status == JLOS_TASK_BLOCKED) {
                 JLOS_TASK_SET_READY(t);
-                t->last_ready_tick = now_tick;
+                if (!task_on_rq(t)) {
+                    rq_enqueue(self, t);
+                }
             }
         }
-        if (t->status == JLOS_TASK_READY && (now_tick - t->last_ready_tick) > JLOS_TASK_MLFQ_AGING_TICKS
-        && t->priority > 0) {
-            t->priority--;
-            t->default_slice = (2 << t->priority);
-            t->last_ready_tick = now_tick;
+        if (t->status == JLOS_TASK_WAITING && t->waiting_pid != t->pid) {
+            jlos_task_t *c = jlos_task_manager_find_pid(self, t->waiting_pid);
+            if (c && c->status == JLOS_TASK_ZOMBIE) {
+                t->waiting_pid = t->pid;
+                JLOS_TASK_SET_READY(t);
+                if (!task_on_rq(t)) {
+                    rq_enqueue(self, t);
+                }
+            }
         }
     }
 
-    for (uint32_t le = 0; le < JLOS_TASK_MLFQ_LEVELS; le++) {
+    jlos_task_t *next = rq_dequeue(self);
+    if (!next) {
+        next = self->idle_task;
+    }
+
+    jlos_paging_context_t *target_mm = next->mm ? next->mm : &s_kernel_paging_context;
+    jlos_paging_switch(target_mm);
+    
+    int idx = next->slot_idx;
+    if (idx < 0 || idx >= self->num_tasks || self->tasks[idx] != next) {
+        idx = -1;
         for (int i = 0; i < self->num_tasks; i++) {
-            int idx = (self->current_task + 1 + i) % self->num_tasks;
-            jlos_task_t *next = self->tasks[idx];
-            if (next && next->status == JLOS_TASK_READY && next->priority == le
-            && !next->sleeping) {
-                self->current_task = idx;
-                jlos_paging_context_t *target_mm = next->mm ? next->mm : &s_kernel_paging_context;
-                jlos_paging_switch(target_mm);
-                JLOS_TASK_SET_RUNNING(next);
-                g_current_task_ptr = next;
-                jlos_arch_tss_set_ctx((uint32_t)(next->stack + next->stack_size));
-                jlos_arch_task_ext_switch();
-                return &next->cpustate;
+            if (self->tasks[i] == next) {
+                idx = i;
+                next->slot_idx = i;
+                break;
             }
         }
     }
-    /* 没有Ready任务，恢复主线程的状态 */
-    g_current_task_ptr = NULL;
-    self->current_task = -1;
-    jlos_paging_switch(&s_kernel_paging_context);
-    jlos_arch_task_ext_switch();
-    if (self->main_thread_saved) {
-        self->main_thread_saved = false;
-        return &self->main_thread_state;
+    if (idx < 0) {
+        printk_err("[sched] next=%p not in tasks[], fallback failed\n", next);
+        return cpustate;
     }
-    return cpustate;
+    self->current_task = idx;
+    g_current_task_ptr = next;
+    JLOS_TASK_SET_RUNNING(next);
+    jlos_arch_tss_set_ctx((uint32_t)(next->stack + next->stack_size));
+    jlos_arch_task_ext_switch();
+    self->need_resched = false;
+    return &next->cpustate;
 }
 
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
@@ -515,6 +572,9 @@ jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
         return NULL;
     }
     jlos_task_t *curr = self->tasks[self->current_task];
+    if (curr == self->idle_task) {
+        return NULL;
+    }
     if (curr && curr->status == JLOS_TASK_RUNNING) {
         if (curr->remain_slice > 0) {
             curr->remain_slice--;
@@ -529,10 +589,6 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
                                uint32_t fork_ebp_ref,
                                uint32_t fork_resume_pc)
 {
-    /* 经典 Linux copy_thread: jlos_arch_fork_invoke asm 首句读硬件 esp/ebp 作
-     * 锚点, HAL prepare_child 沿帧链或 K_DEAD=-24 硬编码求子栈 iret_sp.
-     * 帧链法精确但 -fomit-frame-pointer 时不命中, K_DEAD 0 方差兜底. */
-
     if (self->num_tasks >= JLOS_TASK_MAX_NUM) {
         return NULL;
     }
@@ -544,7 +600,7 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
     /* 范围校验: kalloc 返回值必须 >= _kernel_end (内核 image 之后皆为可写区).
      * [fk-OV] 必须保留: kalloc 返回内核 .text 段时仅有的定位证据. */
     if (!JLOS_KERN_PTR_VALID(child, sizeof(jlos_task_t))) {
-        printk("[fk-OV] task=%p (sz=%zu) below writable min; rollback OOM\n",
+        printk_err("[fk-OV] task=%p (sz=%u) below writable min; rollback OOM\n",
                child, sizeof(jlos_task_t));
         jlos_kfree(child);
         return NULL;
@@ -554,7 +610,7 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
     child->stack_size = JLOS_TASK_STACK_SIZE;
     if (child->stack) {
         if (!JLOS_KERN_PTR_VALID(child->stack, JLOS_TASK_STACK_SIZE)) {
-            printk("[fk-OV] stack=%p (sz=%u) below writable min; rollback OOM\n",
+            printk_err("[fk-OV] stack=%p (sz=%u) below writable min; rollback OOM\n",
                    child->stack, (unsigned)JLOS_TASK_STACK_SIZE);
             jlos_kfree(child->stack);
             child->stack = NULL;
@@ -572,12 +628,15 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
     child->wake_tick = jlos_hal_timer_get_ticks();
     child->remain_slice = parent->default_slice;
     child->next_wait = NULL;
+    child->pid_hash_node.next = NULL;
+    child->pid_hash_node.pprev = NULL;
+    jlos_list_init(&child->rq_node);
+    jlos_list_init(&child->zombie_node);
     
     if (parent->fds) {
         child->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
         if (child->fds) {
             jlos_memcpy(child->fds, parent->fds, sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
-            child->fds_size = JLOS_TASK_FDS_NUM;
             for (int i = 0; i < JLOS_TASK_FDS_NUM; i++) {
                 if (child->fds[i].type == JLOS_TASK_FD_PIPE && child->fds[i].obj) {
                     ((jlos_pipe_t *)child->fds[i].obj)->refcount++;
@@ -585,11 +644,9 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
             }
         } else {
             child->fds = NULL;
-            child->fds_size = 0;
         }
     } else {
         child->fds = NULL;
-        child->fds_size = 0;
     }
 
     /* 分配失败/越界统一ROLLBACK: 绝不把半截task struct挂进调度器 */
@@ -630,7 +687,6 @@ ROLLBACK_OOM:
         jlos_paging_change_flags_range(parent->mm, 0, KERNEL_VIRTUAL_BASE, JLOS_PTE_USER_COW);
     }
 
-    child->next_hash = NULL;
     child->exit_code = TASK_EXIT_DEAUFT;
     /* HAL prepare_child: 子cpustate on-kstack 56B + epilogue 5slot; fork_return_pc必须来自fork_stub.c(本层取=错frame) */
     jlos_arch_task_fork_prepare_child(
@@ -686,25 +742,58 @@ int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
 
 void jlos_process_exit(jlos_task_t *task, uint32_t exit_code)
 {
-    /* 兜底: task≠curr时exit curr, 永远不误杀非当前task(exit永不返回caller) */
-    jlos_task_t *real = g_current_task_ptr;
-    if (!task || (real && task != real)) {
-        if (real && task != real) {
-            printk("[ex-FIX] caller passed task=%p(pid=%u) but curr=%p(pid=%u); "
-                   "exit curr instead\n",
-                   task, task? (unsigned)task->pid : 0u,
-                   real, (unsigned)real->pid);
-        }
-        if (!real) {
-            jlos_task_manager_t *mgr = g_task_manager_ptr;
-            if (mgr) real = jlos_task_manager_curr_task_on_tick(mgr);
-            if (!real) { for (;;) jlos_hal_halt(); }
-        }
-        task = real;
+    (void)task;
+    if (!g_current_task_ptr || !g_task_manager_ptr) {
+        goto halt;
     }
-    JLOS_TASK_SET_ZOMBIE(task, exit_code);
-    task->yield = true;
+    JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, exit_code);
+    jlos_sched_wake_waiter(g_task_manager_ptr, g_current_task_ptr->pid);
+    bool has_alive_parent = false;
+    if (g_current_task_ptr->parent_pid && g_current_task_ptr->parent_pid != g_current_task_ptr->pid) {
+        jlos_task_t *parent = jlos_task_manager_find_pid(g_task_manager_ptr, g_current_task_ptr->parent_pid);
+        if (parent && parent->status != JLOS_TASK_ZOMBIE) {
+            has_alive_parent = true;
+        }
+    }
+    if (!has_alive_parent) {
+        jlos_list_add(&g_current_task_ptr->zombie_node, &g_task_manager_ptr->zombie_head);
+    }
+    g_task_manager_ptr->need_resched = true;
+halt:
+    jlos_hal_enable_interrupts();
     for (;;) {
         jlos_hal_halt();
+    }
+}
+
+bool jlos_need_resched(void)
+{
+    return g_task_manager_ptr && g_task_manager_ptr->need_resched;
+}
+
+void jlos_sched_set_need_resched(void)
+{
+    if (g_task_manager_ptr) {
+        g_task_manager_ptr->need_resched = true;
+    }
+}
+
+void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid)
+{
+    if (!self) {
+        return;
+    }
+    for (int i = 0; i < self->num_tasks; i++) {
+        jlos_task_t *p = self->tasks[i];
+        if (!p) continue;
+        if (p->status == JLOS_TASK_WAITING && p->waiting_pid == exited_pid) {
+            p->waiting_pid = p->pid;
+            JLOS_TASK_SET_READY(p);
+            if (!task_on_rq(p)) {
+                rq_enqueue(self, p);
+            }
+            self->need_resched = true;
+            break;
+        }
     }
 }

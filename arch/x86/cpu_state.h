@@ -1,5 +1,5 @@
-#ifndef JLOS_ARCH_X86_CPU_STATE_H
-#define JLOS_ARCH_X86_CPU_STATE_H
+#ifndef _JLOS_ARCH_X86_CPU_STATE_H
+#define _JLOS_ARCH_X86_CPU_STATE_H
 
 #include <common/types.h>
 #include <hal/cpu_state.h>

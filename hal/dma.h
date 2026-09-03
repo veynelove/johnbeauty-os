@@ -1,5 +1,5 @@
-#ifndef __JLOS_HAL_DMA_H
-#define __JLOS_HAL_DMA_H
+#ifndef _JLOS_HAL_DMA_H
+#define _JLOS_HAL_DMA_H
 
 #include <tools/config.h>
 #include <common/types.h>

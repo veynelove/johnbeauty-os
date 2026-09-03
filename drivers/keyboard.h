@@ -1,5 +1,5 @@
-#ifndef __DRIVERS_KEYBOARD_H
-#define __DRIVERS_KEYBOARD_H
+#ifndef _DRIVERS_KEYBOARD_H
+#define _DRIVERS_KEYBOARD_H
 
 #include <common/types.h>
 #include <hal/irq.h>

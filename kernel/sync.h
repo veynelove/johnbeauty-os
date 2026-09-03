@@ -1,5 +1,5 @@
-#ifndef JLOS_KERNEL_SYNC_H
-#define JLOS_KERNEL_SYNC_H
+#ifndef _JLOS_KERNEL_SYNC_H
+#define _JLOS_KERNEL_SYNC_H
 
 #include <common/types.h>
 #include <kernel/multitask.h>

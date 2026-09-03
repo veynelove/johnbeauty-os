@@ -2,6 +2,7 @@
 #include <kernel/paging.h>
 #include <hal/spinlock.h>
 #include <hal/serial.h>
+#include <hal/timer.h>
 
 #define JLOS_VGA_TEXT_BUFFER_VA  ((uint16_t *)PHYS_TO_VIRT(0xB8000))
 
@@ -178,11 +179,65 @@ static void printk_utoa(unsigned int value, int base, bool uppercase)
     }
 }
 
-void printk(const char *fmt, ...)
+static void printk_put_us_padded(unsigned int value, int width)
+{
+    char buf[16];
+    const char *digits = "0123456789";
+    int i = 0;
+    do { buf[i++] = digits[value % 10]; value /= 10; } while (value > 0);
+    while (i < width) buf[i++] = '0';
+    while (i > 0) printk_putchar(buf[--i]);
+}
+
+static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, const char *func)
+{
+    uint32_t sec = ticks / JLOS_HAL_TIME_FREQ_HZ;
+    uint32_t us  = (ticks % JLOS_HAL_TIME_FREQ_HZ) * (1000000 / JLOS_HAL_TIME_FREQ_HZ);
+    printk_putchar('[');
+    printk_utoa(sec, 10, false);
+    printk_putchar('.');
+    printk_put_us_padded(us, 6);
+    printk_putchar(']');
+    printk_putchar(' ');
+#if JLOS_KERNEL_LOG_PRINT_LEVEL
+    printk_putchar('[');
+    printk_putchar(printk_level_char(level));
+    printk_putchar(']');
+    printk_putchar(' ');
+#endif
+#if JLOS_KERNEL_LOG_PRINT_SUBSYS
+    printk_putchar('[');
+    printk_puts(subsys);
+    printk_putchar(']');
+    printk_putchar(' ');
+#endif
+    if (func) {
+        printk_putchar('[');
+        printk_puts(func);
+        printk_putchar(']');
+        printk_putchar(' ');
+    }
+    (void)level;
+    (void)subsys;
+}
+
+void printk(int level, const char *subsys, const char *func, const char *fmt, ...)
 {
     uint32_t *args = (uint32_t *)&fmt + 1;
     uint32_t flags = jlos_spin_lock_irqsave(&s_printf_lock);
+    uint32_t ticks = jlos_hal_timer_get_ticks();
+    int at_line_start = 1;
+
     for (int i = 0; fmt[i] != '\0'; i++) {
+        if (fmt[i] == '\n') {
+            printk_putchar('\n');
+            at_line_start = 1;
+            continue;
+        }
+        if (at_line_start) {
+            printk_print_prefix(ticks, level, subsys, func);
+            at_line_start = 0;
+        }
         if (fmt[i] == '%') {
             i++;
             switch(fmt[i]) {
@@ -198,7 +253,7 @@ void printk(const char *fmt, ...)
                 }
                 case 'x': {
                     unsigned int value = *args++;
-                    printk_utoa(value , 16, false);
+                    printk_utoa(value, 16, false);
                     break;
                 }
                 case 'X': {

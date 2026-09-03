@@ -1,10 +1,12 @@
-#ifndef __JLOS__KERNEL_MULTITASK_H
-#define __JLOS__KERNEL_MULTITASK_H
+#ifndef _JLOS__KERNEL_MULTITASK_H
+#define _JLOS__KERNEL_MULTITASK_H
 
 #include <common/types.h>
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
 #include <hal/ext_state.h>
+#include <dsa/list.h>
+#include <dsa/hash_chain.h>
 
 #define JLOS_TASK_READY             0
 #define JLOS_TASK_RUNNING           1
@@ -93,22 +95,30 @@ typedef struct jlos_task {
     uint32_t                default_slice;
     uint32_t                last_ready_tick;
     jlos_task_fd_t          *fds;
-    uint32_t                fds_size;
     uint32_t                brk_start;
     uint32_t                brk_end;
     uint32_t                brk_limit;
     jlos_task_t             *next_wait;
-    jlos_task_t             *next_hash;
+    jlos_hash_node_t        pid_hash_node;
+    jlos_list_head_t        zombie_node;
+    jlos_list_head_t        rq_node;
+    int32_t                 slot_idx;
     jlos_arch_ext_state_t   ext_state;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
     jlos_task_t         *tasks[JLOS_TASK_MAX_NUM];
-    jlos_task_t         *pid_hash[jLOS_TASK_PID_HASH_SIZE];
+    jlos_hash_chain_t   pid_hash;
     int                 num_tasks;
     int                 current_task;
-    jlos_cpu_state_t    main_thread_state;
-    bool                main_thread_saved;
+    jlos_list_head_t    zombie_head;
+    struct {
+        jlos_list_head_t head;
+        uint32_t count;
+    }                   rq[JLOS_TASK_MLFQ_LEVELS];
+    uint32_t            rq_nonempty;
+    jlos_task_t         *idle_task;
+    bool                need_resched;
 } jlos_task_manager_t;
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
@@ -153,4 +163,7 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
 void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
+extern bool jlos_need_resched(void);
+extern void jlos_sched_set_need_resched(void);
+extern void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
 #endif
