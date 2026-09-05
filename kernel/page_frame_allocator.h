@@ -3,23 +3,29 @@
 
 #include <common/types.h>
 #include <kernel/paging.h>
+#include <hal/atomic.h>
+#include <dsa/list.h>
 
-#define JLOS_PAGE_FRAME_SIZE            JLOS_PAGE_SIZE
-#define JLOS_PAGE_FRAME_REFCOUNT_MAX    255
+#define JLOS_PAGE_FRAME_SIZE                JLOS_PAGE_SIZE
+#define JLOS_PAGE_FRAME_REFCOUNT_MAX        255
 
-#define JLOS_PFA_MAX_ORDER              10
-#define JLOS_PFA_BUDDY_ORDER_INVALID    0xFF
+#define JLOS_PFA_MAX_ORDER                  10
+#define JLOS_PFA_BUDDY_ORDER_INVALID        0xFF
 
-#define JLOS_PFA_BIT_MAP_FRAME_VALUE(frame) (s_bitmap[(frame) / 8] & (1 << ((frame) % 8)))
+#define JLOS_PFA_FLAG_OCCUPIED              0x01
 
-#define JLOS_BUDDY_NODE_MAGIC 0xBADDF00DU
+#define JLOS_PFA_FREE_BULK_MAX              1024
 
-typedef struct free_order_node_t {
-    struct free_order_node_t    *next;
-    struct free_order_node_t    *prev;
-    uint32_t                    phys_frame;
-    uint32_t                    magic;   /* canary, buddy_insert 写, buddy_remove 校验 */
-} free_order_node_t;
+typedef struct jlos_page_t {
+union {
+    jlos_list_head_t free_list;
+    void             *owner;
+}                 u;
+    uint8_t       flags;
+    uint8_t       type;
+    uint8_t       order;
+    jlos_atomic_t refcount;
+} jlos_page_t;
 
 void jlos_pfa_boot_alloc_init(uint32_t start_phys);
 void *jlos_pfa_boot_alloc(uint32_t size);
@@ -32,8 +38,11 @@ void *jlos_page_frame_malloc(void);
 void jlos_page_frame_free(void *addr);
 
 void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames);
-
 void *jlos_page_frame_reserve_bulk(uint32_t num_frames);
+
+void *jlos_page_frame_alloc_order(uint32_t order);
+void  jlos_page_frame_free_order(void *addr, uint32_t order);
+
 void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end);
 
 uint32_t jlos_page_frame_get_total(void);
