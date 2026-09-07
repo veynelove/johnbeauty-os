@@ -123,8 +123,11 @@ static bool jlos_paging_unmap_nolock(jlos_paging_context_t *self, uint32_t vir_a
         return false;
     }
     if (*pde & JLOS_PDE_4MB) {
-        uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
-        jlos_page_frame_free_bulk(phys_base, 1024);
+        uint32_t vir_addr = pd_idx << 22;
+        if (vir_addr < KERNEL_VIRTUAL_BASE) {
+            uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
+            jlos_page_frame_free_bulk(phys_base, 1024);
+        }
         *pde = 0;
         return true;
     }
@@ -164,6 +167,10 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
     }
     uint32_t virtual_addr = virtual_addr_start;
     uint32_t physical_addr = physical_addr_start;
+    if (size && (virtual_addr_start + size < virtual_addr_start
+        || physical_addr_start + size < physical_addr_start)) {
+        return false;
+    }
     uint32_t end_addr = virtual_addr_start + size;
     uint32_t pages_done = 0;
     
@@ -189,7 +196,7 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         }
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
         if (*pte & JLOS_PTE_PRESENT) {
-            printk_err("remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
+            printk_err("paging_map_over: remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
             for (;;) {
                 jlos_hal_halt();
             }
@@ -269,9 +276,9 @@ static void jlos_paging_change_flags_nolock(jlos_paging_context_t *self, uint32_
         return;
     }
     if (*pde & JLOS_PDE_4MB) {
-        /* FIX: 4MB PSE 页改 flags 时必须保留 PDE_4MB (PS) 位！否则下一次翻译会当成 PT 指针走 → PF */
         uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
-        uint32_t keep = *pde & (JLOS_PDE_4MB | JLOS_PDE_GLOBAL | 0x00001000 /* PAT */ | 0x00000E00 /* PCD|PWT|A|D */);
+        uint32_t keep = *pde & (JLOS_PDE_4MB | JLOS_PDE_GLOBAL | 0x00001000 |
+            JLOS_PDE_WRITE_THROUGH | JLOS_PDE_CACHE_DISABLE | JLOS_PDE_ACCESSED | JLOS_PDE_DIRTY);
         *pde = phys_base | flags | keep;
         return;
     }
@@ -307,16 +314,13 @@ bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_
 
 bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_start,
     uint32_t physical_addr_start, size_t size, uint32_t flags)
-{    
+{   
+    if (!self || !self->page_dir) {
+        return false;
+    }
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     bool ret = jlos_paging_map_range_nolock(self, virtual_addr_start, physical_addr_start, size, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    /* TLB 刷新策略：
-     * - 如果 self 不是当前 active 的 paging context（即正在构建新页表），
-     *   完全不需要刷 TLB —— 这些映射在 CR3 切换时自然生效。
-     * - 如果 self 就是 active context，用 HAL 刷全 TLB，
-     *   绝对不能调用 jlos_hal_paging_switch 切到别的 page_dir！
-     */
     if (ret && self == jlos_active_paging_context) {
         uint32_t num_pages = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
         if (num_pages < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD) {
@@ -338,7 +342,7 @@ bool jlos_paging_unmap(jlos_paging_context_t *self, uint32_t virtual_addr)
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     bool ret = jlos_paging_unmap_nolock(self, virtual_addr);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (ret) {
+    if (ret && self == jlos_active_paging_context) {
         jlos_hal_paging_flush_tlb(virtual_addr);
     }
     return ret;
@@ -372,6 +376,9 @@ void jlos_paging_switch(jlos_paging_context_t *self)
 
 void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t flags)
 {
+    if (!self || !self->page_dir) {
+        return;
+    }
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     jlos_paging_change_flags_nolock(self, virtual_addr, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
@@ -381,6 +388,9 @@ void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr
 void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
     uint32_t flags)
 {
+    if (!self || !self->page_dir || virtual_addr_end <= virtual_addr_start) {
+        return;
+    }
     uint32_t start = JLOS_PAGE_ALIGN_DOWN(virtual_addr_start);
     uint32_t page_num = (virtual_addr_end - start) / JLOS_PAGE_SIZE;
 

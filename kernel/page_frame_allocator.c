@@ -213,7 +213,7 @@ void jlos_page_frame_allocator_init(void)
     }
     
     uint32_t boot_frames = ((uint32_t)&_boot_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
-    for (uint32_t i = 0; i < boot_frames && i < s_total_frames; i++) {
+    for (uint32_t i = kernel_frames; i < boot_frames && i < s_total_frames; i++) {
         jlos_page_frame_mark_recycle(i);
     }
 
@@ -342,33 +342,12 @@ static inline uint32_t pfa_phys_to_frame(uint32_t p)
 void jlos_page_frame_free(void *addr)
 {
     uint32_t phys = (uint32_t)VIRT_TO_PHYS(addr);
-    uint32_t frame = pfa_phys_to_frame(phys);
-    if (frame >= s_total_frames) {
-        return;
-    }
-    jlos_page_t *pg = pfa_page(frame);
-    if (!(pg->flags & JLOS_PFA_FLAG_OCCUPIED) && jlos_atomic_read(&pg->refcount) == 0) {
-        printk_emerg("[pfa] free idle frame=%u (double free or wrong addr?)\n", frame);
-        for (;;) {
-            jlos_hal_halt();
-        }
-    }
     jlos_page_frame_refcount_dec(phys);
 }
 
 void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
 {
     uint32_t head_frame = pfa_phys_to_frame(phys_start);
-    if (head_frame < s_total_frames) {
-        uint8_t head_order = s_pages[head_frame].order;
-        if (head_order != JLOS_PFA_BUDDY_ORDER_INVALID && order_to_frames(head_order) < num_frames) {
-            printk_emerg("free_bulk frame=%u order=%u n=%u (over-release!)\n",
-                   head_frame, head_order, num_frames);
-            for (;;) {
-                jlos_hal_halt();
-            }
-        }
-    }
     uint32_t frames[JLOS_PFA_FREE_BULK_MAX];
     uint32_t n = 0;
     for (uint32_t i = 0; i < num_frames; i++) {
@@ -379,14 +358,16 @@ void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
         }
         jlos_atomic_t *rc = &s_pages[frame].refcount;
         int old = jlos_atomic_read(rc);
-        while (old) {
+        if (old == 0) {
+            printk_emerg("frame = %u refcount = 0 (double free)\n", frame);
+            goto halt;
+        }
+        while (old > 0) {
             if (jlos_atomic_cmpxchg(rc, &old, old - 1)) {
                 if (old == 1) {
                     if (n == JLOS_PFA_FREE_BULK_MAX) {
                         printk_emerg("free_bulk overflow: %u frames > %u\n", num_frames, JLOS_PFA_FREE_BULK_MAX);
-                        for (;;) {
-                            jlos_hal_halt();
-                        }
+                        goto halt;
                     }
                     frames[n++] = frame;
                 }
@@ -399,6 +380,14 @@ void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
     }
 
     uint32_t flags = jlos_spin_lock_irqsave(&s_buddy_lock);
+    if (head_frame < s_total_frames) {
+        uint8_t head_order = s_pages[head_frame].order;
+        if (head_order != JLOS_PFA_BUDDY_ORDER_INVALID && order_to_frames(head_order) < num_frames) {
+            printk_emerg("free_bulk frame=%u order=%u n=%u (over-release!)\n",
+                   head_frame, head_order, num_frames);
+            goto halt;
+        }
+    }
     for (uint32_t i = 1; i < n; i++) {
         uint32_t v = frames[i], j = i;
         while (j > 0 && frames[j - 1] > v) {
@@ -419,6 +408,11 @@ void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
     }
     buddy_free_range(start, len);
     jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
+    return;
+halt:
+    for (;;) {
+        jlos_hal_halt();
+    }
 }
 
 void jlos_page_frame_refcount_inc(uint32_t phys_addr)
@@ -427,7 +421,13 @@ void jlos_page_frame_refcount_inc(uint32_t phys_addr)
     if (frame >= s_total_frames) {
         return;
     }
-    jlos_atomic_add_unless(&s_pages[frame].refcount, 1, 0);
+    int old = jlos_atomic_add_unless(&s_pages[frame].refcount, 1, 0);
+    if (old == 0) {
+        printk_emerg("on free frame = %u\n", frame);
+        for (;;) {
+            jlos_hal_halt();
+        }
+    }
 }
 
 void jlos_page_frame_refcount_dec(uint32_t phys_addr)
@@ -438,7 +438,7 @@ void jlos_page_frame_refcount_dec(uint32_t phys_addr)
     }
     jlos_atomic_t *rc = &s_pages[frame].refcount;
     int old = jlos_atomic_read(rc);
-    while (old) {
+    while (old > 0) {
         if (jlos_atomic_cmpxchg(rc, &old, old - 1)) {
             if (old == 1) {
                 uint32_t fl = jlos_spin_lock_irqsave(&s_buddy_lock);
@@ -449,6 +449,10 @@ void jlos_page_frame_refcount_dec(uint32_t phys_addr)
             }
             return;
         }
+    }
+    printk_emerg("underflow frame = %u\n", frame);
+    for (;;) {
+        jlos_hal_halt();
     }
 }
 
@@ -557,17 +561,29 @@ void jlos_page_frame_free_order(void *addr, uint32_t order)
 
 void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end)
 {
-    if (phys_end <= phys_start) return;
+    if (phys_end <= phys_start) {
+        return;
+    }
     uint32_t start_frame = pfa_phys_to_frame(phys_start);
     uint32_t end_frame   = JLOS_EXCEPT_CEIL(phys_end - s_start_addr, JLOS_PAGE_FRAME_SIZE);
-    if (start_frame >= s_total_frames) return;
-    if (end_frame > s_total_frames) end_frame = s_total_frames;
+    if (start_frame >= s_total_frames) {
+        return;
+    }
+    if (end_frame > s_total_frames) {
+        end_frame = s_total_frames;
+    }
     uint32_t flags = jlos_spin_lock_irqsave(&s_buddy_lock);
     for (uint32_t i = start_frame; i < end_frame; i++) {
-        if (!(s_pages[i].flags & JLOS_PFA_FLAG_OCCUPIED)) {
-            jlos_page_frame_mark_reserve(i);
-            jlos_atomic_dec(&s_free_frames);
+        jlos_page_t *pg = &s_pages[i];
+        if (pg->flags & JLOS_PFA_FLAG_OCCUPIED) {
+            continue;
         }
+        if (pg->order != JLOS_PFA_BUDDY_ORDER_INVALID) {
+            uint8_t ord = pg->order;
+            buddy_remove(i, ord);
+            jlos_atomic_fetch_sub(&s_free_frames, order_to_frames(ord));
+        }
+        jlos_page_frame_mark_reserve(i);
     }
     jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
 }
