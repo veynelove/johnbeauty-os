@@ -24,6 +24,7 @@ union {
     uint8_t       flags;
     uint8_t       type;
     uint8_t       order;
+    uint8_t       pt_present_count;
     jlos_atomic_t refcount;
 } jlos_page_t;
 
@@ -58,6 +59,7 @@ typedef enum {
     JLOS_PAGE_FRAME_TYPE_KV_CONTIG  = 2,
     JLOS_PAGE_FRAME_TYPE_KV_HEAP    = 3,
     JLOS_PAGE_FRAME_TYPE_KERN_STACK = 4,
+    JLOS_PAGE_FRAME_TYPE_PAGE_TABLE = 5,
 } jlos_page_frame_type_t;
 
 jlos_page_frame_type_t jlos_page_frame_get_type(uint32_t phys);
@@ -69,4 +71,9 @@ void jlos_page_frame_print_buddy(void);
 
 bool jlos_page_frame_contains_phys(uint32_t phys);
 uint32_t jlos_page_frame_start_phys(void);
+
+void jlos_page_frame_pt_present_count_set(uint32_t phys, uint8_t count);
+uint32_t jlos_page_frame_pt_present_count_get(uint32_t phys);
+void jlos_page_frame_pt_present_count_inc(uint32_t phys);
+void jlos_page_frame_pt_present_count_dec(uint32_t phys);
 #endif

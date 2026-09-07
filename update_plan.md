@@ -7,10 +7,12 @@
 ## 优化原则
 
 1. **核心功能对齐生产级：多架构可移植、多核可扩展、运行稳定、基础路径性能优秀。**
-2. 核心功能优先；经典结构优先，不为单核临时妥协。
-3. **稳定性 > 性能 > 改动大小；每一项改动必须可回滚，验证可独立复现。**
-4. **面向未来多核/SMP 设计，HAL 层先做抽象，架构相关代码不侵入内核子系统。**
-5. **各子系统按依赖顺序升级，底层先于上层；先修正确性与锁粒度，再做数据结构优化。**
+2. **经典结构优先，性能优先。** 所有修改必须对齐经典操作系统教科书级实现（Linux/xv6/BSD），采用经典数据结构与算法，而非为图省事的最小修改或临时补丁。不为单核做临时妥协，但也不为优化而破坏经典结构。
+3. **拒绝"最小修改"思维。** 改动大小不是考量因素——只要经典结构和性能需要，就完整实现；不做半吊子的折中方案。新增的数据结构、字段、辅助函数必须配套维护完整，不留半成品。
+4. **稳定性 > 性能 > 改动大小；每一项改动必须可回滚，验证可独立复现。**
+5. **面向未来多核/SMP 设计，HAL 层先做抽象，架构相关代码不侵入内核子系统。**
+6. **各子系统按依赖顺序升级，底层先于上层；先修正确性与锁粒度，再做数据结构优化。**
+7. **命名遵循 JLOS 规范（`jlos_<subsystem>_<action>`），日志只写错误类型 tag，不重复时间戳/子系统/函数名（由框架自动封装）。**
 
 ***
 
@@ -189,37 +191,37 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 5.1 锁粒度细化 + 正确性收紧（高优，先做，低侵入）
 
-| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 验证 |
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| PFA-1 | 拆全局 `s_pfa_lock` 为 `s_buddy_lock` + `s_refcount_lock` + `s_owner_lock` | buddy 链表操作、refcount、owner 读写三套完全无关的逻辑抢同一把锁；SMP 下全 CPU spin，成为瓶颈 | page_frame_allocator.c | 中 | multitask ALL PASSED ×10；PFA stats free_frames 稳定 |
-| PFA-6 | `set_owner_type` / `get_type` / `get_owner` 用独立 `s_owner_lock`，不再拿 buddy 大锁 | kvfree 分支高频判别被全局锁串行；per-frame 独立读写与 buddy 链表无依赖 | page_frame_allocator.c | 低 | kvalloc/kvfree 10K 轮后 SLUB cache 无泄漏 |
-| MM-1a | 拆 `s_mm_lock` 为 `s_slab_lock` + `s_heap_lock`；SLUB `cpu[N].partial` 真正做到 per-CPU 先无锁试 alloc，失败再拿 shared 锁 | 当前 per-CPU 结构已定义但 alloc/free 全程先拿大锁，形同虚设；kalloc/kfree 全局串行化 | memory_manager.c | 高 | slab cache 10K 轮 alloc/free inuse 计数正确 ±0 |
-| MM-2 | 收紧 `kvfree` 分支判定：DIRECT_MAP 区域 `KV_HEAP` type 直接 return + assertion；SLAB_OBJ/KV_CONTIG 分支独立无交叉 | 逻辑上 direct map 只会出现 SLAB_OBJ 和 KV_CONTIG，KV_HEAP 是虚拟堆区；判定模糊会导致 free 时走错路径 double-free 或 leak | memory_manager.c | 中 | 三档 size (SLAB / KV_HEAP / KV_CONTIG) 交替 10K 轮，memory_manager_stats chunks 无增长 |
-| PAG-7 | `jlos_active_paging_context` 改为 HAL 层 per-CPU 访问器 `jlos_hal_this_cpu_pg_ctx()`，当前单核 fallback 到 static | 裸全局指针在 SMP 下多核并行 switch 会乱序；HAL 抽象方便 ARM/RISC-V 替换为 TPIDRPRW/sscratch 寄存器 | paging.c / hal/paging.h | 中 | context switch 10K 次后 active_context 与 CR3 一致 |
+| ~~PFA-1~~ | ~~拆 `s_pfa_lock` 为 buddy + refcount + owner 三套锁~~ | **已实现**：refcount 用 `jlos_atomic_add_unless`/`cmpxchg` 完全原子化（无锁），owner 独立 `s_owner_lock`，buddy 独立 `s_buddy_lock`，`s_free_frames` 原子计数 | page_frame_allocator.c | — | ✅ 已完成 |
+| ~~PFA-6~~ | ~~`set_owner_type` 用独立 `s_owner_lock`~~ | **已实现**：`s_owner_lock` 已保护 owner/type 读写，与 buddy 锁无交叉 | page_frame_allocator.c | — | ✅ 已完成 |
+| ~~MM-1a~~ | ~~拆 `s_mm_lock` 为 `s_slab_lock` + `s_heap_lock`~~ | **已实现**：slab 路径用 `s_slab_lock`，heap 路径用 `s_heap_lock`，数据结构无交叉，消除全局串行化 | memory_manager.c | — | ✅ 已完成 |
+| MM-2 | `kvfree` DIRECT_MAP 区域非 SLAB_OBJ/KV_CONTIG type 加 assertion 日志 | 分支已独立无交叉，但非预期 type 静默 return 无日志，难排查 | memory_manager.c | 低 | 部分完成（缺 assertion） |
+| PAG-7 | `jlos_active_paging_context` HAL 化为 per-CPU 访问器 | 裸全局指针，SMP 下多核 switch 乱序；HAL 抽象方便 ARM/RISC-V | paging.c / hal/paging.h | 中 | 待做 |
 
 ### 5.2 性能热点（高频路径 O(1) / 跳空扫 / 批量化）
 
-| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 验证 |
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| PAG-1 | `context_destroy` 4MB PDE 批量释放：先整 1024 帧清 refcount+bitmap，末尾一次 `buddy_free_bulk_aligned` | 现在逐帧 `free_bulk(phys,1024)` = 1024 次 refcount_dec + 1024 次 buddy 尝试合并；进程退出 + fork ROLLBACK 场景锁持有时间超长 | paging.c | 中 | destroy 耗时对比 baseline 快 5x 以上；释放页帧与 PFA free_frames 对账一致 |
-| PAG-2 | `pt_used_count[1024]` 计数位替 `unmap_nolock` O(1024) 空扫 PT | unmap 清 PTE 后判 PT 是否空现在线性扫 1024 项；加计数位则直接读 `used_count[pd_idx]==0` | paging.h / paging.c | 中 | unmap 10K 随机 PTE，每次 is_empty 判断正确；PT 空闲释放率 100% |
-| PAG-4 | kernel PDE 改为共享 + change_flags 触发深拷贝（COW-like） | 现在每进程 clone 内核 896KB PT = 900 次 PFA 分配；实际 99% 生命周期不会改内核 PDE 标志 | paging.c | 高 | fork 10 子进程 kernel PDE 物理地址与父进程一致；模拟 change_flags 内核 PDE 后父子地址隔离 |
-| PAG-6 | `change_flags_range` 外层 PDE 步长已具备，关键修复：锁内全程 atomic，禁止中途 schedule 让其他 CPU 读 stale TLB；循环末尾统一 flush | 现在循环中间每次写 PTE 后不 flush（单核没事）、多核下调度迁移到其他 CPU 读的是旧 TLB 条目 | paging.c | 中 | 4MB range change_flags 后所有 PTE 标志位 dump 与预期一致；multitask ×20 无 PF |
-| MT-3 | fork COW 内层循环优化：PDE non-present 直接 continue（已存在）；PT 内部连续 non-present 按 32 一组跳过；`present_count[pd]` 提前 short-circuit | 现在外层 768 × 内层 1024 = 78 万次循环，哪怕 PDE non-present 内层都空扫；绝大多数用户进程只有 ~10 页内存 | multitask.c (fork) | 中 | fork 10 子进程耗时对比 baseline 快 5x；映射页数量统计（`present_count`）与实际 PTE present 数一致 |
-| MT-1 | 引入 `wait_queue_head_t` + 低粒度 `timer_wheel`（tick 级超时桶）；schedule() 去掉 O(num_tasks) sleeping + waiting_pid 扫 | 现在 schedule 每次线性扫 256 任务查 `sleeping & wake_tick` 和 `WAITING && status=ZOMBIE`；任务数到 1024 直接爆 | multitask.h / multitask.c | 高 | `#define JLOS_CONFIG_WAITQUEUE=1/0` 双编；两种模式下 multitask ALL PASSED 无差异 |
-| MT-2 | exit → zombie 时反向找 `parent_pid`（通过 hash 查 parent task）直接 `wake_up(parent->wait_child_head)`，不再扫全局 tasks[] | 现在 exit 侧和 schedule 侧都做线性扫等待者，O(n^2) 嵌套 | multitask.c (exit + wake) | 中 | wait_pid 10 子并发唤醒顺序正确，无超时 |
-| PFA-2 | `free_bulk` 两级合并：先遍历所有 frame 把 refcount 减到 0 的收进 free_frames[]，再对 free_frames[] 做一次排序 + 连续块 buddy 合并 | 现在逐帧 `refcount_dec + buddy_free_nolock`，每帧都会触发最高 order=10 次 mergeable 判断；顺序释放 1024 帧场景会大量重复合并/拆分 | page_frame_allocator.c | 中 | free_bulk(1024) 耗时对比 baseline 快 3x；PFA stats 释放帧计数对账 |
+| PAG-1 | `context_destroy` 4MB PDE 批量释放：整 1024 帧一次 `free_bulk`，避免逐帧 refcount_dec 风暴 | `context_destroy` 对 4MB PDE 调 `free_bulk(phys,1024)`，free_bulk 内部已两级合并，但仍 1024 次 atomic_cmpxchg；可整段清 refcount 后一次 buddy_free | paging.c | 中 | 待做 |
+| PAG-2 | `pt_used_count[1024]` 替 `unmap_nolock` O(1024) 空扫 PT | unmap 清 PTE 后判 PT 空仍线性扫 1024 项；加计数位直接读 `used_count[pd_idx]==0` | paging.h / paging.c | 中 | 待做 |
+| PAG-4 | kernel PDE 共享 + change_flags 触发深拷贝（COW-like） | `context_clone` 对内核 PDE 仍深拷贝（每进程 ~900 次 PFA 分配）；实际 99% 生命周期不改内核 PDE | paging.c | 高 | 待做 |
+| PAG-6 | `change_flags_range` 多核下锁内全程 atomic，循环末尾统一 flush | 当前循环内逐 PTE 写不 flush（单核 OK），多核调度迁移会读 stale TLB | paging.c | 中 | 待做（单核暂无影响） |
+| MT-3 | fork COW 内层循环优化：PT 内连续 non-present 按 32 一组跳过 + `present_count` 短路 | fork 外层 768 × 内层 1024 = 78 万次循环；PDE non-present 已 skip，PT 内层仍空扫 | multitask.c (fork) | 中 | 待做 |
+| MT-1 | 引入 `wait_queue_head_t` + `timer_wheel`；schedule() 去 O(n) sleeping/waiting 扫 | schedule 每次线性扫 256 任务查 `sleeping & wake_tick` 和 `WAITING && ZOMBIE` | multitask.h / multitask.c | 高 | 待做 |
+| MT-2 | exit→zombie 时通过 hash 查 parent 直接 wake，不再扫全局 tasks[] | exit 侧和 schedule 侧都线性扫等待者，O(n²) 嵌套 | multitask.c (exit + wake) | 中 | 待做 |
+| ~~PFA-2~~ | ~~`free_bulk` 两级合并~~ | **已实现**：free_bulk 先收集 refcount→0 的帧到数组，排序后连续合并，一次 `buddy_free_range` 释放 | page_frame_allocator.c | — | ✅ 已完成 |
 
 ### 5.3 经典化 / 内存布局 / 扩展性
 
-| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 验证 |
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| PFA-3 | buddy 初始化 while(merged) → 升序不回头扫，每层 order 合并一次 | 现在 while(merged) 重复扫，256MB/1GB 内存初始化耗时放大；经典 xv6 做法 order 升序一遍过 | page_frame_allocator.c | 低 | 启动 buddy 打印输出 order 分布与当前一致（块数对账） |
-| PFA-4 | 引入 `struct jlos_page` 数组统一 `bitmap + refcount + buddy_order + owner + type + freelist_head`，每帧 8~16B，替代物理帧头嵌入 free_order_node_t | 现在 buddy 节点写物理帧首 32B 与 SLUB slab_page_t 存在复用风险；struct page 是 Linux 经典做法，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c + 所有引用 s_bitmap / s_refcount 的上游 | 高 | memory_test ALL PASSED；SLUB alloc/free 后物理帧无 magic canary 污染 |
-| PAG-3 | `context_destroy` 用 `used_pde_count` 短路；内层循环 PDE non-present 走 fast-path skip | Phase 3 规划已写，当前仍 1024 PDE 全扫；`num_page_tables` 已有统计 | paging.c | 低 | destroy 耗时再降 ~20% |
-| MM-3 | size class 从纯 2^n 改精细粒度表 (16/32/48/64/96/128/192/256/384/512/768/1024/...)，平均膨胀 < 15% （当前 2^n 最坏 38%） | 现在 `mm_size_to_class(513)` → class=9=1024B，浪费 50%；高频 80~1500B 分配实际浪费严重 | memory_manager.h / .c | 中 | mm_size_to_class 单元测试：常用 (80/128/256/384/512/768/1024/2048) 总浪费 ≤ 15%；memory_test slab 9 sizes 仍 PASS |
-| MM-4 | `jlos_memory_chunk_t` 瘦身：allocated chunk 8B（prev_size + size + flag），free chunk 扩展为 fd/bk 双链表（经典 dlmalloc 边界标记）；删除 free_next/free_prev 常驻 8B × 所有 chunk | 现在 4 指针 16B 常驻 allocated chunk，小分配 overhead 极高；地址序链表 + class 空闲链表双维护 4×指针写 | memory_manager.h / .c | 高 | memory_manager_malloc/free 10K 各种 size，prev/next 合并正确性与当前一致 |
-| MT-4 | `tasks[256]` 静态数组 → SLAB task_struct 动态分配 + `for_each_process` 链表遍历主路径，pid hash 保留按 pid 查；新增 pid bitmap 防 wrap 冲突 | 256 上限对网络服务/多进程很快打顶；pid 线性递增 wrap 时与已占 pid 无冲突判定 | multitask.h / multitask.c | 中 | 1024 任务并发创建后 pid 无重复，destroy 无泄漏 |
+| PFA-3 | buddy 初始化升序不回头扫，每层 order 合并一次 | 当前初始化是双层循环（order 0→max, frame 0→total），重复扫描；经典 xv6 做法 order 升序一遍过 | page_frame_allocator.c | 低 | 待做 |
+| ~~PFA-4~~ | ~~引入 `struct jlos_page` 数组~~ | **已实现**：`s_pages[]` 已是 `jlos_page_t` 数组，含 flags/refcount/order/type/u(free_list|owner)，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c | — | ✅ 已完成 |
+| PAG-3 | `context_destroy` 用 `num_page_tables` 短路非 present PDE | 当前仍 1024 PDE 全扫；`num_page_tables` 已有统计但 destroy 未用 | paging.c | 低 | 待做 |
+| MM-3 | size class 从纯 2^n 改精细粒度表，平均膨胀 < 15% | 当前 `mm_size_to_class(513)` → 1024B 浪费 50%；高频 80~1500B 浪费严重 | memory_manager.h / .c | 中 | 待做 |
+| MM-4 | `jlos_memory_chunk_t` 瘦身：allocated 8B，free 用 fd/bk 双链表 | 当前 4 指针 16B 常驻 allocated chunk，小分配 overhead 高 | memory_manager.h / .c | 高 | 待做 |
+| MT-4 | `tasks[256]` 静态数组 → SLAB 动态分配 + pid bitmap | 256 上限对网络服务很快打顶；pid wrap 无冲突判定 | multitask.h / multitask.c | 中 | 待做 |
 
 ### 5.4 SMP / 多架构预留接口
 

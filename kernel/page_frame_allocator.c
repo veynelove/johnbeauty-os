@@ -93,12 +93,12 @@ static void buddy_insert(uint32_t frame, uint32_t order)
     uint32_t block = order_to_frames(order);
     /* 防 double insert: 确保帧 free 且不在任何 free list, 块不跨越物理边界 */
     if (frame >= s_total_frames || frame + block > s_total_frames) {
-        printk_emerg("[buddy-OOB] insert frame=%u order=%u block=%u total=%u (cross phys boundary)\n",
+        printk_emerg("[OOB] insert frame=%u order=%u block=%u total=%u (cross phys boundary)\n",
                frame, order, block, s_total_frames);
         goto halt;
     }
     if (frame & (block - 1)) {
-        printk_emerg("[buddy-ALIGN] insert frame=%u order=%u (frame not aligned to order)\n", frame, order);
+        printk_emerg("[ALIGN] insert frame=%u order=%u (frame not aligned to order)\n", frame, order);
         goto halt;
     }
     jlos_page_t *pg = pfa_page(frame);
@@ -106,11 +106,11 @@ static void buddy_insert(uint32_t frame, uint32_t order)
         bool is_reserved = (pg->flags & JLOS_PFA_FLAG_OCCUPIED);
         uint8_t cur_order = pg->order;
         if (is_reserved) {
-            printk_emerg("[buddy-ASSERT] insert frame=%u order=%u FAIL: flags=0x%x (reserved)!\n", frame, order, pg->flags);
+            printk_emerg("[ASSERT] insert frame=%u order=%u FAIL: flags=0x%x (reserved)!\n", frame, order, pg->flags);
             goto halt;
         }
         if (cur_order != JLOS_PFA_BUDDY_ORDER_INVALID && cur_order != order) {
-            printk_emerg("[buddy-ASSERT] insert frame=%u order=%u FAIL: buddy_order=%u (already in free list)!\n",
+            printk_emerg("[ASSERT] insert frame=%u order=%u FAIL: buddy_order=%u (already in free list)!\n",
                    frame, order, cur_order);
             goto halt;
         }
@@ -131,7 +131,7 @@ static void buddy_remove(uint32_t frame, uint32_t order)
 {
     uint32_t block = order_to_frames(order);
     if (frame >= s_total_frames || frame + block > s_total_frames) {
-        printk_emerg("[buddy-PANIC] frame=%u order=%u block=%u s_total=%u (frame/block OOB)\n",
+        printk_emerg("[PANIC] frame=%u order=%u block=%u s_total=%u (frame/block OOB)\n",
                frame, order, block, s_total_frames);
         goto halt;
     }
@@ -141,7 +141,7 @@ static void buddy_remove(uint32_t frame, uint32_t order)
     if (pg->order == JLOS_PFA_BUDDY_ORDER_INVALID) bad |= 2;
     if (jlos_list_empty(&pg->u.free_list)) bad |= 4;
     if (bad) {
-        printk_emerg("[buddy-PANIC] remove frame=%u order=%u bad=%u next=%p prev=%p\n",
+        printk_emerg("[PANIC] remove frame=%u order=%u bad=%u next=%p prev=%p\n",
                frame, order, bad, pg->u.free_list.next, pg->u.free_list.prev);
         goto halt;
     }
@@ -182,6 +182,8 @@ static void jlos_page_frame_mark_reserve(uint32_t frame)
     pg->flags |= JLOS_PFA_FLAG_OCCUPIED;
     jlos_atomic_set(&pg->refcount, 1);
     pg->order = JLOS_PFA_BUDDY_ORDER_INVALID;
+    pg->type = JLOS_PAGE_FRAME_TYPE_FREE;
+    pg->pt_present_count = 0;
 }
 
 void jlos_page_frame_allocator_init(void)
@@ -327,6 +329,8 @@ static void buddy_free_range(uint32_t base_frame, uint32_t len)
             jlos_page_t *pg = pfa_page(base_frame + i);
             pg->flags &= ~JLOS_PFA_FLAG_OCCUPIED;
             pg->order = JLOS_PFA_BUDDY_ORDER_INVALID;
+            pg->type = JLOS_PAGE_FRAME_TYPE_FREE;
+            pg->pt_present_count = 0;
         }
         buddy_free_nolock(base_frame, order);
         base_frame += block;
@@ -444,6 +448,8 @@ void jlos_page_frame_refcount_dec(uint32_t phys_addr)
                 uint32_t fl = jlos_spin_lock_irqsave(&s_buddy_lock);
                 s_pages[frame].flags &= ~JLOS_PFA_FLAG_OCCUPIED;
                 s_pages[frame].order = JLOS_PFA_BUDDY_ORDER_INVALID;
+                s_pages[frame].type = JLOS_PAGE_FRAME_TYPE_FREE;
+                s_pages[frame].pt_present_count = 0;
                 buddy_free_nolock(frame, 0);
                 jlos_spin_unlock_irqrestore(&s_buddy_lock, fl);
             }
@@ -621,4 +627,39 @@ bool jlos_page_frame_contains_phys(uint32_t phys)
 uint32_t jlos_page_frame_start_phys(void)
 {
     return s_start_addr;
+}
+
+void jlos_page_frame_pt_present_count_set(uint32_t phys, uint8_t count)
+{
+    uint32_t f = pfa_phys_to_frame(phys);
+    if (f >= s_total_frames) {
+        return;
+    }
+    s_pages[f].pt_present_count = count;
+}
+
+uint32_t jlos_page_frame_pt_present_count_get(uint32_t phys)
+{
+    uint32_t f = pfa_phys_to_frame(phys);
+    if (f >= s_total_frames) {
+        return 0;
+    }
+    return s_pages[f].pt_present_count;
+}
+
+void jlos_page_frame_pt_present_count_inc(uint32_t phys)
+{
+    uint32_t f = pfa_phys_to_frame(phys);
+    if (f >= s_total_frames) {
+        return;
+    }
+    s_pages[f].pt_present_count++;
+}
+
+void jlos_page_frame_pt_present_count_dec(uint32_t phys)
+{
+    uint32_t f = pfa_phys_to_frame(phys);
+    if (f < s_total_frames && s_pages[f].pt_present_count > 0) {
+        s_pages[f].pt_present_count--;
+    } 
 }

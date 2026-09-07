@@ -11,7 +11,8 @@
 jlos_memory_manager_t *jlos_active_memory_manager = NULL;
 static jlos_memory_slab_cache_t *s_kalloc_caches[JLOS_MM_CLASS_COUNT];
 
-static jlos_spinlock_t s_mm_lock = JLOS_SPINLOCK_INIT;
+static jlos_spinlock_t s_slab_lock = JLOS_SPINLOCK_INIT;
+static jlos_spinlock_t s_heap_lock = JLOS_SPINLOCK_INIT;
 
 static inline int mm_size_to_class(size_t size, int max_class)
 {
@@ -99,7 +100,7 @@ void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_
         self->class_head[i] = NULL;
     }
 
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_heap_lock);
     if (size < sizeof(jlos_memory_chunk_t)) {
         self->first = NULL;
     } else {
@@ -114,7 +115,7 @@ void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_
         int cls = mm_size_to_class(self->first->size, self->max_class);
         mm_class_add(self, cls, self->first);
     }
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
 }
 
 void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
@@ -191,7 +192,7 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     new_chunk->free_next = NULL;
     new_chunk->free_prev = NULL;
 
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_heap_lock);
     if (self->tail && !self->tail->allocated) {
         jlos_memory_chunk_t *tail = self->tail;
         int tcls = mm_size_to_class(tail->size, self->max_class);
@@ -210,7 +211,7 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     int cls = mm_size_to_class(new_chunk->size, self->max_class);
     mm_class_add(self, cls, new_chunk);
     self->heap_current += new_chunk_size;
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
     return new_chunk;
 }
 
@@ -220,7 +221,7 @@ void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size)
         size = JLOS_MM_MIN_ALLOC;
     }
 
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_heap_lock);
     int target_cls = mm_size_to_class(size, self->max_class);
     int found_cls = mm_bitmap_find(self, (uint32_t)target_cls);
 
@@ -231,12 +232,12 @@ void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size)
     }
 
     if (!result) {
-        jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+        jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
         result = jlos_memory_manager_expand_heap(self, size);
         if (!result) {
             return NULL;
         }
-        fl = jlos_spin_lock_irqsave(&s_mm_lock);
+        fl = jlos_spin_lock_irqsave(&s_heap_lock);
         int cls = mm_size_to_class(result->size, self->max_class);
         mm_class_remove_chunk(self, cls, result);
     }
@@ -261,19 +262,19 @@ void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size)
         mm_class_add(self, tcls, temp);
     }
     result->allocated = true;
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
     return (void *)(((size_t)result) + sizeof(jlos_memory_chunk_t));
 }
 
 void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
 {
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_heap_lock);
     if (!ptr || !self) {
-        jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+        jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
         return;
     }
     if ((uint8_t *)ptr < self->heap_start || (uint8_t *)ptr >= self->heap_current) {
-        jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+        jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
         return;
     }
     jlos_memory_chunk_t *chunk = (jlos_memory_chunk_t *)((size_t)ptr - sizeof(jlos_memory_chunk_t));
@@ -308,7 +309,7 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
     }
     int cls = mm_size_to_class(chunk->size, self->max_class);
     mm_class_add(self, cls, chunk);
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
     ptr = NULL;
 }
 
@@ -330,7 +331,6 @@ void *jlos_kvalloc(size_t size)
                 for (size_t i = 0; i < npages; i++) {
                     uint32_t p = (uint32_t)VIRT_TO_PHYS(hdr) + i * JLOS_PAGE_FRAME_SIZE;
                     jlos_page_frame_set_owner_type(p, (void *)npages, JLOS_PAGE_FRAME_TYPE_KV_CONTIG);
-                    jlos_page_frame_refcount_inc(p);
                 }
                 return (void *)(hdr + 1);
             }
@@ -366,13 +366,9 @@ void jlos_kvfree(void *ptr)
                 uint32_t np = hdr->npages;
                 hdr->magic = 0;
                 for (uint32_t i = 0; i < np; i++) {
-                    uint32_t p = phys_hdr + i * JLOS_PAGE_FRAME_SIZE;
-                    jlos_page_frame_clear_owner_type(p);
-                    uint8_t g = 0;
-                    while (jlos_page_frame_refcount_get(p) && g++ < JLOS_PAGE_FRAME_REFCOUNT_MAX) {
-                        jlos_page_frame_refcount_dec(p);
-                    }
+                    jlos_page_frame_clear_owner_type(phys_hdr + i * JLOS_PAGE_FRAME_SIZE);
                 }
+                jlos_page_frame_free_bulk(phys_hdr, np);
             }
             return;
         }
@@ -439,7 +435,7 @@ void *memcpy(void *dst, const void *src, size_t size) __attribute__((weak, alias
 void jlos_kvalloc_stats(jlos_memory_manager_t *self)
 {
     if (!self) return;
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_heap_lock);
 
     uint32_t total = 0, free = 0, alloc = 0;
     uint32_t free_bytes = 0, alloc_bytes = 0;
@@ -472,7 +468,7 @@ void jlos_kvalloc_stats(jlos_memory_manager_t *self)
         }
     }
 
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
 }
 
 static void slab_list_insert(jlos_memory_slab_page_t **head, jlos_memory_slab_page_t *sp)
@@ -613,7 +609,7 @@ void *jlos_memory_slab_cache_alloc(jlos_memory_slab_cache_t *cache)
     }
     uint32_t cpu = jlos_hal_get_cpu_id();
     jlos_memory_slab_cpu_t *cs = &cache->cpu[cpu];
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_slab_lock);
     jlos_memory_slab_page_t *sp = cs->partial;
     if (!sp) {
         if (cache->partial) {
@@ -622,7 +618,7 @@ void *jlos_memory_slab_cache_alloc(jlos_memory_slab_cache_t *cache)
         } else {
             sp = slab_page_alloc(cache);
             if (!sp) {
-                jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+                jlos_spin_unlock_irqrestore(&s_slab_lock, fl);
                 return NULL;
             }
         }
@@ -636,7 +632,7 @@ void *jlos_memory_slab_cache_alloc(jlos_memory_slab_cache_t *cache)
         cs->partial_count--;
         slab_list_insert(&cache->full, sp);
     }
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_slab_lock, fl);
     return obj;
 }
 
@@ -647,7 +643,7 @@ void jlos_memory_slab_cache_free(jlos_memory_slab_cache_t *cache, const void *ob
     }
     uint32_t cpu = jlos_hal_get_cpu_id();
     jlos_memory_slab_cpu_t *cs = &cache->cpu[cpu];
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_slab_lock);
     uint32_t page_base = JLOS_ALIGN_DOWN(obj, JLOS_PAGE_FRAME_SIZE);
     jlos_memory_slab_page_t *sp = (jlos_memory_slab_page_t *)page_base;
     
@@ -671,7 +667,7 @@ void jlos_memory_slab_cache_free(jlos_memory_slab_cache_t *cache, const void *ob
         slab_list_remove(&cache->empty, victim);
         slab_page_free(cache, victim);
     }
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_slab_lock, fl);
 }
 
 void jlos_memory_slab_cache_destroy(jlos_memory_slab_cache_t *cache)
@@ -679,7 +675,7 @@ void jlos_memory_slab_cache_destroy(jlos_memory_slab_cache_t *cache)
     if (!cache) {
         return;
     }
-    uint32_t fl = jlos_spin_lock_irqsave(&s_mm_lock);
+    uint32_t fl = jlos_spin_lock_irqsave(&s_slab_lock);
     jlos_memory_slab_page_t *p, *next;
     for (uint32_t i = 0; i < JLOS_MAX_CPUS; i++) {
         for (p =cache->cpu[i].partial; p; p = next) {
@@ -699,7 +695,7 @@ void jlos_memory_slab_cache_destroy(jlos_memory_slab_cache_t *cache)
         next = p->next;
         slab_page_free(cache, p);
     }
-    jlos_spin_unlock_irqrestore(&s_mm_lock, fl);
+    jlos_spin_unlock_irqrestore(&s_slab_lock, fl);
     jlos_kvfree(cache);
 }
 

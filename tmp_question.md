@@ -6,3 +6,5 @@
 3. icmp test: ping 192.168.159.144
 4. tcp test: curl -v http://192.168.159.144:1234
 5. udp test: echo "johnbeauty" | nc -u 192.168.159.144 5678
+
+6. bear --output ./build/compile_commands.json -- make

@@ -649,15 +649,10 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
         child->fds = NULL;
     }
 
-    /* 分配失败/越界统一ROLLBACK: 绝不把半截task struct挂进调度器 */
-    if (child->stack == NULL) {
+    if (!child->stack || (parent->fds && !child->fds)) {
         goto ROLLBACK_OOM;
     }
 
-    /* 仅 user process 子任务需要独立 mm(克隆内核上下文+USER段映射);
-     * kernel task 子任务保持 mm=NULL, 复用 s_kernel_paging_context —
-     * 否则克隆页目录会浅拷贝共享内核页表, change_flags 修改共享页表
-     * 污染全局, 且调度器切到子克隆 CR3 后堆扩展PDE缺失 → buddy元数据破坏 */
     if (child->is_user_process && jlos_task_create_user_mm(child) < 0) {
 ROLLBACK_OOM:
         jlos_kfree(child->stack);
@@ -718,6 +713,9 @@ int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
     if (!task) {
         return 0;
     }
+    if (g_task_manager_ptr) {
+        jlos_hash_chain_remove(&g_task_manager_ptr->pid_hash, &task->pid_hash_node);
+    }
     if (task->mm) {
         jlos_paging_context_destroy(task->mm);
         jlos_kfree(task->mm);
@@ -734,7 +732,9 @@ int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
         jlos_process_exit(task, (uint32_t)-err_code);
         return -1;
     }
-    task->pid = s_next_pid++;
+    if (g_task_manager_ptr) {
+        jlos_hash_chain_insert(&g_task_manager_ptr->pid_hash, &task->pid, &task->pid_hash_node);
+    }
     task->parent_pid = 0;
     task->exit_code = TASK_EXIT_DEAUFT;
     return 0;
