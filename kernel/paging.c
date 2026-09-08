@@ -26,11 +26,12 @@ void jlos_paging_context_init(jlos_paging_context_t *self)
 
 void jlos_paging_context_destroy(jlos_paging_context_t *self)
 {
-    if (!self->page_dir) {
+    if (!self || !self->page_dir) {
         return;
     }
     uint32_t flags = jlos_spin_lock_irqsave(&self->lock);
-    for (uint32_t i = 0; i < JLOS_PAGE_DIR_ENTRIES; i++) {
+    uint32_t pt_freed = 0;
+    for (uint32_t i = 0; i < JLOS_PAGE_DIR_ENTRIES && pt_freed < self->num_page_tables; i++) {
         jlos_page_dir_entry_t *pde = &self->page_dir->entries[i];
         if (!(*pde & JLOS_PDE_PRESENT)) {
             continue;
@@ -41,14 +42,13 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
         if (*pde & JLOS_PDE_4MB) {
             if (!is_kernel_space) {
                 uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
-                jlos_page_frame_free_bulk(phys_base, 1024);
+                jlos_page_frame_free_order((void *)PHYS_TO_VIRT(phys_base), JLOS_PFA_MAX_ORDER);
             }
             continue;
         }
         
         jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
         if (!is_kernel_space) {
-            /* 用户空间 PT: 释放 PTE 引用计数 + PT 页本身 */
             for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
                 jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
                 if (*pte & JLOS_PTE_PRESENT) {
@@ -58,6 +58,7 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
         }
         jlos_page_frame_clear_owner_type(VIRT_TO_PHYS(pt));
         jlos_page_frame_free(pt);
+        pt_freed++;
     }
     jlos_spin_unlock_irqrestore(&self->lock, flags);
     jlos_page_frame_free(self->page_dir);
@@ -580,12 +581,8 @@ void jlos_paging_print_states(jlos_paging_context_t *self)
             if (*pde & JLOS_PDE_4MB) {
                 mapped_pages += JLOS_PAGE_TABLE_ENTRIES;
             } else {
-                jlos_page_table_t *page_table = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
-                for (uint32_t pt_index = 0; pt_index < JLOS_PAGE_TABLE_ENTRIES; pt_index++) {
-                    if (page_table->entries[pt_index] & JLOS_PTE_PRESENT) {
-                        mapped_pages++;
-                    }
-                }
+                uint32_t pt_phys = *pde & JLOS_PAGE_ADDR_MASK;
+                mapped_pages += jlos_page_frame_pt_present_count_get(pt_phys);
             }
         }
     }

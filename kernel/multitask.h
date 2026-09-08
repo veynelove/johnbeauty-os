@@ -98,7 +98,7 @@ typedef struct jlos_task {
     uint32_t                brk_start;
     uint32_t                brk_end;
     uint32_t                brk_limit;
-    jlos_task_t             *next_wait;
+    jlos_list_head_t        wait_node;
     jlos_hash_node_t        pid_hash_node;
     jlos_list_head_t        zombie_node;
     jlos_list_head_t        rq_node;
@@ -120,6 +120,10 @@ typedef struct {
     jlos_task_t         *idle_task;
     bool                need_resched;
 } jlos_task_manager_t;
+
+#define jlos_task_curr()  (g_current_task_ptr)
+
+extern jlos_task_t *g_current_task_ptr;
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
@@ -145,25 +149,17 @@ void jlos_task_manager_init(jlos_task_manager_t* self);
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
 
+void jlos_task_manager_schedule(jlos_task_manager_t* self);
+
 jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid);
-jlos_cpu_state_t *jlos_task_manager_schedule(jlos_task_manager_t* self, jlos_cpu_state_t *cpustate);
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 
-/* fork后父子必须读g_current_task_ptr; mgr->current_task被子栈memcpy父值污染(实锤: curr_pid=4 fault0x0) */
-extern jlos_task_t *g_current_task_ptr;
-/* C99内联-TU混合可能undefined reference; 直接折叠成解extern指针 */
-#define jlos_task_curr()  (g_current_task_ptr)
-
-/* fork调用约定说明: return_pc必须来自fork_stub.c体__builtin_return_address(0); resume_pc=asm内call下一条label1,错一帧=递归孙fork实锤 */
 jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
-                               uint32_t fork_return_pc,
-                               uint32_t fork_esp_ref,
-                               uint32_t fork_ebp_ref,
-                               uint32_t fork_resume_pc);
+    uint32_t fork_esp_ref, uint32_t fork_resume_pc);
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
 void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
-extern bool jlos_need_resched(void);
-extern void jlos_sched_set_need_resched(void);
-extern void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
+bool jlos_need_resched(void);
+void jlos_sched_set_need_resched(void);
+void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
 #endif

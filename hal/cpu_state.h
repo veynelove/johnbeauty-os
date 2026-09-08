@@ -23,10 +23,4 @@ typedef struct {
     uint32_t value;
 } jlos_arch_sp_t;
 
-extern void     jlos_arch_task_set_sp(void *task, uint32_t real_on_stack_cpustate);
-extern uint32_t jlos_arch_task_get_sp(void *task);
-extern uint32_t jlos_arch_task_copy_sp(void *parent, void *child,
-                                       uint32_t parent_stack_base,
-                                       uint32_t child_stack_base);
-
 #endif

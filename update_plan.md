@@ -208,8 +208,9 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | PAG-4 | kernel PDE 共享 + change_flags 触发深拷贝（COW-like） | `context_clone` 对内核 PDE 仍深拷贝（每进程 ~900 次 PFA 分配）；实际 99% 生命周期不改内核 PDE | paging.c | 高 | 待做 |
 | PAG-6 | `change_flags_range` 多核下锁内全程 atomic，循环末尾统一 flush | 当前循环内逐 PTE 写不 flush（单核 OK），多核调度迁移会读 stale TLB | paging.c | 中 | 待做（单核暂无影响） |
 | MT-3 | fork COW 内层循环优化：PT 内连续 non-present 按 32 一组跳过 + `present_count` 短路 | fork 外层 768 × 内层 1024 = 78 万次循环；PDE non-present 已 skip，PT 内层仍空扫 | multitask.c (fork) | 中 | 待做 |
-| MT-1 | 引入 `wait_queue_head_t` + `timer_wheel`；schedule() 去 O(n) sleeping/waiting 扫 | schedule 每次线性扫 256 任务查 `sleeping & wake_tick` 和 `WAITING && ZOMBIE` | multitask.h / multitask.c | 高 | 待做 |
-| MT-2 | exit→zombie 时通过 hash 查 parent 直接 wake，不再扫全局 tasks[] | exit 侧和 schedule 侧都线性扫等待者，O(n²) 嵌套 | multitask.c (exit + wake) | 中 | 待做 |
+| MT-1 | ~~引入 `wait_queue_head_t` + `timer_wheel`~~ **已回退** | 无 `swtch()` 汇编上下文切换时，wait_queue/timer_wheel 无法实现真正阻塞（ISR-only schedule 架构限制），已回退为 O(n) 扫描 + spin。前置依赖 MT-5 已 ✅ 完成，可基于 `swtch()` 重新引入 | multitask.h / multitask.c | 高 | 已回退（可重做） |
+| MT-2 | exit→zombie 时通过 hash 查 parent 直接 wake，不再扫全局 tasks[] | exit 侧和 schedule 侧都线性扫等待者，O(n²) 嵌套；前置依赖 MT-5（swtch 阻塞语义）已 ✅ 满足 | multitask.c (exit + wake) | 中 | 待做 |
+| MT-5 | **实现 `swtch()` 汇编上下文切换** | 已落地为 Linux/xv6 式单轨切换：`jlos_hal_context_switch(old_sp,new_sp)` 保存/恢复 esp+callee-saved；`schedule()` 改 void 内部 swtch 不再返回 cpustate；中断返回路径从「`movl %eax,%esp` 重建现场」改为「现场冻结在任务内核栈、swtch 切回后就地 iret」；新任务（kernel/user）与 fork 子进程都用 swtch 帧首次进入；阻塞原语（sleep/wait_pid/sem）改主动 schedule 而非 spin。multitask ALL PASSED | arch/x86/switch.s + context_switch.c + interrupts_asm.s + multitask.c + sync.c + syscall.c | 高 | ✅ 已完成 |
 | ~~PFA-2~~ | ~~`free_bulk` 两级合并~~ | **已实现**：free_bulk 先收集 refcount→0 的帧到数组，排序后连续合并，一次 `buddy_free_range` 释放 | page_frame_allocator.c | — | ✅ 已完成 |
 
 ### 5.3 经典化 / 内存布局 / 扩展性

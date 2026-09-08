@@ -43,12 +43,6 @@
 .extern jlos_arch_tss_base_addr
 .extern jlos_interrupt_manager_handle_interrupt
 
-# 全局变量：保存原始栈指针，用于 ring3 返回路径
-.section .bss
-.global jlos_ring3_original_esp
-jlos_ring3_original_esp:
-    .long 0
-
 .global interruptnumber
 interruptnumber:
     .long 0
@@ -200,20 +194,28 @@ common_entry:
                             #   2) .stack_return 无切换同理, 从 eax/ecx 到 iret
                             #      期间不能被改写.
                             # iret 通过弹 EFLAGS.IF=1 (父保存的原值) 自动重新开中断.
-    movl 4(%esp), %ecx
-    cmpl %eax, %ecx
-    je .stack_return
+    addl $8, %esp           # 清 2 个 arg; esp 指向本任务入栈的 regs
 
-    movl %eax, %esp
-    testl $3, 40(%esp)
-    jnz ring3_return
-    jmp ring0_task_return
+    testl $3, 40(%esp)      # cs 字段判 ring
+    jnz ring3_finish
 
-.stack_return:
-    addl $8, %esp
-    testl $3, 40(%esp)
-    jnz ring3_return
+ring0_finish:
+    popl %ebp
+    popl %edi
+    popl %esi
+    popl %edx
+    popl %ecx
+    popl %ebx
+    popl %eax
+    addl $8, %esp           # 跳过 error + padding
+    iret
 
+ring3_finish:
+    movw $0x2B, %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
     popl %ebp
     popl %edi
     popl %esi
@@ -223,79 +225,3 @@ common_entry:
     popl %eax
     addl $8, %esp
     iret
-
-ring0_task_return:
-    # esp = NEW cpustate 基 (sched 返回 &next->cpustate 后 common_entry L197
-    # movl %eax, %esp 已切换). 恢复寄存器 & iret frame 全部从 NEW cpustate
-    # 读, 不再用 old cpustate (此前 edi=jlos_ring3_original_esp=old 的 bug).
-    #   OFFSET 0-27: ebp,edi,esi,edx,ecx,ebx,eax (7 GPR)
-    #   OFFSET 28-35: error_code + int_no
-    #   OFFSET 36/40/44: eip / cs / eflags (iret frame 3 x 4B)
-    #   OFFSET 48/52: user_esp / user_ss
-    movl %esp, %edi              # edi = NEW cpustate 基指针 (不再用 old!)
-    movl 48(%edi), %ecx          # ecx = NEW.user_esp (任务内核栈指针)
-    movl %ecx, %esp              # 切到任务内核栈 (此时 esp=user_esp)
-
-    movl 44(%edi), %ecx          # 3 x pushl 构造 iret frame, 内容来自 NEW cpustate
-    pushl %ecx
-    movl 40(%edi), %ecx
-    pushl %ecx
-    movl 36(%edi), %ecx
-    pushl %ecx
-
-    movl 24(%edi), %eax          # 恢复 7 GPR, 全来自 NEW cpustate
-    movl 20(%edi), %ebx          # ebx = NEW.ebx -> HAL 写 fork_retpc 在这里生效
-    movl 16(%edi), %ecx
-    movl 12(%edi), %edx
-    movl  8(%edi), %esi
-    movl  0(%edi), %ebp
-    movl  4(%edi), %edi          # 最后一步写 edi, 不再需要源基指针
-
-    iret                         # 弹出 eip/cs/eflags -> CPU 寄存器 = NEW cpustate
-
-ring3_return:
-    # esp = NEW cpustate 基 (与 ring0_task_return 同前提). 基址改为 NEW
-    movl %esp, %edi              # edi = NEW cpustate 基
-    # ring3 iret 从 TSS.esp0 拿 ring0 栈, TSS 已在 task user init 时设好,
-    # 直接用.  esp 切到 TSS 后 new cpustate 指针 edi 还留着.
-    movl (jlos_arch_tss_base_addr), %ecx
-    movl 4(%ecx), %ecx
-    movl %ecx, %esp
-
-    movl 52(%edi), %ecx          # 5 x pushl = user_ss/user_esp/eflags/cs/eip
-    pushl %ecx
-    movl 48(%edi), %ecx
-    pushl %ecx
-    movl 44(%edi), %ecx
-    pushl %ecx
-    movl 40(%edi), %ecx
-    pushl %ecx
-    movl 36(%edi), %ecx
-    pushl %ecx
-
-    movw $0x2B, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
-
-    movl 24(%edi), %eax          # 恢复 GPR, 全来自 NEW cpustate
-    movl 20(%edi), %ebx
-    movl 16(%edi), %ecx
-    movl 12(%edi), %edx
-    movl  8(%edi), %esi
-    movl  0(%edi), %ebp
-    movl  4(%edi), %edi
-
-    iret
-
-# ============================================================================
-# ret_from_fork - fork 子任务首次 iret 后的专用跳板 (经典 Linux copy_thread)
-# ============================================================================
-.global ret_from_fork
-.type ret_from_fork, @function
-ret_from_fork:
-    movl $0, %eax               # eax=0 -> fork 子 retval == NULL (最终防线)
-    jmp  *%ebx                  # 不经过 fork 尾部 return child, 直接跳回 caller
-.size ret_from_fork, . - ret_from_fork
-

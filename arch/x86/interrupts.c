@@ -311,13 +311,13 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     if (interrupt == 0 && self && self->task_manager) {
         jlos_hal_timer_on_tick();
         jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
-        
+
         bool resched = self->task_manager->need_resched;
         if (!curr || curr->status != JLOS_TASK_RUNNING || (KERNEL_CONFIG_PREEMPTIVE && !curr->remain_slice)) {
             resched = true;
         }
         if (resched) {
-            esp = (uint32_t)jlos_task_manager_schedule(self->task_manager, (jlos_cpu_state_t *)esp);
+            jlos_task_manager_schedule(self->task_manager);
         }
     }
     if (vector >= 0x20 && vector < 0x30) {
