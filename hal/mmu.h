@@ -14,8 +14,8 @@
 #error "Unknown KERNEL_CONFIG_HARDWARE_ARCH value"
 #endif
 
-/* MMU 统一命名：x86 GDT / ARM TTBR0+MAIR / RISC-V satp 上层透明 */
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
+
 typedef jlos_gdt_t                    jlos_mmu_t;
 typedef jlos_gdt_segment_descriptor_t jlos_mmu_segment_t;
 
@@ -27,8 +27,7 @@ extern uint16_t jlos_mmu_data_selector(jlos_mmu_t *self);
 extern uint16_t jlos_mmu_user_code_selector(jlos_mmu_t *self);
 extern uint16_t jlos_mmu_user_data_selector(jlos_mmu_t *self);
 
-extern void jlos_mmu_segment_init(jlos_mmu_segment_t *self, uint32_t base,
-                                  uint32_t limit, uint8_t flags);
+extern void jlos_mmu_segment_init(jlos_mmu_segment_t *self, uint32_t base, uint32_t limit, uint8_t flags);
 extern uint32_t jlos_mmu_segment_base(jlos_mmu_segment_t *self);
 extern uint32_t jlos_mmu_segment_limit(jlos_mmu_segment_t *self);
 

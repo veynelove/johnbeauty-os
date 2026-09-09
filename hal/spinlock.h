@@ -8,9 +8,9 @@
 #define JLOS_SPINLOCK_INIT  { 0, 0, 0 }
 
 typedef struct {
-    volatile uint32_t lock;
-    uint32_t irq_state;
-    int recursion_depth;
+    volatile uint32_t   lock;
+    uint32_t            irq_state;
+    int                 recursion_depth;
 } jlos_spinlock_t;
 
 extern void jlos_spinlock_init(jlos_spinlock_t *lock);

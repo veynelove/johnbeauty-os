@@ -5,10 +5,10 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 
-static jlos_task_t *s_fpu_owner = NULL;
-static jlos_spinlock_t s_fpu_lock = JLOS_SPINLOCK_INIT;
-static bool s_init_template_done = false;
-static uint8_t s_fxsave_template[512] __attribute__((aligned(16)));
+static jlos_task_t      *s_fpu_owner = NULL;
+static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
+static bool             s_init_template_done = false;
+static uint8_t          s_fxsave_template[512] __attribute__((aligned(16)));
 
 extern jlos_task_t *g_current_task_ptr;
 

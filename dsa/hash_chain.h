@@ -14,12 +14,12 @@ typedef struct jlos_hash_head {
 } jlos_hash_head_t;
 
 typedef struct {
-    jlos_hash_head_t *buckets;
-    uint32_t bucket_count;
-    uint32_t bucket_mask;
-    uint32_t (*hash)(const void *key);
-    int (*cmp)(const void *key, const void *node);
-    jlos_spinlock_t lock;
+    jlos_hash_head_t    *buckets;
+    uint32_t            bucket_count;
+    uint32_t            bucket_mask;
+    uint32_t            (*hash)(const void *key);
+    int                 (*cmp)(const void *key, const void *node);
+    jlos_spinlock_t     lock;
 } jlos_hash_chain_t;
 
 typedef int (*jlos_hash_chain_match_t)(jlos_hash_node_t *node, void *args);

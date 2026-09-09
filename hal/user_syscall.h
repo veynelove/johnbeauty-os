@@ -18,8 +18,6 @@ static inline int32_t jlos_user_read(int32_t fd, void *buf, uint32_t len)
 
 static inline int32_t jlos_user_puts(const char *str)
 {
-    /* 字符串字面量在 .rodata (0xC0xxxxxx 内核空间), access_ok 会拒绝。
-     * 先拷贝到用户栈缓冲, 再传给 syscall */
     char buf[256];
     uint32_t len = 0;
     while (str[len] && len < sizeof(buf)) { buf[len] = str[len]; len++; }

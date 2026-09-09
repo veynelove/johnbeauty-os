@@ -3,7 +3,6 @@
 #include <hal/hal.h>
 #include <hal/diag.h>
 
-/* 16550 寄存器偏移（DLAB=0） */
 #define REG_RBR           0
 #define REG_THR           0
 #define REG_IER           1
@@ -15,22 +14,17 @@
 #define REG_MSR           6
 #define REG_SCRATCH       7
 
-/* DLAB=1 时 REG0=divisor low, REG1=divisor high */
 #define LCR_DLAB_BIT      0x80
-
-/* 期望波特率 = 115200 Hz / divisor（16550 通用时钟 1.8432 MHz ÷ 16 = 115200） */
 #define UART_INPUT_DIV16  115200U
 
-/* 默认 COM 缓存，避免 jlos_hal_serial_default_* 每次传参数 */
 static uint16_t s_default_com;
 static uint8_t  s_default_inited;
 
-/* 内部：等待 THR 为空（LSR bit5=1）。返回 1 = 就绪。 */
 static int uart_wait_thr_empty(uint16_t base)
 {
     jlos_io8_t lsr;
     jlos_io8_init(&lsr, (uint16_t)(base + REG_LSR));
-    int timeout = 100000;  /* 大约几 ms，防止死锁 */
+    int timeout = 100000;
     while (timeout-- > 0) {
         if ((jlos_io8_read(&lsr) & 0x20) != 0) return 1;
     }
@@ -54,8 +48,6 @@ void jlos_hal_serial_puts(uint16_t com_base, const char *s)
 
 void jlos_hal_serial_default_init(void)
 {
-    /* hal_arch_init() 已经把 0x3F8-0x3FF 注册成 "16550 UART COM1" 保留段，
-     * 这里直接 init 硬件，不会注册重复段。 */
     s_default_inited = 0;
     s_default_com = JLOS_HAL_SERIAL_DEFAULT_COM;
 
@@ -91,5 +83,3 @@ void jlos_hal_serial_default_puts(const char *s)
     if (!s || !s_default_inited) return;
     jlos_hal_serial_puts(s_default_com, s);
 }
-
-

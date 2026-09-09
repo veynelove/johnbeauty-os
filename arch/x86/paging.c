@@ -67,7 +67,5 @@ bool jlos_hal_paging_supports_4mb_pages(void)
         : "a"(1)
     );
     
-    // PAE (Physical Address Extension) bit in edx[6]
-    // PSE (Page Size Extension) bit in edx[3]
     return (edx & (1 << 6)) && (edx & (1 << 3));
 }

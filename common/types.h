@@ -44,4 +44,6 @@ typedef uint32_t                   size_t;
     (type *)((char *)__mptr - offsetof(type, member)); \
 })
 
+#define JLOS_CAP_UPPER(val, max)   ((val) < (max) ? (val) : (max))
+
 #endif

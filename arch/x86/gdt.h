@@ -4,12 +4,12 @@
 #include <common/types.h>
 
 typedef struct {
-    uint16_t limit_lo;
-    uint16_t base_lo;
-    uint8_t base_hi;
-    uint8_t type;
-    uint8_t flags_limit_hi;
-    uint8_t base_vhi;
+    uint16_t    limit_lo;
+    uint16_t    base_lo;
+    uint8_t     base_hi;
+    uint8_t     type;
+    uint8_t     flags_limit_hi;
+    uint8_t     base_vhi;
 } __attribute__((packed)) jlos_gdt_segment_descriptor_t;
 
 typedef struct {

@@ -6,11 +6,14 @@
 
 ## 优化原则
 
-1. 核心功能优先;
-2. 优化时，选择经典做法优先;
-3. **性能优先于改动大小;**
-4. **面向未来多核/SMP 设计，不为单核临时妥协;**
-5. **各子系统按依赖顺序升级，底层先于上层。**
+1. **核心功能对齐生产级：多架构可移植、多核可扩展、运行稳定、基础路径性能优秀。**
+2. **经典结构优先，性能优先。** 
+3. **拒绝"最小修改"思维。** 
+4. **稳定性 > 性能 > 改动大小。**
+5. **面向未来多核/SMP 设计，HAL 层先做抽象，架构相关代码不侵入内核子系统。**
+6. **各子系统按依赖顺序升级，底层先于上层；先修正确性与锁粒度，再做数据结构优化。**
+7. **命名遵循 JLOS 规范（`jlos_<subsystem>_<action>`），日志只写错误类型 tag，不重复时间戳/子系统/函数名（由框架自动封装）。**
+8. **生产级内核, vmplayer测试，目标运行在硬件上**
 
 ***
 
@@ -26,7 +29,7 @@
 | TCP            | 完整状态机 + 三次握手/四次挥手 + SYN/FIN 序列号处理                                              | curl 直连成功                                |
 | HTTP           | HTTP/1.1 响应 + Content-Length + 正确 header                                                     | curl -v 原生解析 200 OK                      |
 | 虚拟内存       | 3:1 高半核分页 + 内核/用户地址空间隔离 + per-context lock + COW + context\_clone 浅拷贝          | 动态映射，ring3 用户进程正常运行             |
-| 内存管理       | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向    | 256MB QEMU 全流程通过                        |
+| 内存管理       | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向    | 256MB                     |
 | 系统调用       | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close                | per-thread errno + wait\_pid 退出码          |
 | 多任务调度     | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 + pid hash table + O(1) zombie 清理               | 时间片轮转正常，交互型优先                   |
 | 同步原语       | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                    | spinlock 关中断保护                          |
@@ -38,8 +41,6 @@
 ***
 
 ## 架构升级总览（v2.5 核心）
-
-当前系统四个基础子系统（PFA / Paging / MemoryManager / Multitask）存在大量非经典做法和性能瓶颈。本计划按**依赖顺序**从底层向上逐层重构，使内核达到经典操作系统教科书级别的实现质量，同时为 SMP 预留清晰的扩展点。
 
 ```
 依赖关系：
@@ -71,7 +72,7 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | Linux 风格虚拟布局                               | ✅    | DIRECT\_MAP\_SIZE=896MB, HEAP\_BASE=0xF8000000          |
 | 内核堆逐帧映射                                   | ✅    | init\_main + expand\_heap 同构 (物理散、虚拟连)         |
 | spinlock 保护                                    | ✅    | s\_pfa\_lock                                            |
-| 验证                                             | ✅    | 256MB QEMU 全流程通过: ring3 + fork COW + 网络 + 多任务 |
+| 验证                                             | ✅    | 256MB 全流程通过: ring3 + fork COW + 网络 + 多任务 |
 
 ### 已知遗留
 
@@ -97,19 +98,17 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | PAG-1  | map\_range 回滚用 unmap\_nolock 锁内完成                        | ✅    | paging.c               |
 | PAG-2  | Per-context spinlock 替代全局锁                                 | ✅    | paging.h + paging.c    |
 | PAG-3  | access\_ok 仅范围检查，删掉页表遍历                             | ✅    | paging.c               |
-| PAG-4  | context\_clone 内核 PDE 浅拷贝 (共享)                           | ✅    | paging.c               |
-| PAG-5  | context\_destroy 用 used\_pde\_count 优化                       | ✅    | paging.c               |
+| PAG-4  | context\_clone 内核 4MB PDE 浅拷贝共享（4KB 内核 PT 仍深拷贝）  | ✅    | paging.c               |
+| PAG-5  | context\_destroy 用 num\_page\_tables 短路非 present PDE        | ✅    | paging.c               |
 | PAG-8  | COW fault handler 一次锁内完成                                  | ✅    | paging.c               |
 | PAG-9  | context\_clone malloc 失败处理                                  | ✅    | paging.c               |
 | PAG-11 | fork COW 只遍历 present PDE                                     | ✅    | paging.c + multitask.c |
 
 ### 已知遗留（低优先级）
 
-| #      | 问题                            | 说明                      | 优先级 |
-| ------ | ------------------------------- | ------------------------- | ------ |
-| PAG-6  | 4MB PDE unmap 循环 1024 次 free | 可批量 refcount\_dec 优化 | 低     |
-| PAG-7  | 无 page table slab cache        | 预分配 PT 池              | 低     |
-| PAG-10 | change\_flags 双重 TLB 刷新     | 内部不刷外层统一刷        | 低     |
+| #     | 问题                     | 说明         | 优先级 |
+| ----- | ------------------------ | ------------ | ------ |
+| PAG-7 | 无 page table slab cache | 预分配 PT 池 | 低     |
 
 ***
 
@@ -126,11 +125,9 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ### 已知遗留（Phase 4 SMP 范畴）
 
-| #    | 问题                                    | 说明                            | 优先级 |
-| ---- | --------------------------------------- | ------------------------------- | ------ |
-| MM-1 | 全局 `s_mm_lock` → 多核瓶颈             | Per-CPU freelists (SLUB style)  | 低     |
-| MM-3 | 无 per-type cache                       | kmem\_cache（task / fd / pipe） | 低     |
-| MM-5 | 16B min alloc + 24B header → 小对象开销 | 调整 size classes               | 低     |
+| #    | 问题                                     | 说明                            | 优先级 |
+| ---- | ---------------------------------------- | ------------------------------- | ------ |
+| MM-3 | 无 per-type cache（task / fd / pipe 走通用 class） | kmem\_cache 专用精确尺寸 cache | 低     |
 
 ***
 
@@ -183,6 +180,52 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ***
 
+## Phase 5: 核心四子系统生产级优化（v3.0）
+
+在 Phase 0-4 基础功能全通 + 经典结构就位后，聚焦**稳定性能 + 多核可扩展 + 多架构可移植**三项目标。按依赖顺序分 4 个子阶段推进，每步独立可回滚。依赖关系：`Phase 5.1（锁粒度+正确性）→ 5.2（性能热点）→ 5.3（经典化/扩展性）→ 5.4（SMP/多架构预留）`。
+
+### 5.1 锁粒度细化 + 正确性收紧（高优，先做，低侵入）
+
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ~~PFA-1~~ | ~~拆 `s_pfa_lock` 为 buddy + refcount + owner 三套锁~~ | **已实现**：refcount 用 `jlos_atomic_add_unless`/`cmpxchg` 完全原子化（无锁），owner 独立 `s_owner_lock`，buddy 独立 `s_buddy_lock`，`s_free_frames` 原子计数 | page_frame_allocator.c | — | ✅ 已完成 |
+| ~~PFA-6~~ | ~~`set_owner_type` 用独立 `s_owner_lock`~~ | **已实现**：`s_owner_lock` 已保护 owner/type 读写，与 buddy 锁无交叉 | page_frame_allocator.c | — | ✅ 已完成 |
+| ~~MM-1a~~ | ~~拆 `s_mm_lock` 为 `s_slab_lock` + `s_heap_lock`~~ | **已实现**：slab 路径用 `s_slab_lock`，heap 路径用 `s_heap_lock`，数据结构无交叉，消除全局串行化 | memory_manager.c | — | ✅ 已完成 |
+| MM-2 | `kvfree` DIRECT_MAP 区域非 SLAB_OBJ/KV_CONTIG type 加 assertion 日志 | 分支已独立无交叉，但非预期 type 静默 return 无日志，难排查 | memory_manager.c | 低 | 部分完成（缺 assertion） |
+| PAG-7 | `jlos_active_paging_context` HAL 化为 per-CPU 访问器 | 裸全局指针，SMP 下多核 switch 乱序；HAL 抽象方便 ARM/RISC-V | paging.c / hal/paging.h | 中 | 待做 |
+
+### 5.2 性能热点（高频路径 O(1) / 跳空扫 / 批量化）
+
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ~~PAG-1~~ | ~~`context_destroy` 4MB PDE 批量释放~~ | **已实现**：destroy 对 4MB PDE 已 `free_order(MAX_ORDER)` 单次释放；unmap 4MB 用户区分支 `free_bulk(1024)` 无创建者，属死路径 | paging.c | — | ✅ 已完成 |
+| ~~PAG-2~~ | ~~`pt_used_count[1024]` 替 PT 空扫~~ | **已实现**：判空用帧级 `pt_present_count` O(1)，map/unmap/clone/destroy 全程维护；再加一层计数属负优化 | paging.h / paging.c | — | ✅ 已完成 |
+| PAG-4 | 内核 4KB PDE 共享（4MB PDE 已浅拷贝共享；低直接区 + heap 的 4KB PT 每进程仍深拷贝） | Linux 内核半页共享方案：boot 期低直接 4KB 段全局一次置 USER（删 `create_user_mm` 逐进程 `change_flags_range`）→ clone 内核半区浅拷贝 / destroy 跳过内核半区 → 内核 vmalloc/heap 边界 PT boot 期预建 | paging.c + multitask.c | 高 | 待做（可选） |
+| ~~PAG-6~~ | ~~`change_flags_range` 批量 TLB 刷新~~ | **已实现**：< 阈值逐页 flush、≥ 阈值循环外统一 `flush_all_tlb`，非 active context 不刷 | paging.c | — | ✅ 已完成 |
+| ~~MT-3~~ | ~~fork COW PT 内层连续 non-present 跳过~~ | **已实现短路**：fork 已 skip 非 present PDE + `pt_present_count==0` 整 PT 跳过；残余仅省分支无内存读收益，正解随 F11 mmap/VMA 按映射区遍历 | multitask.c (fork) | — | ✅ 已完成 |
+| MT-1 | wait queue + timer 唤醒经典化 | 前置 swtch()（MT-5）已落地；sleep/wait 仍靠 `schedule()` 对全任务 O(n) 扫描唤醒。改为 wait queue（`task.wait_node` 已备）+ 到期 timer node，删 O(n) 扫描 | multitask.h / multitask.c + sync.c | 高 | 待做 |
+| MT-2 | exit→zombie 直连父进程唤醒 | `jlos_sched_wake_waiter` 仍全表扫；改用 `parent_pid` + pid hash O(1) 命中唯一合法 waiter（WAITING && waiting_pid==pid），连带删 `schedule()` 的 WAITING+zombie 分支 | multitask.c (exit + wake + schedule) | 低 | 待做 |
+| MT-5 | **实现 `swtch()` 汇编上下文切换** | 已落地为 Linux/xv6 式单轨切换：`jlos_hal_context_switch(old_sp,new_sp)` 保存/恢复 esp+callee-saved；`schedule()` 改 void 内部 swtch 不再返回 cpustate；中断返回路径从「`movl %eax,%esp` 重建现场」改为「现场冻结在任务内核栈、swtch 切回后就地 iret」；新任务（kernel/user）与 fork 子进程都用 swtch 帧首次进入；阻塞原语（sleep/wait_pid/sem）改主动 schedule 而非 spin。multitask ALL PASSED | arch/x86/switch.s + context_switch.c + interrupts_asm.s + multitask.c + sync.c + syscall.c | 高 | ✅ 已完成 |
+| ~~PFA-2~~ | ~~`free_bulk` 两级合并~~ | **已实现**：free_bulk 先收集 refcount→0 的帧到数组，排序后连续合并，一次 `buddy_free_range` 释放 | page_frame_allocator.c | — | ✅ 已完成 |
+
+### 5.3 经典化 / 内存布局 / 扩展性
+
+| ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ~~PFA-4~~ | ~~引入 `struct jlos_page` 数组~~ | **已实现**：`s_pages[]` 已是 `jlos_page_t` 数组，含 flags/refcount/order/type/u(free_list|owner)，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c | — | ✅ 已完成 |
+| MM-3 | size class 从纯 2^n 改精细粒度表，平均膨胀 < 15% | 当前 `mm_size_to_class(513)` → 1024B 浪费 50%；高频 80~1500B 浪费严重 | memory_manager.h / .c | 中 | 待做 |
+| MT-4 | `tasks[256]` 静态数组动态化 | 256 上限对网络服务很快打顶；pid wrap 无冲突判定 | multitask.h / multitask.c | 中 | 待做 |
+
+### 5.4 SMP / 多架构预留接口
+
+| ID | 任务 | 说明 | 涉及文件 | 复杂度 |
+| --- | --- | --- | --- | --- |
+| PAG-5 | HAL 层加 `jlos_hal_paging_global_pages(enable)`（x86 CR4.PGE）+ `jlos_hal_paging_asid_alloc/free`（ARM/RISC-V 留占位，x86 返回 0）；内核页 PTE 统一加 `JLOS_PTE_GLOBAL` 标志 | 减少 CR3 切换导致的内核 TLB 全刷；为 ARM 等有 ASID 的架构预留钩子 | hal/paging.h + 各 arch 实现占位 / paging.c | 低 |
+| PFA-5 | 对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)` | 目前 malloc 单帧 + reserve_bulk 多帧两条独立路径，调用方用错会泄漏；统一出口便于批量优化 | page_frame_allocator.h / .c | 低 |
+| MM-5 | `memset`/`memcpy` 32B 展开 + SSE2 宽写（`movdqa`/`movdqu`），函数头 `clts` 清 CR0.TS + 尾 `mov %cr0` 恢复 | 现在 32-bit 逐字写 4B/cycle，COW 4KB 拷贝慢 2~3 倍；CR0.TS 置位保证 #NM lazy FPU 语义不变 | memory_manager.c（汇编块或内联 asm） | 中 |
+
+***
+
 ## 实施优先级
 
 | 优先级 | Phase | 任务                                                                | 依赖        |
@@ -190,8 +233,11 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | **P0** | 0     | Buddy Page Frame Allocator                                          | ✅ 已完成    |
 | **P0** | 1     | Paging 全部修复 (per-context lock + clone 浅拷贝 + COW 锁合并等)    | ✅ 已完成    |
 | **P0** | 2     | Memory Manager 修复 (prev 合并方向 + tail 更新 + 批量 expand\_heap) | ✅ 已完成    |
-| **P0** | 3     | Multitask 升级 (exit stub 修复 + pid hash + O(1) zombie/wait\_pid)  | ✅ 已完成    |
-| **P3** | 4.x   | SMP 全部预留                                                        | Phase 0-3 ✅ |
+| **P0** | 3     | Multitask 升级 (exit stub 修复 + pid hash + O(1) zombie/wait_pid)  | ✅ 已完成    |
+| **P1** | 5.1   | 锁粒度细化 + 正确性收紧（MM-2 收尾、PAG-7 HAL 化）                | Phase 0-3 ✅ |
+| **P1** | 5.2   | 性能热点（MT-2 直连唤醒、MT-1 wait queue 经典化；PAG-4 内核 4KB PDE 共享可选） | Phase 5.1 完成 |
+| **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
+| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、MM-5、4.1~4.6）        | Phase 5.3 完成 |
 
 ***
 
@@ -223,7 +269,6 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | A2  | 0\~1MB 恒等映射残留        | GRUB 退出后不再需要，经典做法移除                                                  |
 | A3  | boot\_page\_dir 内存未释放 | 切到内核页表后 4KB 无法回收                                                        |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
-| A5  | 任务表硬编码 256 上限      | Phase 3.4 改为动态数组                                                             |
 
 ***
 
