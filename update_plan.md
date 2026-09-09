@@ -7,12 +7,13 @@
 ## 优化原则
 
 1. **核心功能对齐生产级：多架构可移植、多核可扩展、运行稳定、基础路径性能优秀。**
-2. **经典结构优先，性能优先。** 所有修改必须对齐经典操作系统教科书级实现（Linux/xv6/BSD），采用经典数据结构与算法，而非为图省事的最小修改或临时补丁。不为单核做临时妥协，但也不为优化而破坏经典结构。
-3. **拒绝"最小修改"思维。** 改动大小不是考量因素——只要经典结构和性能需要，就完整实现；不做半吊子的折中方案。新增的数据结构、字段、辅助函数必须配套维护完整，不留半成品。
-4. **稳定性 > 性能 > 改动大小；每一项改动必须可回滚，验证可独立复现。**
+2. **经典结构优先，性能优先。** 
+3. **拒绝"最小修改"思维。** 
+4. **稳定性 > 性能 > 改动大小。**
 5. **面向未来多核/SMP 设计，HAL 层先做抽象，架构相关代码不侵入内核子系统。**
 6. **各子系统按依赖顺序升级，底层先于上层；先修正确性与锁粒度，再做数据结构优化。**
 7. **命名遵循 JLOS 规范（`jlos_<subsystem>_<action>`），日志只写错误类型 tag，不重复时间戳/子系统/函数名（由框架自动封装）。**
+8. **生产级内核, vmplayer测试，目标运行在硬件上**
 
 ***
 
@@ -28,7 +29,7 @@
 | TCP            | 完整状态机 + 三次握手/四次挥手 + SYN/FIN 序列号处理                                              | curl 直连成功                                |
 | HTTP           | HTTP/1.1 响应 + Content-Length + 正确 header                                                     | curl -v 原生解析 200 OK                      |
 | 虚拟内存       | 3:1 高半核分页 + 内核/用户地址空间隔离 + per-context lock + COW + context\_clone 浅拷贝          | 动态映射，ring3 用户进程正常运行             |
-| 内存管理       | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向    | 256MB QEMU 全流程通过                        |
+| 内存管理       | Buddy PFA + Bootstrap Allocator + Linux 风格虚拟布局 + 批量 expand\_heap + 修复 prev 合并方向    | 256MB                     |
 | 系统调用       | exit/fork/read/write/get\_errno/get\_pid/yield/sleep/wait\_pid/brk/pipe/fd\_close                | per-thread errno + wait\_pid 退出码          |
 | 多任务调度     | MLFQ 四级反馈队列 + 老化升级 + 抢占/协作可切换 + pid hash table + O(1) zombie 清理               | 时间片轮转正常，交互型优先                   |
 | 同步原语       | 信号量 + 互斥锁(可重入+所有权传递) + 条件变量                                                    | spinlock 关中断保护                          |
@@ -40,8 +41,6 @@
 ***
 
 ## 架构升级总览（v2.5 核心）
-
-当前系统四个基础子系统（PFA / Paging / MemoryManager / Multitask）存在大量非经典做法和性能瓶颈。本计划按**依赖顺序**从底层向上逐层重构，使内核达到经典操作系统教科书级别的实现质量，同时为 SMP 预留清晰的扩展点。
 
 ```
 依赖关系：
@@ -73,7 +72,7 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | Linux 风格虚拟布局                               | ✅    | DIRECT\_MAP\_SIZE=896MB, HEAP\_BASE=0xF8000000          |
 | 内核堆逐帧映射                                   | ✅    | init\_main + expand\_heap 同构 (物理散、虚拟连)         |
 | spinlock 保护                                    | ✅    | s\_pfa\_lock                                            |
-| 验证                                             | ✅    | 256MB QEMU 全流程通过: ring3 + fork COW + 网络 + 多任务 |
+| 验证                                             | ✅    | 256MB 全流程通过: ring3 + fork COW + 网络 + 多任务 |
 
 ### 已知遗留
 

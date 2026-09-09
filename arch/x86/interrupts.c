@@ -13,21 +13,17 @@
 extern void jlos_arch_tss_init_for_asm(void);
 extern jlos_task_t *g_current_task_ptr;
 
-jlos_interrupt_manager_t *jlos_active_interrupt_manager = NULL;
+jlos_interrupt_manager_t    *jlos_active_interrupt_manager = NULL;
 
 /* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
-uint32_t jlos_syscall_ring3_ctx = 0;
-uint32_t jlos_syscall_ring3_kstack = 0;
+uint32_t                    jlos_syscall_ring3_ctx = 0;
+uint32_t                    jlos_syscall_ring3_kstack = 0;
 
-typedef struct {
-    uint16_t handle_address_low_bits;
-    uint16_t gdt_codeSegmentSelector;
-    uint8_t reserved;
-    uint8_t access;
-    uint16_t handle_address_high_bits;
-} __attribute__((packed)) jlos_gate_descriptor_t;
+jlos_gate_descriptor_t      jlos_interrupt_descriptor_table[256];
 
-jlos_gate_descriptor_t jlos_interrupt_descriptor_table[256];
+/* PIC IRQ 动态屏蔽：驱动注册 handler 时自动 unmask，避免无处理的 IRQ 导致 UNHANDLED */
+static uint8_t              s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
+static uint8_t              s_pic_slave_mask  = 0xFF;  /* 1111 1111 — 默认关 slave 全部（IRQ8~15） */
 
 typedef struct {
     uint16_t size;
@@ -50,10 +46,6 @@ static void jlos_set_interrupt_descriptor_table_entry(uint8_t interrupt_number,
         | ((descriptor_privilege_level & 3) << 5));
     jlos_interrupt_descriptor_table[interrupt_number].reserved = 0;
 }
-
-/* PIC IRQ 动态屏蔽：驱动注册 handler 时自动 unmask，避免无处理的 IRQ 导致 UNHANDLED */
-static uint8_t s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
-static uint8_t s_pic_slave_mask  = 0xFF;  /* 1111 1111 — 默认关 slave 全部（IRQ8~15） */
 
 static void jlos_irq_pic_unmask(jlos_interrupt_manager_t* self, uint8_t vector)
 {

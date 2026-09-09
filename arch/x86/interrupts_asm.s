@@ -185,15 +185,7 @@ common_entry:
     call jlos_interrupt_manager_handle_interrupt
 
     cli                     # 调度器 / 中断处理可能开中断 (sti). 从现在到 iret
-                            # 必须关中断保证原子性:
-                            #   1) esp = new cpustate 基 (L197) 之后, 如果 IF=1,
-                            #      IRQ 插进来 pushal 会把 new cpustate.GPR (HAL 写的
-                            #      eax=0/ebx=retpc/eip=ret_from_fork) 瞬间覆写成
-                            #      随机上下文 → pid=4 c≠NULL / pid=6 jmp 0xC3C910C4
-                            #      这类错位崩溃 100% 命中.
-                            #   2) .stack_return 无切换同理, 从 eax/ecx 到 iret
-                            #      期间不能被改写.
-                            # iret 通过弹 EFLAGS.IF=1 (父保存的原值) 自动重新开中断.
+                            # 必须关中断保证原子性
     addl $8, %esp           # 清 2 个 arg; esp 指向本任务入栈的 regs
 
     testl $3, 40(%esp)      # cs 字段判 ring

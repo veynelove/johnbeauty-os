@@ -6,30 +6,24 @@
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
 
-/* Task context switch HAL 接口: kernel 层调用, arch 层实现. HAL 不含汇编. */
-
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
+
 extern __attribute__((naked)) void jlos_task_entry_stub(void);
 extern __attribute__((naked)) void jlos_task_user_entry_stub(void);
 extern __attribute__((naked)) void jlos_task_fork_entry_stub(void);
 
-extern void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate,
-    jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack, uint32_t stack_size);
-extern void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate,
-    jlos_mmu_t *mmu, void (*entrypoint)(void), uint8_t *stack, uint32_t stack_size,
-    uint32_t user_stack_top, uint16_t user_ss);
-/* prepare_child: 高层已做 task+栈 1:1 拷贝, 本函数在子栈上布 swtch 帧:
- * 子进程首次被 swtch 切到时经 fork_entry_stub 跳到 fork_resume_pc. */
-extern void jlos_arch_task_fork_prepare_child(
-    uint8_t *parent_stack, uint8_t *child_stack,
-    uint32_t fork_esp_ref, uint32_t fork_resume_pc,
-    void *child_task);
+extern void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
+                uint8_t *stack, uint32_t stack_size);
+extern void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
+                uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top, uint16_t user_ss);
+
+extern void jlos_arch_task_fork_prepare_child(uint8_t *parent_stack, uint8_t *child_stack, uint32_t fork_esp_ref,
+                uint32_t fork_resume_pc, void *child_task);
+
 extern void jlos_arch_tss_init(uint16_t kernel_data_selector);
 extern void jlos_arch_tss_set_ctx(uint32_t ctx);
 extern void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size);
 
-/* fork_invoke: 父返回 child* (非 NULL), 子返回 NULL. asm 输出约束 &=a 绑 eax,
- * GCC 不会 spill 父残留. 调用方据此判 is_child = (ret == NULL). */
 extern void *jlos_arch_fork_invoke(void *mgr, void *parent);
 
 extern void jlos_hal_context_switch(uint32_t *old_sp_ptr, uint32_t new_sp);
@@ -37,5 +31,4 @@ extern void jlos_hal_context_switch(uint32_t *old_sp_ptr, uint32_t new_sp);
 #elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_ARM
 #error "ARM architecture task context switch not implemented yet"
 #endif
-
 #endif

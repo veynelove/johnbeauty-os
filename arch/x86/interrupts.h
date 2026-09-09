@@ -12,21 +12,28 @@ typedef struct jlos_interrupt_handler jlos_interrupt_handler_t;
 typedef uint32_t (*jlos_interrupt_handler_func_t)(jlos_interrupt_handler_t*, uint32_t);
 
 struct jlos_interrupt_handler {
-    uint8_t interrupt_number;
-    jlos_interrupt_manager_t *interrupt_manager;
-    jlos_interrupt_handler_func_t handle_interrupt;
+    uint8_t                         interrupt_number;
+    jlos_interrupt_manager_t        *interrupt_manager;
+    jlos_interrupt_handler_func_t   handle_interrupt;
 };
 
 struct jlos_interrupt_manager {
-    uint16_t hardware_interrupt_offset;
-    void *handles[256];
-    jlos_task_manager_t *task_manager;
-
-    jlos_port8_bit_slow_t pic_master_command;
-    jlos_port8_bit_slow_t pic_master_data;
-    jlos_port8_bit_slow_t pic_slave_command;
-    jlos_port8_bit_slow_t pic_slave_data;
+    uint16_t                hardware_interrupt_offset;
+    void                    *handles[256];
+    jlos_task_manager_t     *task_manager;
+    jlos_port8_bit_slow_t   pic_master_command;
+    jlos_port8_bit_slow_t   pic_master_data;
+    jlos_port8_bit_slow_t   pic_slave_command;
+    jlos_port8_bit_slow_t   pic_slave_data;
 };
+
+typedef struct {
+    uint16_t    handle_address_low_bits;
+    uint16_t    gdt_codeSegmentSelector;
+    uint8_t     reserved;
+    uint8_t     access;
+    uint16_t    handle_address_high_bits;
+} __attribute__((packed)) jlos_gate_descriptor_t;
 
 extern jlos_interrupt_manager_t *jlos_active_interrupt_manager;
 

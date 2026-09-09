@@ -10,7 +10,7 @@ typedef struct {
 } jlos_atomic_t;
 
 static inline int jlos_atomic_read(const jlos_atomic_t *v)         { return __atomic_load_n(&v->counter, __ATOMIC_SEQ_CST); }
-static inline void jlos_atomic_set(jlos_atomic_t *v, int i)         { __atomic_store_n(&v->counter, i, __ATOMIC_SEQ_CST); }
+static inline void jlos_atomic_set(jlos_atomic_t *v, int i)        { __atomic_store_n(&v->counter, i, __ATOMIC_SEQ_CST); }
 
 static inline int jlos_atomic_fetch_add(jlos_atomic_t *v, int i)   { return __atomic_fetch_add(&v->counter, i, __ATOMIC_SEQ_CST); }
 static inline int jlos_atomic_fetch_sub(jlos_atomic_t *v, int i)   { return __atomic_fetch_sub(&v->counter, i, __ATOMIC_SEQ_CST); }

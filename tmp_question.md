@@ -1,10 +1,24 @@
 # qeustion
 
-1. @内核栈可以任意设置大小吗，为什么4mb;随着内核体量增大，是否需要增加内核栈，增加衡量标准怎么衡量;
-2. void jlos_hal_serial_default_init(void)串口初始化需要指定架构吧，现在是写死x86的配置吧;
+1. icmp test: ping 192.168.159.144
+2. tcp test: curl -v http://192.168.159.144:1234
+3. udp test: echo "johnbeauty" | nc -u 192.168.159.144 5678
 
-3. icmp test: ping 192.168.159.144
-4. tcp test: curl -v http://192.168.159.144:1234
-5. udp test: echo "johnbeauty" | nc -u 192.168.159.144 5678
+4. bear --output ./build/compile_commands.json -- make
 
-6. bear --output ./build/compile_commands.json -- make
+.h头文件
+1. 文件第一行必须是#ifndef _*头文件名，头文件名前是1个'_'符号
+2. 文件末尾有一个空行
+3. struct统一用typedef struct {} 结构体名;定义， 结构体名末尾必须携带”_t"，结构体成员必须成员名左对齐。整个头文件定义的所有结构体成员保持左对齐。
+4. 头文件内容顺序(从上到下，如果有): #import, define宏定义， extern变量声明，extern函数声明, enum枚举定义，typedef 函数类型, struct结构体定义，普通函数声明，inline内联函数定义。
+5. enum枚举定义，'='字符和值左对齐。
+6. define宏定义，宏体左对齐。
+7. 无注释。
+8. 函数声明，长度超过120行才换行，换行从前一行函数名开始 + 1个tab开始。
+
+.c文件
+1. #import头文件在文件最顶部。
+2. 文件内容顺序(从上到下，如果有)：#import, extern变量声明, 全局变量， static全局变量， static函数实现，inline 函数实现，普通函数实现。
+3. 文件末尾有一个空行
+4. 函数代码，长度超过120行才换行，换行从前一行函数名开始 + 1个tab开始。
+5. if, for等不能省略{}直接写return。

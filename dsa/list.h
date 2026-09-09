@@ -4,7 +4,8 @@
 #include <common/types.h>
 
 typedef struct jlos_list_head {
-    struct jlos_list_head *next, *prev;
+    struct jlos_list_head *next;
+    struct jlos_list_head *prev;
 } jlos_list_head_t;
 
 #define JLOS_LIST_HEAD_INIT(name) {&(name), &(name)}
