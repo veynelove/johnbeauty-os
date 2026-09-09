@@ -5,7 +5,9 @@
 #include <common/types.h>
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
+
 #include <arch/x86/fpu_state.h>
+
 #elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_ARM
 #error "ARM architecture ext_state (VFP/ASIMD/SVE) not implemented yet"
 #elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_RISCV

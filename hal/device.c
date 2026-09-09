@@ -1,15 +1,6 @@
 #include <hal/device.h>
 #include <hal/hal.h>
 
-#define JLOS_MMIO_TRACK_MAX  64
-
-typedef struct {
-    bool     used;
-    uint32_t start;
-    uint32_t end;
-    const char *owner;
-} jlos_hal_mmio_track_t;
-
 static jlos_device_t         *s_devices[JLOS_HAL_MAX_DEVICES];
 static int                   s_device_count = 0;
 static jlos_hal_mmio_track_t s_mmio_track[JLOS_MMIO_TRACK_MAX];

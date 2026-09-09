@@ -69,8 +69,7 @@ static void test2_parent_entry(void)
     v_t2_child_pid = ((jlos_task_t *)child)->pid;
     v_t2_fork_done = 1;
     jlos_task_set_waiting(me, v_t2_child_pid);
-    for (volatile long spin = 0;
-         me->status == JLOS_TASK_WAITING && spin < 500000000L; spin++);
+    jlos_task_manager_schedule(s_mgr);
     jlos_task_t *z = jlos_task_manager_find_pid(s_mgr, v_t2_child_pid);
     if (!z || z->status != JLOS_TASK_ZOMBIE) { v_t2_parent_done = -3; return; }
     v_t2_exit_code = z->exit_code;
@@ -130,8 +129,7 @@ static void test3_parent_entry(void)
      * 时自动唤醒父 (经典 wait/wake 阻塞语义, 替代原 busy-wait budget loop). */
     for (int i = 0; i < T3_CHILDREN; i++) {
         jlos_task_set_waiting(me, v_t3_child_pids[i]);
-        for (volatile long spin = 0;
-             me->status == JLOS_TASK_WAITING && spin < 500000000L; spin++);
+        jlos_task_manager_schedule(s_mgr);
         jlos_task_t *cc = jlos_task_manager_find_pid(s_mgr, v_t3_child_pids[i]);
         if (!cc || cc->status != JLOS_TASK_ZOMBIE) {
             v_t3_done = -2;

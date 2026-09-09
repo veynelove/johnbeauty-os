@@ -17,9 +17,7 @@ typedef enum {
 
 #if HAL_CONFIG_TRACE_IO
 
-void jlos_hal_trace_io(const char *file, uint16_t line,
-                       jlos_hal_trace_op_t op,
-                       uint16_t port, uint32_t value);
+void jlos_hal_trace_io(const char *file, uint16_t line, jlos_hal_trace_op_t op, uint16_t port, uint32_t value);
 void jlos_hal_trace_msg(const char *file, uint16_t line, const char *msg);
 void jlos_hal_trace_dump(int last_n);
 void jlos_hal_trace_clear(void);
@@ -46,5 +44,4 @@ static inline void jlos_hal_trace_clear(void) {}
 static inline int  jlos_hal_trace_count(void) { return 0; }
 
 #endif
-
 #endif

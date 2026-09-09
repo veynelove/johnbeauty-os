@@ -312,7 +312,7 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         jlos_task_free(g_task_manager_ptr, target);
         return (int32_t)pid;
     }
-    JLOS_TASK_SET_WAITING(g_current_task_ptr, target_pid);
+    jlos_task_set_waiting(g_current_task_ptr, target_pid);
     (void)arg3;
     return 0;
 }
@@ -334,7 +334,7 @@ static uint32_t s_syscall_resched_do(uint32_t ctx)
 {
     if (g_current_task_ptr) {
         g_current_task_ptr->yield = false;
-        return (uint32_t)jlos_task_manager_schedule(g_task_manager_ptr, (jlos_cpu_state_t *)ctx);
+        jlos_task_manager_schedule(g_task_manager_ptr);
     }
     return ctx;
 }

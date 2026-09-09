@@ -1,0 +1,21 @@
+# 编译产物
+obj/
+*.bin
+*.iso
+*.o
+*.elf
+*.img
+iso/
+
+# clangd 编译数据库
+build/
+.cache/
+
+# VS Code 配置（如果你不想提交）
+.vscode/
+
+# 系统临时文件
+*.swp
+*.swo
+*~
+.DS_Store

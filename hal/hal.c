@@ -5,11 +5,8 @@
 
 #define JLOS_KERNEL_LOG_SUBSYS "hal"
 
-/* 前向声明：io ranges / irq table，后面定义，给前面的 sanity_check / claim 用 */
 static jlos_hal_io_range_t  s_io_ranges[JLOS_HAL_IO_RANGES_MAX];
 static jlos_hal_irq_info_t s_irq_table[JLOS_HAL_IRQ_MAX];
-
-/* -------------------- 系统平台设备：由 jlos_hal_arch_init 注册 -------------------- */
 
 static jlos_device_t s_dev_pic_master = {
     .name       = "8259 PIC Master",
@@ -73,10 +70,7 @@ static jlos_device_t s_dev_uart_com1 = {
     .drv = 0,
 };
 
-/* -------------------- 硬件 Probe 结果：只读，jlos_hal_get_info() 导出 -------------------- */
 static jlos_hal_info_t s_hal_info;
-
-/* -------------------- x86 IO ops 两套实现 -------------------- */
 
 static void hal_x86_fast_io8_init(jlos_io8_t *self, uint16_t port)
 { jlos_port8_bit_init(self, port); }
@@ -85,8 +79,6 @@ static void hal_x86_fast_io8_write(jlos_io8_t *self, uint8_t val)
 static uint8_t hal_x86_fast_io8_read(jlos_io8_t *self)
 { return jlos_port8_bit_read(self); }
 
-/* "fast" 下的 slow 变体：我们还是走 jlos_port8_bit_slow_* 底层，
- * 因为有些老设备（8259 PIC / PIT）无论 CPU 多快都要求 I/O 延迟。 */
 static void hal_x86_fast_io8_slow_init(jlos_io8_slow_t *self, uint16_t port)
 { jlos_port8_bit_slow_init(self, port); }
 static void hal_x86_fast_io8_slow_write(jlos_io8_slow_t *self, uint8_t val)
@@ -108,7 +100,6 @@ static void hal_x86_fast_io32_write(jlos_io32_t *self, uint32_t val)
 static uint32_t hal_x86_fast_io32_read(jlos_io32_t *self)
 { return jlos_port32_bit_read(self); }
 
-/* slow 实现：所有 variant 都走 jlos_port*_slow_*（目前 port.c 只有 io8 有 slow 变体） */
 static void hal_x86_slow_io8_init(jlos_io8_t *self, uint16_t port)
 { jlos_port8_bit_slow_init((jlos_port8_bit_slow_t*)self, port); }
 static void hal_x86_slow_io8_write(jlos_io8_t *self, uint8_t val)
@@ -167,13 +158,12 @@ const jlos_hal_io_ops_t jlos_hal_x86_slow_io_ops = {
     .read_io32        = hal_x86_slow_io32_read,
 };
 
-/* 全局活跃 ops；默认 fast，jlos_hal_arch_init() 可按 CPUID 重设 */
 const jlos_hal_io_ops_t *jlos_hal_io_ops = &jlos_hal_x86_fast_io_ops;
 
-/* -------------------- IO sanity check -------------------- */
-
 static int ranges_overlap(uint16_t a_s, uint16_t a_e, uint16_t b_s, uint16_t b_e)
-{ return !(a_e < b_s || b_e < a_s); }
+{ 
+    return !(a_e < b_s || b_e < a_s);
+}
 
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
 {
@@ -193,8 +183,6 @@ int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner)
     }
     return 0;
 }
-
-/* -------------------- IO ranges 注册去重 -------------------- */
 
 static void strncpy_safe(char *dst, const char *src, int sz)
 {
@@ -248,8 +236,6 @@ const jlos_hal_io_range_t *jlos_hal_get_io_ranges(int *out_count)
     return s_io_ranges;
 }
 
-/* -------------------- IRQ claim 保留机制 -------------------- */
-
 int jlos_hal_irq_claim(uint8_t irq, const char *owner)
 {
     if (s_irq_table[irq].claimed) {
@@ -287,58 +273,45 @@ const jlos_hal_irq_info_t *jlos_hal_get_irq_table(int *out_count)
     return s_irq_table;
 }
 
-/* -------------------- HAL 启动初始化 -------------------- */
-
 void jlos_hal_arch_init(void)
 {
-    /* CPUID 探测未来在此处填 cpu_model / has_apic；目前默认现代 x86 */
-    s_hal_info.cpu_model     = 0x00000686; /* 默认 686 类（QEMU 默认） */
+    s_hal_info.cpu_model     = 0x00000686; 
     s_hal_info.cpu_has_cpuid = true;
     s_hal_info.cpu_has_apic  = true;
-
-    /* 默认双 8259 级联，IRQ0 起始向量 0x20（与 irq_manager_init 第二个参数一致） */
+    
     s_hal_info.irq_mode        = JLOS_HAL_IRQ_PIC_8259;
     s_hal_info.irq_base_vector = 0x20;
-
-    /* 默认 8253 PIT，输入晶振 1193180 Hz */
+    
     s_hal_info.timer_mode           = JLOS_HAL_TIMER_PIT_8253;
     s_hal_info.timer_input_clock_hz = 1193180ULL;
-
-    /* PCI：目前只支持 Mechanism #1 (0xCF8/0xCFC)；ECAM 等 ACPI MCFG 解析后再填 */
+    
     s_hal_info.pci_mmconfig_base   = 0;
     s_hal_info.pci_ecam_available  = false;
 
-    /* 内存：预留典型 MMIO 区（未来从 E820 / ACPI 读真实值，覆盖这里）
-     *  - 0x000A0000 ~ 0x000FFFFF：VGA / BIOS shadow / 预留 ROM
-     *  - 0xFEE00000 ~ 0xFFFFFFFF：LAPIC / IOAPIC / PCI memory BAR / HPET 常用 */
     s_hal_info.mmio_reserved_start = 0x000A0000;
     s_hal_info.mmio_reserved_end   = 0xFFFFFFFF;
 
-    /* CPUID 探测未来在此处添加；目前默认现代 x86，走 fast ops */
     jlos_hal_io_ops = &jlos_hal_x86_fast_io_ops;
-
-    /* 系统平台设备统一注册：IO / IRQ / MMIO 资源在 device_register 内做冲突检查 */
+    
     jlos_hal_device_register(&s_dev_pic_master);
     jlos_hal_device_register(&s_dev_pic_slave);
     jlos_hal_device_register(&s_dev_pit_timer);
     jlos_hal_device_register(&s_dev_pci_cfg);
     jlos_hal_device_register(&s_dev_uart_com1);
 
-    /* jlos_hal_device_register 内部已调 jlos_hal_irq_claim → refresh_reserved_bitmap，
-     * s_hal_info.irq_reserved_bitmap_31_0 自动同步 */
     jlos_hal_kernel_segments_init();
     jlos_hal_arch_syscall_init();
 }
 
-/* -------------------- 对外只读查询 + bitmap 同步 -------------------- */
-
 const jlos_hal_info_t *jlos_hal_get_info(void)
-{ return &s_hal_info; }
+{ 
+    return &s_hal_info;
+}
 
 void jlos_hal_irq_refresh_reserved_bitmap(void)
 {
     uint32_t bm = 0;
-    /* 0-31：这是 x86 经典 IRQ 覆盖范围（PIC 0-15 + IOAPIC 扩展 16-31） */
+    
     for (unsigned irq = 0; irq < 32u; irq++) {
         if (s_irq_table[irq].claimed) bm |= (1u << irq);
     }

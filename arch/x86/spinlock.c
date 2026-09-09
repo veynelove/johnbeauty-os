@@ -1,7 +1,5 @@
 #include <hal/spinlock.h>
 
-#if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
-
 void jlos_spinlock_init(jlos_spinlock_t *lock)
 {
     if (!lock) return;
@@ -18,7 +16,6 @@ void jlos_spinlock_destroy(jlos_spinlock_t *lock)
     lock->recursion_depth = 0;
 }
 
-/* 关中断 + 原子拿锁/重入计数，返回值仅接口兼容保留 */
 uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock)
 {
     if (!lock) return 0;
@@ -42,7 +39,7 @@ uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock)
     "2:\n\t"
         : "+m"(*lockp) : : "eax", "memory"
     );
-    /* acquire barrier：临界区内的 load/store 不能跑到拿锁之前 */
+    
     jlos_mb();
     lock->recursion_depth = 1;
     lock->irq_state = flags;
@@ -54,15 +51,8 @@ void jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags)
     if (!lock || lock->recursion_depth <= 0) return;
     lock->recursion_depth--;
     if (lock->recursion_depth == 0) {
-        /* release barrier：临界区内的 load/store 不能跑到放锁之后 */
         jlos_mb();
         __asm__ __volatile__("movl $0, %0" : "+m"(lock->lock) :: "memory");
         __asm__ __volatile__("push %0; popf" :: "r"(flags) : "memory", "cc");
     }
 }
-
-#elif KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_ARM
-#error "ARM architecture spinlock support not implemented yet"
-#else
-#error "Unknown KERNEL_CONFIG_HARDWARE_ARCH value"
-#endif
