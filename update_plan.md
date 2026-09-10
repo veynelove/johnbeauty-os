@@ -213,7 +213,6 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | ~~PFA-4~~ | ~~引入 `struct jlos_page` 数组~~ | **已实现**：`s_pages[]` 已是 `jlos_page_t` 数组，含 flags/refcount/order/type/u(free_list|owner)，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c | — | ✅ 已完成 |
-| MM-3 | size class 从纯 2^n 改精细粒度表，平均膨胀 < 15% | 当前 `mm_size_to_class(513)` → 1024B 浪费 50%；高频 80~1500B 浪费严重 | memory_manager.h / .c | 中 | 待做 |
 | MT-4 | `tasks[256]` 静态数组动态化 | 256 上限对网络服务很快打顶；pid wrap 无冲突判定 | multitask.h / multitask.c | 中 | 待做 |
 
 ### 5.4 SMP / 多架构预留接口

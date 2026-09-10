@@ -397,6 +397,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     uint32_t start = JLOS_PAGE_ALIGN_DOWN(virtual_addr_start);
     uint32_t page_num = (virtual_addr_end - start) / JLOS_PAGE_SIZE;
     bool active = (self == jlos_active_paging_context);
+    bool flush_one = active && page_num < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD;
 
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     for (uint32_t addr = start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
@@ -407,7 +408,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
             continue;
         }
         jlos_paging_change_flags_nolock(self, addr, flags);
-        if (active && page_num < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD) {
+        if (flush_one) {
             jlos_hal_paging_flush_tlb(addr);
         }
     }

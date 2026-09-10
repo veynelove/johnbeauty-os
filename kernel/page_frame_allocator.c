@@ -79,10 +79,9 @@ static inline bool buddy_mergeable(uint32_t frame, uint32_t order)
     if (buddy >= s_total_frames) {
         return false;
     }
-    /* 合并后块起始 = min(frame, buddy), 大小 = block * 2 */
     uint32_t merged_start = (buddy < frame) ? buddy : frame;
     if (merged_start + block * 2 > s_total_frames) {
-        return false;   /* 合并后会跨越物理内存边界 → 拒绝 */
+        return false;
     }
     jlos_page_t *page = pfa_page(buddy);
     return page->order == order && !(page->flags & JLOS_PFA_FLAG_OCCUPIED);
@@ -91,7 +90,6 @@ static inline bool buddy_mergeable(uint32_t frame, uint32_t order)
 static void buddy_insert(uint32_t frame, uint32_t order)
 {
     uint32_t block = order_to_frames(order);
-    /* 防 double insert: 确保帧 free 且不在任何 free list, 块不跨越物理边界 */
     if (frame >= s_total_frames || frame + block > s_total_frames) {
         printk_emerg("[OOB] insert frame=%u order=%u block=%u total=%u (cross phys boundary)\n",
                frame, order, block, s_total_frames);
@@ -299,7 +297,6 @@ void *jlos_page_frame_malloc(void)
         jlos_page_frame_order_split(frame, order, target_order);
     }
     jlos_page_frame_mark_reserve(frame);
-    s_pages[frame].order = 0;
     jlos_atomic_dec(&s_free_frames);
     jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
     return (void *)PHYS_TO_VIRT(s_start_addr + frame * JLOS_PAGE_FRAME_SIZE);
@@ -425,12 +422,16 @@ void jlos_page_frame_refcount_inc(uint32_t phys_addr)
     if (frame >= s_total_frames) {
         return;
     }
-    int old = jlos_atomic_add_unless(&s_pages[frame].refcount, 1, 0);
-    if (old == 0) {
-        printk_emerg("on free frame = %u\n", frame);
-        for (;;) {
-            jlos_hal_halt();
+    jlos_atomic_t *rc = &s_pages[frame].refcount;
+    int old = jlos_atomic_read(rc);
+    while (old > 0 && old < JLOS_PAGE_FRAME_REFCOUNT_MAX) {
+        if (jlos_atomic_cmpxchg(rc, &old, old + 1)) {
+            return;
         }
+    }
+    printk_emerg("refcount overflow/free frame = %u, count = %d\n", frame, old);
+    for (;;) {
+        jlos_hal_halt();
     }
 }
 

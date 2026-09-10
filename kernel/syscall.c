@@ -244,8 +244,7 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    g_current_task_ptr->wake_tick = jlos_hal_timer_get_ticks() + arg1;
-    g_current_task_ptr->sleeping = true;
+    jlos_task_sleep_until(g_task_manager_ptr, jlos_hal_timer_get_ticks() + arg1);
     (void)arg2;
     (void)arg3;
     return 0;
@@ -279,8 +278,8 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
     for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
         if (t) {
-            printk_info("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->name,
-                t->pid, t->status, t->is_user_process ? "user" : "kernel");
+            printk_info("[%d] name = %s, pid = %u, status = %s, task_type = %s\n", i, t->name,
+                t->pid, jlos_task_status_map_str(t->status), t->is_user_process ? "user" : "kernel");
         }
     }
     printk_info("---\n");
@@ -302,19 +301,20 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!target || target->parent_pid != g_current_task_ptr->pid) {
         return -SYSCALL_ENINVAL;
     }
-    if (target->status == JLOS_TASK_ZOMBIE) {
-        if (exit_code) {
-            if (!jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
-                return -SYSCALL_EFAULT;
-            }
+    while (target->status != JLOS_TASK_ZOMBIE) {
+        JLOS_TASK_SET_WAITING(g_current_task_ptr, target_pid);
+        jlos_task_manager_schedule(g_task_manager_ptr);
+        target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
+        if (!target) {
+            return -SYSCALL_ENINVAL;
         }
-        uint32_t pid = target->pid;
-        jlos_task_free(g_task_manager_ptr, target);
-        return (int32_t)pid;
     }
-    jlos_task_set_waiting(g_current_task_ptr, target_pid);
+    if (exit_code && !jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
+            return -SYSCALL_EFAULT;
+    }
     (void)arg3;
-    return 0;
+    jlos_task_free(g_task_manager_ptr, target);
+    return (int32_t)target->pid;
 }
 
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)

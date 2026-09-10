@@ -3,6 +3,7 @@
 
 #include <common/types.h>
 #include <hal/smp.h>
+#include <dsa/list.h>
 
 #define KERNEL_MEMORY_PHYSICAL_START        0x100000
 
@@ -15,26 +16,25 @@
 #define JLOS_MM_MIN_ALLOC      16
 #define JLOS_MM_CLASS_COUNT    32
 
-#define JLOS_KV_CONTIG_MAGIC   0x4B564354U  /* "KVCT" */
+#define JLOS_KV_CONTIG_MAGIC        0x4B564354U
+#define JLOS_KV_CONTIG_MAX_PAGES    0xFFFFFFFEU
 
 typedef struct jlos_memory_chunk {
-    struct jlos_memory_chunk    *next;
-    struct jlos_memory_chunk    *prev;
-    struct jlos_memory_chunk    *free_next;
-    struct jlos_memory_chunk    *free_prev;
+    jlos_list_head_t            link;
+    jlos_list_head_t            free_link;
     bool                        allocated;
     size_t                      size;
 } __attribute__((aligned(16))) jlos_memory_chunk_t;
 
 typedef struct {
-    jlos_memory_chunk_t *first;
+    jlos_list_head_t    chunk_head;
     jlos_memory_chunk_t *tail;
     uint8_t             *heap_start;
     uint8_t             *heap_end;
     uint8_t             *heap_current;
     uint32_t            size_bitmap;
     int                 max_class;
-    jlos_memory_chunk_t *class_head[JLOS_MM_CLASS_COUNT];
+    jlos_list_head_t    class_head[JLOS_MM_CLASS_COUNT];
 } jlos_memory_manager_t;
 
 typedef struct {
@@ -97,6 +97,8 @@ typedef struct jlos_memory_slab_page {
     jlos_memory_slab_cache_t     *cache;
     uint32_t                     inuse;
     void                         *freelist;
+    uint32_t                     obj_count;
+    uint8_t                      *obj_start;
 } jlos_memory_slab_page_t;
 
 jlos_memory_slab_cache_t *jlos_memory_slab_cache_create(const char *name, size_t size, size_t align,

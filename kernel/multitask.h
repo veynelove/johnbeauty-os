@@ -34,7 +34,6 @@
 #define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
-/* 内核可写区边界校验 (kalloc 返回值必须 >= _kernel_end). */
 extern uint32_t _kernel_end;
 #define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
 #define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
@@ -112,6 +111,7 @@ typedef struct {
     int                 num_tasks;
     int                 current_task;
     jlos_list_head_t    zombie_head;
+    jlos_list_head_t    sleep_queue;
     struct {
         jlos_list_head_t head;
         uint32_t count;
@@ -144,6 +144,9 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 #define JLOS_TASK_SET_BLOCKED   jlos_task_set_blocked
 #define JLOS_TASK_SET_ZOMBIE    jlos_task_set_zombie
 #define JLOS_TASK_SET_WAITING   jlos_task_set_waiting
+
+void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick);
+const char *jlos_task_status_map_str(uint32_t status);
 
 void jlos_task_manager_init(jlos_task_manager_t* self);
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
