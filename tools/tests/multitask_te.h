@@ -1,5 +1,5 @@
-#ifndef _JLOS_MULTI_TASK_TEST_H
-#define _JLOS_MULTI_TASK_TEST_H
+#ifndef _JLOS_MULTITASK_TE_H
+#define _JLOS_MULTITASK_TE_H
 
 #include <hal/mmu.h>
 #include <kernel/multitask.h>

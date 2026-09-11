@@ -1,5 +1,5 @@
-#ifndef _HTTP_SERVER_TE_H
-#define _HTTP_SERVER_TE_H
+#ifndef _JLOS_HTTP_SERVER_TE_H
+#define _JLOS_HTTP_SERVER_TE_H
 
 #include <net/tcp.h>
 

@@ -304,6 +304,7 @@ void *jlos_page_frame_malloc(void)
 
 static void buddy_free_nolock(uint32_t frame, uint32_t order)
 {
+    uint32_t freed_frames = order_to_frames(order);
     while (order < JLOS_PFA_MAX_ORDER && buddy_mergeable(frame, order)) {
         uint32_t buddy = frame ^ order_to_frames(order);
         buddy_remove(buddy, order);
@@ -311,7 +312,7 @@ static void buddy_free_nolock(uint32_t frame, uint32_t order)
         order++;
     }
     buddy_insert(frame, order);
-    jlos_atomic_fetch_add(&s_free_frames, order_to_frames(order));
+    jlos_atomic_fetch_add(&s_free_frames, (int)freed_frames);
 }
 
 static void buddy_free_range(uint32_t base_frame, uint32_t len)

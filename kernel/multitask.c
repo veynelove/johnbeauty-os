@@ -476,7 +476,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
     if (prev->status == JLOS_TASK_RUNNING) {
         if (prev->sleeping) {
             JLOS_TASK_SET_BLOCKED(prev);
-        } else {
+        } else if (prev != self->idle_task) {
             if (prev->yield || !prev->remain_slice) {
                 if (!prev->remain_slice && prev->priority < JLOS_TASK_MLFQ_LEVELS - 1) {
                     prev->priority++;
@@ -516,6 +516,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
         next = self->idle_task;
     }
     if (next == prev) {
+        JLOS_TASK_SET_RUNNING(prev);
         self->need_resched = false;
         return;
     }

@@ -1,5 +1,5 @@
-#ifndef _UDP_SERVER_TE_H
-#define _UDP_SERVER_TE_H
+#ifndef _JLOS_UDP_SERVER_TE_H
+#define _JLOS_UDP_SERVER_TE_H
 
 #include <net/udp.h>
 
