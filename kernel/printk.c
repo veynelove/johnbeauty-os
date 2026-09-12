@@ -189,6 +189,23 @@ static void printk_put_us_padded(unsigned int value, int width)
     while (i > 0) printk_putchar(buf[--i]);
 }
 
+#if JLOS_KERNEL_LOG_PRINT_LEVEL
+static char printk_level_char(int level)
+{
+    switch (level) {
+    case JLOS_KERNEL_LOG_EMERG:  return 'P';  /* panic */
+    case JLOS_KERNEL_LOG_ALERT:  return 'A';
+    case JLOS_KERNEL_LOG_CRIT:   return 'C';
+    case JLOS_KERNEL_LOG_ERR:    return 'E';
+    case JLOS_KERNEL_LOG_WARN:   return 'W';
+    case JLOS_KERNEL_LOG_NOTICE: return 'N';
+    case JLOS_KERNEL_LOG_INFO:   return 'I';
+    case JLOS_KERNEL_LOG_DEBUG:  return 'D';
+    default:                     return '?';
+    }
+}
+#endif
+
 static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, const char *func)
 {
     uint32_t sec = ticks / JLOS_HAL_TIME_FREQ_HZ;

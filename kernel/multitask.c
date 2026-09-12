@@ -196,31 +196,31 @@ static int32_t jlos_task_create_user_mm(jlos_task_t *self)
     if (!self) {
         return -TASK_ERR_NOMEM;
     }
-    self->mm = (jlos_paging_context_t *)jlos_kalloc(sizeof(jlos_paging_context_t));
+    self->mm = jlos_mm_create();
     if (!self->mm) {
         return -TASK_ERR_NOMEM;
     }
-    jlos_paging_context_clone(self->mm, &s_kernel_paging_context);
+    jlos_paging_context_clone(self->mm->pc, &s_kernel_paging_context);
 
     const jlos_hal_kernel_segments_t *seg = jlos_hal_get_kernel_segments();
     if (seg) {
         if (seg->text_start != 0) {
-            jlos_paging_change_flags_range(self->mm,
+            jlos_paging_change_flags_range(self->mm->pc,
                 JLOS_PAGE_ALIGN_DOWN(seg->text_start),
                 JLOS_PAGE_ALIGN_DOWN(seg->text_end + JLOS_PAGE_SIZE - 1), JLOS_PTE_USER_RO);
         }
         if (seg->rodata_start != 0) {
-            jlos_paging_change_flags_range(self->mm,
+            jlos_paging_change_flags_range(self->mm->pc,
                 JLOS_PAGE_ALIGN_DOWN(seg->rodata_start),
                 JLOS_PAGE_ALIGN_DOWN(seg->rodata_end + JLOS_PAGE_SIZE - 1), JLOS_PTE_USER_RO);
         }
         if (seg->data_start != 0) {
-            jlos_paging_change_flags_range(self->mm,
+            jlos_paging_change_flags_range(self->mm->pc,
                 JLOS_PAGE_ALIGN_DOWN(seg->data_start),
                 JLOS_PAGE_ALIGN_DOWN(seg->data_end + JLOS_PAGE_SIZE - 1), JLOS_PTE_USER_RW);
         }
         if (seg->bss_start != 0) {
-            jlos_paging_change_flags_range(self->mm,
+            jlos_paging_change_flags_range(self->mm->pc,
                 JLOS_PAGE_ALIGN_DOWN(seg->bss_start),
                 JLOS_PAGE_ALIGN_DOWN(seg->bss_end + JLOS_PAGE_SIZE - 1), JLOS_PTE_USER_RW);
         }
@@ -240,13 +240,13 @@ static int32_t jlos_task_create_user_stack(jlos_task_t *self)
         void *frame = jlos_page_frame_malloc();
         if (frame) {
             jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
-            jlos_paging_map(self->mm, stack_base, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW);
-            /* 仅映射栈底1页; user_esp=栈顶, 首次push依赖#PF demand-map自愈 */
-            (void)self;
+            jlos_paging_map(self->mm->pc, stack_base, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW);
         } else {
             printk_err("[ustack] pid=%u frame alloc FAILED\n", self->pid);
         }
     }
+    jlos_vma_add(self->mm, stack_base,
+        stack_base + JLOS_TASK_USER_STACK_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_STACK);
     return 0;
 }
 
@@ -280,8 +280,8 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
     int32_t ret = jlos_task_create_user_mm(self);
     if (ret < 0) {
         if (self->mm) {
-            jlos_paging_context_destroy(self->mm);
-            jlos_kfree(self->mm);
+            jlos_mm_destroy(self->mm);
+            self->mm = NULL;
         }
         jlos_kfree(self->fds);
         jlos_kfree(self->stack);
@@ -289,8 +289,8 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
     }
     ret = jlos_task_create_user_stack(self);
     if (ret < 0) {
-        jlos_paging_context_destroy(self->mm);
-        jlos_kfree(self->mm);
+        jlos_mm_destroy(self->mm);
+        self->mm = NULL;
         jlos_kfree(self->fds);
         jlos_kfree(self->stack);
         return ret;
@@ -308,9 +308,12 @@ static void jlos_task_unmap_user_stack(jlos_task_t *task)
     }
     uint32_t base = JLOS_PAGE_ALIGN_DOWN((uint32_t)task->user_stack);
     uint32_t top = base + task->user_stack_size;
-    jlos_paging_context_t *mm = task->mm ? task->mm : jlos_active_paging_context;
-    for (uint32_t addr = base; addr < top; addr += JLOS_PAGE_FRAME_SIZE) {
-        jlos_paging_unmap(mm, addr);
+    if (task->mm) {
+        jlos_vma_remove_range(task->mm, base, top);
+    } else {
+        for (uint32_t addr = base; addr < top; addr += JLOS_PAGE_FRAME_SIZE) {
+            jlos_paging_unmap(jlos_active_paging_context, addr);
+        }
     }
     task->user_stack = NULL;
 }
@@ -330,8 +333,7 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
         task->stack = NULL;
     }
     if (task->mm) {
-        jlos_paging_context_destroy(task->mm);
-        jlos_kfree(task->mm);
+        jlos_mm_destroy(task->mm);
         task->mm = NULL;
     } else {
         jlos_task_unmap_user_stack(task);
@@ -537,7 +539,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
         return;
     }
 
-    jlos_paging_switch(next->mm ? next->mm : &s_kernel_paging_context);
+    jlos_paging_switch(next->mm ? next->mm->pc : &s_kernel_paging_context);
     jlos_arch_tss_set_ctx((uint32_t)(next->stack + next->stack_size));
     jlos_arch_task_ext_switch();
 
@@ -646,28 +648,7 @@ ROLLBACK_OOM:
         return NULL;
     }
     if (parent->mm && child->mm) {
-        for (uint32_t pd_idx = 0; pd_idx < (KERNEL_VIRTUAL_BASE >> 22); pd_idx++) {
-            jlos_page_dir_entry_t *pde = &parent->mm->page_dir->entries[pd_idx];
-            if (!(*pde & JLOS_PDE_PRESENT)) {
-                continue;
-            }
-            uint32_t pt_phys = *pde & JLOS_PAGE_ADDR_MASK;
-            if (jlos_page_frame_pt_present_count_get(pt_phys) == 0) {
-                continue;
-            }
-            jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT(pt_phys);
-            for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
-                jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
-                if (!(*pte & JLOS_PTE_PRESENT)) {
-                    continue;
-                }
-                uint32_t phys = *pte & JLOS_PAGE_ADDR_MASK;
-                uint32_t vir = (pd_idx << 22) | (pt_idx << 12);
-                jlos_page_frame_refcount_inc(phys);
-                jlos_paging_map(child->mm, vir, phys, JLOS_PTE_USER_COW);
-            }
-        }
-        jlos_paging_change_flags_range(parent->mm, 0, KERNEL_VIRTUAL_BASE, JLOS_PTE_USER_COW);
+        jlos_mm_clone_user(child->mm, parent->mm);
     }
     
     jlos_arch_task_fork_prepare_child(parent->stack, child->stack, fork_esp_ref, fork_resume_pc, child);
@@ -675,8 +656,8 @@ ROLLBACK_OOM:
         jlos_kfree(child->stack);
         jlos_kfree(child->fds);
         if (child->mm) {
-            jlos_paging_context_destroy(child->mm);
-            jlos_kfree(child->mm);
+            jlos_mm_destroy(child->mm);
+            child->mm = NULL;
         }
         jlos_kfree(child);
         return NULL;
@@ -693,8 +674,7 @@ int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
         jlos_hash_chain_remove(&g_task_manager_ptr->pid_hash, &task->pid_hash_node);
     }
     if (task->mm) {
-        jlos_paging_context_destroy(task->mm);
-        jlos_kfree(task->mm);
+        jlos_mm_destroy(task->mm);
         task->mm = NULL;
     }
     if (task->stack) {

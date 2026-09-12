@@ -7,6 +7,7 @@
 #include <hal/ext_state.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
+#include <kernel/vma.h>
 
 #define JLOS_TASK_READY             0
 #define JLOS_TASK_RUNNING           1
@@ -83,7 +84,7 @@ typedef struct jlos_task {
     uint32_t                parent_pid;
     jlos_task_exit_code     exit_code;
     bool                    is_user_process;
-    jlos_paging_context_t   *mm;
+    jlos_mm_t               *mm;
     uint32_t                wake_tick;
     bool                    sleeping;
     bool                    yield;

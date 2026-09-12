@@ -191,13 +191,11 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     }
     uint32_t old_brk = g_current_task_ptr->brk_end;
     
-    //brk扩容时，不分配页帧，缺页补帧
-    if (new_brk < old_brk) {
-        uint32_t old_page = JLOS_PAGE_ALIGN_DOWN(old_brk);
-        uint32_t new_page = JLOS_PAGE_ALIGN_UP(new_brk);
-        for (uint32_t addr = new_page; addr < old_page; addr += JLOS_PAGE_FRAME_SIZE) {
-            jlos_paging_unmap(g_current_task_ptr->mm, addr);
-        }
+    if (new_brk > old_brk) {
+        jlos_vma_grow_tail(g_current_task_ptr->mm,
+            g_current_task_ptr->brk_start, new_brk, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_BRK);
+    } else if (new_brk < old_brk) {
+        jlos_vma_shrink_tail(g_current_task_ptr->mm, new_brk, JLOS_VMA_TYPE_BRK);
     }
     g_current_task_ptr->brk_end = new_brk;
     (void)arg2;
@@ -406,7 +404,7 @@ bool jlos_syscall_need_resched()
 bool jlos_access_ok(const void *addr, size_t n)
 {
     jlos_paging_context_t *ctx =
-        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm : jlos_active_paging_context;
+        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm->pc : jlos_active_paging_context;
     return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
 }
 

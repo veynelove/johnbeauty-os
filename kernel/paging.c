@@ -195,10 +195,8 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         }
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
         if (*pte & JLOS_PTE_PRESENT) {
-            printk_err("[MAP-OVR] remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
-            for (;;) {
-                jlos_hal_halt();
-            }
+            printk_err("remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
+            goto halt;
         }
         *pte = (physical_addr & JLOS_PAGE_ADDR_MASK) | flags;
         jlos_page_frame_pt_present_count_inc(pt_phys);
@@ -210,6 +208,10 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         pages_done++;
     }
     return true;
+halt:
+    for (;;) {
+        jlos_hal_halt();
+    }
 }
 
 static bool jlos_paging_map_nolock(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t flags)
@@ -486,39 +488,13 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     }
 
     jlos_task_t *task = g_current_task_ptr;
-    jlos_paging_context_t *ctx = task->mm;
+    jlos_paging_context_t *ctx = task->mm->pc;
 
-    /* demand paging: brk 堆区按需映射 (经典 Linux expand_stack/mmap 语义) */
-    if (!present && task->brk_start && fault_addr >= task->brk_start && fault_addr <task->brk_limit) {
-        uint32_t page_dir = JLOS_PAGE_ALIGN_DOWN(fault_addr);
-        if (page_dir < JLOS_PAGE_ALIGN_UP(task->brk_end)) {
-            void *frame = jlos_page_frame_malloc();
-            if (!frame) {
-                goto page_fault_oom;
-            }
-            jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
-            if (!jlos_paging_map(ctx, page_dir, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW)) {
-                jlos_page_frame_free(frame);
-                goto page_fault_kill;
-            }
+    if (!present) {
+        if (jlos_vma_demand_map(task->mm, fault_addr)) {
             return;
         }
         goto page_fault_kill;
-    }
-    /* demand paging: 用户栈向下生长, 顶部 guard 之下按需映射 */
-    if (!present && task->user_stack && task->user_stack_size
-    && fault_addr >= (uint32_t)task->user_stack && fault_addr < (uint32_t)(task->user_stack + task->user_stack_size)) {
-        uint32_t page_addr = JLOS_PAGE_ALIGN_DOWN(fault_addr);
-        void *frame = jlos_page_frame_malloc();
-        if (!frame) {
-            goto page_fault_oom;
-        }
-        jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
-        if (!jlos_paging_map(ctx, page_addr, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW)) {
-            jlos_page_frame_free(frame);
-            goto page_fault_kill;
-        }
-        return;
     }
     if (present && write && fault_addr < KERNEL_VIRTUAL_BASE) {
         uint32_t page_addr = JLOS_PAGE_ALIGN_DOWN(fault_addr);

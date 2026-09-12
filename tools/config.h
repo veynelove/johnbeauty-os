@@ -18,7 +18,7 @@
 #define KERNEL_CONFIG_DEBUG_LOG         1
 
 #define JLOS_KERNEL_DEBUG               1
-#define JLOS_KERNEL_LOG_FUNC            0
+#define JLOS_KERNEL_LOG_FUNC            1
 #define JLOS_KERNEL_LOG_PRINT_LEVEL     0
 #define JLOS_KERNEL_LOG_PRINT_SUBSYS    0
 

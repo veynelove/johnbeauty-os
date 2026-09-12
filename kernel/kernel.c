@@ -117,7 +117,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     network_init(network_stack, &driver_manager_);
 
 #if KERNEL_CONFIG_ENABLE_TESTS
-    printk_info("running tests...\n");
+    printk_info("=== running tests ===\n");
     memory_manager_test(multiboot_structure);
     pfa_test();
     paging_test();
