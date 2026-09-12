@@ -12,14 +12,14 @@ void jlos_irq_handler_destroy(jlos_irq_handler_t *self)
     jlos_interrupt_handler_destroy(self);
 }
 
-void jlos_irq_manager_init(jlos_irq_manager_t *self, uint16_t offset, jlos_mmu_t *mmu, jlos_task_manager_t *tm)
+void jlos_irq_manager_init()
 {
-    jlos_interrupt_manager_init(self, offset, mmu, tm);
+    jlos_interrupt_manager_init();
 }
 
-void jlos_irq_manager_activate(jlos_irq_manager_t *self)
+void jlos_irq_manager_activate(void)
 {
-    jlos_interrupt_manager_activate(self);
+    jlos_interrupt_manager_activate(jlos_active_irq_manager);
 }
 
 void jlos_irq_manager_deactivate(jlos_irq_manager_t *self)

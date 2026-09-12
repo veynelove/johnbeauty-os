@@ -20,6 +20,7 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
 #include <kernel/device.h>
+#include <net/network.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -54,9 +55,8 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_hal_arch_init();
     printk_info("princess yihan is safe and happy!\n");
 
-    jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_mmu_init();
-    jlos_arch_tss_init(jlos_mmu_data_selector(mmu));
+    jlos_arch_tss_init();
 
     jlos_device_init(multiboot_structure);
     jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
@@ -64,67 +64,52 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_page_frame_allocator_init();
     printk_info("paging initialized\n");
 
-    uint8_t* low_memory_heap = (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START);
-    jlos_memory_manager_t low_memory_manager_;
-    jlos_memory_manager_init(&low_memory_manager_, low_memory_heap, KERNEL_LOW_MEMORY_SIZE);
-    
-    jlos_memory_manager_t memory_manager_;
-    jlos_memory_manager_init_main(&memory_manager_);
+    jlos_memory_manager_init();
 
-    jlos_task_manager_t task_manager_;
-    jlos_task_manager_init(&task_manager_);
+    jlos_task_manager_init();
 
-    jlos_irq_manager_t irq_mgr;
-    jlos_irq_manager_init(&irq_mgr, KERNEL_FIRST_INTERRUPT_VECTOR, mmu, &task_manager_);
+    jlos_irq_manager_init();
     printk_info("interrupt manager initialized\n");
 
-    jlos_syscall_handler_t syscalls;
-    jlos_syscall_handler_init(&syscalls, &irq_mgr, 0x80);
-
-    printk_info("initializing hardware, stage 1 start\n");
-    jlos_driver_manager_t driver_manager_;
-    jlos_driver_manager_init(&driver_manager_);
+    jlos_syscall_handler_init();
+    jlos_driver_manager_init();
 
 #if KERNEL_CONFIG_DEBUG_CONSOLE
-    debug_console_init(&irq_mgr, &driver_manager_);
+    debug_console_init();
 #endif
 
-    jlos_hal_pci_controller_t pci_controller;
-    jlos_hal_pci_init(&pci_controller);
+    jlos_hal_pci_init();
 
-    jlos_memory_manager_t *old_manager = jlos_active_memory_manager;
-    jlos_active_memory_manager = &low_memory_manager_;
+    jlos_memory_manager_switch_low();
     printk_info("switched to low memory manager for PCI driver allocation\n");
 
-    jlos_hal_pci_enumerate_and_bind_drivers(&pci_controller, &driver_manager_, &irq_mgr);
-    jlos_active_memory_manager = old_manager;
+    jlos_hal_pci_enumerate_and_bind_drivers();
+    
+    Jlos_memory_manager_switch_main();
     printk_info("switched back to main memory manager\n");
-    printk_info("initializing hardware, stage 2 start\n");
-    jlos_driver_manager_activate_all(&driver_manager_);
-
-    printk_info("initializing hardware, stage 3 start\n");
+    
+    jlos_driver_manager_activate_all();
 
     jlos_hal_timer_start_periodic(JLOS_HAL_TIME_FREQ_HZ);
     printk_info("PIT timer initialized\n");
 
-    jlos_irq_manager_activate(&irq_mgr);
+    jlos_irq_manager_activate();
     printk_info("interrupts activated\n");
 
 #if KERNEL_CONFIG_DEBUG_NETWORK
     printk_info("initializing network stack...\n");
 #endif
-    network_stack_t *network_stack = (network_stack_t *)jlos_kalloc(sizeof(network_stack_t));
-    network_init(network_stack, &driver_manager_);
+    network_init();
 
 #if KERNEL_CONFIG_ENABLE_TESTS
     printk_info("=== running tests ===\n");
     memory_manager_test(multiboot_structure);
     pfa_test();
     paging_test();
-    multitask_test(mmu, &task_manager_);
+    multitask_test(jlos_mmu_get_kernel(), g_task_manager_ptr);
     hard_driver_test();
-    http_server_test(&network_stack->tcp);
-    udp_server_test(&network_stack->udp);
+    http_server_test(&g_network_stack->tcp);
+    udp_server_test(&g_network_stack->udp);
 #endif
 
     for (;;) {

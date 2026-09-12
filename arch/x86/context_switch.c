@@ -116,12 +116,12 @@ void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, 
     task->sp.value = (uint32_t)top;
 }
 
-void jlos_arch_tss_init(uint16_t kernel_data_selector)
+void jlos_arch_tss_init(void)
 {
     jlos_gdt_t *gdt = jlos_gdt_get_kernel();
     uint16_t tss_sel = jlos_gdt_tss_selector(gdt);
     jlos_gdt_set_tss(gdt, (uint32_t)&s_tss, sizeof(jlos_x86_tss_t) - 1);
-    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, kernel_data_selector);
+    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, jlos_gdt_data_segment_selector(gdt));
     jlos_x86_tss_load(tss_sel);
 }
 

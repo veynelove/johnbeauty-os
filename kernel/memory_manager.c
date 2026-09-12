@@ -8,11 +8,17 @@
 
 #define JLOS_KERNEL_LOG_SUBSYS "mm"
 
-jlos_memory_manager_t *jlos_active_memory_manager = NULL;
+static jlos_memory_manager_t    s_low_memory_manager;
+static jlos_memory_manager_t    s_main_memory_manager;
+jlos_memory_manager_t           *jlos_low_memory_manager = &s_low_memory_manager;
+jlos_memory_manager_t           *jlos_main_memory_manager = &s_main_memory_manager;
+
+jlos_memory_manager_t           *jlos_active_memory_manager = NULL;
+
 static jlos_memory_slab_cache_t *s_kalloc_caches[JLOS_MM_CLASS_COUNT];
 
-static jlos_spinlock_t s_slab_lock = JLOS_SPINLOCK_INIT;
-static jlos_spinlock_t s_heap_lock = JLOS_SPINLOCK_INIT;
+static jlos_spinlock_t          s_slab_lock = JLOS_SPINLOCK_INIT;
+static jlos_spinlock_t          s_heap_lock = JLOS_SPINLOCK_INIT;
 
 static inline int mm_size_to_class(size_t size, int max_class)
 {
@@ -60,9 +66,8 @@ static inline int mm_bitmap_find(jlos_memory_manager_t *self, uint32_t min_class
     return __builtin_ctz(masked);
 }
 
-void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t size)
+static void mm_init(jlos_memory_manager_t *self, uint8_t *start, size_t size)
 {
-    jlos_active_memory_manager = self;
     self->heap_start = start;
     self->heap_end = start + size;
     self->heap_current = self->heap_end;
@@ -95,7 +100,12 @@ void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_
     jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
 }
 
-void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
+void jlos_memory_manager_init_low(void)
+{
+    mm_init(jlos_low_memory_manager, (uint8_t*)PHYS_TO_VIRT(KERNEL_LOW_MEMORY_ADDR_START), KERNEL_LOW_MEMORY_SIZE);
+}
+
+void jlos_memory_manager_init_main(void)
 {
     uint32_t initial_pages = KERNEL_MAIN_MEMORY_MIN_SIZE / JLOS_PAGE_FRAME_SIZE;
     uint8_t *heap_start = (uint8_t *)KERNEL_HEAP_VIRT_BASE;
@@ -117,15 +127,32 @@ void jlos_memory_manager_init_main(jlos_memory_manager_t *self)
                 jlos_hal_halt();
             }
         }
-        jlos_page_frame_set_owner_type(phys, (void *)self, JLOS_PAGE_FRAME_TYPE_KV_HEAP);
+        jlos_page_frame_set_owner_type(phys, (void *)jlos_main_memory_manager, JLOS_PAGE_FRAME_TYPE_KV_HEAP);
         jlos_page_frame_refcount_inc(phys);
     }
-    jlos_memory_manager_init(self, heap_start, KERNEL_MAIN_MEMORY_MIN_SIZE);
-    jlos_memory_chunk_t *first = jlos_list_empty(&self->chunk_head) ?
-        NULL : container_of(self->chunk_head.next, jlos_memory_chunk_t, link);
+    mm_init(jlos_main_memory_manager, heap_start, KERNEL_MAIN_MEMORY_MIN_SIZE);
+    jlos_memory_chunk_t *first = jlos_list_empty(&jlos_main_memory_manager->chunk_head) ?
+        NULL : container_of(jlos_main_memory_manager->chunk_head.next, jlos_memory_chunk_t, link);
 
-    printk_info("init_main: first=%p size=%u heap=[%p,%p) current=%p\n",
-        first, first ? (unsigned)first->size : 0, self->heap_start, self->heap_end, self->heap_current);
+    printk_info("init_main: first=%p size=%u heap=[%p,%p) current=%p\n", first, first ? (unsigned)first->size :
+        0, jlos_main_memory_manager->heap_start, jlos_main_memory_manager->heap_end, jlos_main_memory_manager->heap_current);
+}
+
+void jlos_memory_manager_init(void)
+{
+    jlos_memory_manager_init_low();
+    jlos_memory_manager_init_main();
+    jlos_active_memory_manager = jlos_main_memory_manager;
+}
+
+void jlos_memory_manager_switch_low(void)
+{
+    jlos_active_memory_manager = jlos_low_memory_manager;
+}
+
+void Jlos_memory_manager_switch_main(void)
+{
+    jlos_active_memory_manager = jlos_main_memory_manager;
 }
 
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self)

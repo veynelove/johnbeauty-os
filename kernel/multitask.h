@@ -35,7 +35,6 @@
 #define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
-extern uint32_t _kernel_end;
 #define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
 #define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
 #define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_U32OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
@@ -43,6 +42,10 @@ extern uint32_t _kernel_end;
                                      (JLOS_KERN_U32OF(p) + (sz) <= 0xFFFFFFFFu) )
 
 #define jLOS_TASK_PID_HASH_SIZE     256
+
+#define jlos_task_curr()  (g_current_task_ptr)
+
+extern uint32_t _kernel_end;
 
 typedef enum {
     TASK_EXIT_DEAUFT        = 0,
@@ -95,9 +98,6 @@ typedef struct jlos_task {
     uint32_t                default_slice;
     uint32_t                last_ready_tick;
     jlos_task_fd_t          *fds;
-    uint32_t                brk_start;
-    uint32_t                brk_end;
-    uint32_t                brk_limit;
     jlos_list_head_t        wait_node;
     jlos_hash_node_t        pid_hash_node;
     jlos_list_head_t        zombie_node;
@@ -122,9 +122,8 @@ typedef struct {
     bool                need_resched;
 } jlos_task_manager_t;
 
-#define jlos_task_curr()  (g_current_task_ptr)
-
 extern jlos_task_t *g_current_task_ptr;
+extern jlos_task_manager_t *g_task_manager_ptr;
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
@@ -149,7 +148,7 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick);
 const char *jlos_task_status_map_str(uint32_t status);
 
-void jlos_task_manager_init(jlos_task_manager_t* self);
+void jlos_task_manager_init();
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
 

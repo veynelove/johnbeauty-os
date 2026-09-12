@@ -128,3 +128,4 @@ kernel_stack_bottom:
     .space 4 * 1024 * 1024
 .global kernel_stack
 kernel_stack:
+.section .note.GNU-stack,"",%progbits

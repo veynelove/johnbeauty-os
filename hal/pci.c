@@ -3,9 +3,9 @@
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
 
-void jlos_hal_pci_init(jlos_hal_pci_controller_t *self)
+void jlos_hal_pci_init(void)
 { 
-    jlos_pci_controller_init(self);
+    jlos_pci_controller_init();
 }
 
 uint32_t jlos_hal_pci_config_read32(jlos_hal_pci_controller_t *self, uint16_t bus, uint16_t dev, uint16_t func, uint16_t reg)
@@ -71,10 +71,9 @@ void jlos_hal_pci_config_write8(jlos_hal_pci_controller_t *self, uint16_t bus, u
     jlos_pci_controller_write(self, bus, dev, func, aligned, dword);
 }
 
-void jlos_hal_pci_enumerate_and_bind_drivers(jlos_hal_pci_controller_t *self, jlos_hal_pci_drv_mgr_t *drv_mgr,
-    jlos_hal_pci_irq_mgr_t *irq_mgr)
+void jlos_hal_pci_enumerate_and_bind_drivers(void)
 {
-    jlos_pci_controller_select_drivers(self, (jlos_driver_manager_t *)drv_mgr, (jlos_interrupt_manager_t *)irq_mgr);
+    jlos_pci_controller_select_drivers(g_driver_manager_ptr, (jlos_interrupt_manager_t *)jlos_active_irq_manager);
 }
 
 

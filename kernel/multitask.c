@@ -11,12 +11,13 @@
 
 #define JLOS_KERNEL_LOG_SUBSYS "sched"
 
-extern jlos_task_t *g_current_task_ptr;
-extern jlos_paging_context_t s_kernel_paging_context;
+extern jlos_task_t              *g_current_task_ptr;
+extern jlos_paging_context_t    s_kernel_paging_context;
 
-jlos_task_manager_t *g_task_manager_ptr = NULL;
+static jlos_task_manager_t      s_task_manager;
+jlos_task_manager_t             *g_task_manager_ptr = &s_task_manager;
 
-static uint32_t s_next_pid = 1;
+static uint32_t                 s_next_pid = 1;
 
 static inline bool task_on_rq(jlos_task_t *t)
 {
@@ -181,9 +182,6 @@ int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(vo
     self->user_stack = NULL;
     self->user_stack_size = 0;
     self->fds = NULL;
-    self->brk_start = 0;
-    self->brk_end = 0;
-    self->brk_limit = 0;
     jlos_memset(self->stack, 0, JLOS_TASK_STACK_SIZE);
 
     jlos_cpu_state_init(&self->cpustate);
@@ -201,6 +199,9 @@ static int32_t jlos_task_create_user_mm(jlos_task_t *self)
         return -TASK_ERR_NOMEM;
     }
     jlos_paging_context_clone(self->mm->pc, &s_kernel_paging_context);
+    self->mm->brk_start = JLOS_TASK_USER_BRK_START;
+    self->mm->brk_end = self->mm->brk_start;
+    self->mm->brk_limit = JLOS_TASK_USER_BRK_LIMIT;
 
     const jlos_hal_kernel_segments_t *seg = jlos_hal_get_kernel_segments();
     if (seg) {
@@ -236,15 +237,6 @@ static int32_t jlos_task_create_user_stack(jlos_task_t *self)
     uint32_t stack_base = JLOS_TASK_USER_STACK_TOP - JLOS_TASK_USER_STACK_SIZE;
     self->user_stack = (uint8_t *)stack_base;
     self->user_stack_size = JLOS_TASK_USER_STACK_SIZE;
-    {
-        void *frame = jlos_page_frame_malloc();
-        if (frame) {
-            jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
-            jlos_paging_map(self->mm->pc, stack_base, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW);
-        } else {
-            printk_err("[ustack] pid=%u frame alloc FAILED\n", self->pid);
-        }
-    }
     jlos_vma_add(self->mm, stack_base,
         stack_base + JLOS_TASK_USER_STACK_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_STACK);
     return 0;
@@ -271,9 +263,6 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
         self->fds[i].obj = NULL;
         self->fds[i].flags = i ? JLOS_TASK_FD_WRITE_ONLY : JLOS_TASK_FD_READ_ONLY;
     }
-    self->brk_start = JLOS_TASK_USER_BRK_START;
-    self->brk_end = self->brk_start;
-    self->brk_limit = JLOS_TASK_USER_BRK_LIMIT;
     self->is_user_process = true;
     jlos_memset(self->stack, 0, JLOS_TASK_STACK_SIZE);
 
@@ -392,8 +381,9 @@ void jlos_task_fd_free(jlos_task_t *task, int32_t fd)
     task->fds[fd].flags = 0;
 }
 
-void jlos_task_manager_init(jlos_task_manager_t* self)
+void jlos_task_manager_init()
 {
+    jlos_task_manager_t *self = &s_task_manager;
     jlos_hash_chain_init(&self->pid_hash, jLOS_TASK_PID_HASH_SIZE, jlos_hash_uint32, pid_hash_cmp);
     for (uint32_t l = 0; l < JLOS_TASK_MLFQ_LEVELS; l++) {
         jlos_list_init(&self->rq[l].head);
@@ -428,7 +418,6 @@ void jlos_task_manager_init(jlos_task_manager_t* self)
     JLOS_TASK_SET_RUNNING(self->idle_task);
     jlos_hash_chain_insert(&self->pid_hash, &self->idle_task->pid, &self->idle_task->pid_hash_node);
     g_current_task_ptr = self->idle_task;
-    g_task_manager_ptr = self;
 }
 
 void jlos_task_manager_destroy(jlos_task_manager_t* self)

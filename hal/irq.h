@@ -23,8 +23,8 @@ extern void jlos_irq_handler_init(jlos_irq_handler_t *self, jlos_irq_manager_t *
 extern void jlos_irq_handler_destroy(jlos_irq_handler_t *self);
 extern uint32_t jlos_irq_handler_handle(uint32_t esp);
 
-extern void jlos_irq_manager_init(jlos_irq_manager_t *self, uint16_t offset, jlos_mmu_t *mmu, jlos_task_manager_t *tm);
-extern void jlos_irq_manager_activate(jlos_irq_manager_t *self);
+extern void jlos_irq_manager_init();
+extern void jlos_irq_manager_activate(void);
 extern void jlos_irq_manager_deactivate(jlos_irq_manager_t *self);
 extern uint32_t jlos_irq_manager_handle(uint8_t irq, uint32_t esp);
 extern uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t *self);
@@ -33,8 +33,6 @@ extern void jlos_irq_manager_register(jlos_irq_manager_t *self, uint8_t irq, jlo
 
 extern void jlos_irq_ignore_request(void);
 #endif
-
-#define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
 
 typedef struct {
     uint32_t error;

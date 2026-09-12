@@ -5,6 +5,9 @@
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 
+extern jlos_irq_manager_t *jlos_active_irq_manager;
+extern jlos_driver_manager_t *g_driver_manager_ptr;
+
 #define JLOS_VGA_TEXT_BUFFER_VA  ((uint16_t *)PHYS_TO_VIRT(0xB8000))
 
 typedef struct {
@@ -56,7 +59,7 @@ void mouse_console_init(mouse_console_t *mouse_handler)
         | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x00FF));
 }
 
-void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+static void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
     console_keyboard_handler_t *kbhandler = (console_keyboard_handler_t *)jlos_kalloc(sizeof(console_keyboard_handler_t));
     jlos_keyboard_event_handler_init(&kbhandler->base);
@@ -67,7 +70,7 @@ void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)keyboard);
 }
 
-void debug_console_mouse(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+static void debug_console_mouse(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
 {
     mouse_console_t *mouse_handler_ = (mouse_console_t *)jlos_kalloc(sizeof(mouse_console_t));
     jlos_mouse_event_handler_init(&mouse_handler_->base);
@@ -78,8 +81,8 @@ void debug_console_mouse(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *
     jlos_driver_manager_add_driver(driver_manager_, (jlos_driver_t*)mouse);
 }
 
-void debug_console_init(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)
+void debug_console_init()
 {
-    debug_console_keyboard(interrupts, driver_manager_);
-    debug_console_mouse(interrupts, driver_manager_);
+    debug_console_keyboard(jlos_active_irq_manager, g_driver_manager_ptr);
+    debug_console_mouse(jlos_active_irq_manager, g_driver_manager_ptr);
 }

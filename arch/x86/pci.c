@@ -6,8 +6,11 @@
 
 #define JLOS_KERNEL_LOG_SUBSYS "pci"
 
-void jlos_pci_controller_init(jlos_pci_controller_t* self)
+static jlos_pci_controller_t s_pci_controller;
+
+void jlos_pci_controller_init(void)
 {
+    jlos_pci_controller_t *self = &s_pci_controller;
     jlos_port32_bit_init(&self->data_port, 0xCFC);
     jlos_port32_bit_init(&self->command_port, 0xCF8);
 }
@@ -63,9 +66,10 @@ bool jlos_pci_controller_device_has_functions(jlos_pci_controller_t* self, uint1
     return jlos_pci_controller_read(self, bus, device, 0, 0x0E) & (1 << 7);
 }
 
-void jlos_pci_controller_select_drivers(jlos_pci_controller_t* self, jlos_driver_manager_t *driver_manager,
+void jlos_pci_controller_select_drivers(jlos_driver_manager_t *driver_manager,
     jlos_interrupt_manager_t *interrupts)
 {
+    jlos_pci_controller_t *self = &s_pci_controller;
     for (int bus = 0; bus < 8; bus++) {
         for (int device = 0; device < 32; device++) {
             int num_functions = jlos_pci_controller_device_has_functions(self, bus, device) ? 8 : 1;

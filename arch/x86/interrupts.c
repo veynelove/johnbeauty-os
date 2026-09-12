@@ -13,17 +13,18 @@
 extern void jlos_arch_tss_init_for_asm(void);
 extern jlos_task_t *g_current_task_ptr;
 
-jlos_interrupt_manager_t    *jlos_active_interrupt_manager = NULL;
+static jlos_interrupt_manager_t s_interrupt_manager;
+jlos_interrupt_manager_t        *jlos_active_interrupt_manager = &s_interrupt_manager;
 
 /* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
-uint32_t                    jlos_syscall_ring3_ctx = 0;
-uint32_t                    jlos_syscall_ring3_kstack = 0;
+uint32_t                        jlos_syscall_ring3_ctx = 0;
+uint32_t                        jlos_syscall_ring3_kstack = 0;
 
-jlos_gate_descriptor_t      jlos_interrupt_descriptor_table[256];
+jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[256];
 
 /* PIC IRQ 动态屏蔽：驱动注册 handler 时自动 unmask，避免无处理的 IRQ 导致 UNHANDLED */
-static uint8_t              s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
-static uint8_t              s_pic_slave_mask  = 0xFF;  /* 1111 1111 — 默认关 slave 全部（IRQ8~15） */
+static uint8_t                  s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
+static uint8_t                  s_pic_slave_mask  = 0xFF;  /* 1111 1111 — 默认关 slave 全部（IRQ8~15） */
 
 typedef struct {
     uint16_t size;
@@ -87,9 +88,9 @@ uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self,
     (void)self;
 }
 
-void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset,
-    jlos_gdt_t* gdt, jlos_task_manager_t *task_manager)
+void jlos_interrupt_manager_init()
 {
+    jlos_interrupt_manager_t *self = &s_interrupt_manager;
     jlos_port8_bit_slow_init(&self->pic_master_command, 0x20);
     jlos_port8_bit_slow_init(&self->pic_master_data, 0x21);
     jlos_port8_bit_slow_init(&self->pic_slave_command, 0xA0);
@@ -100,8 +101,8 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
     jlos_port8_bit_slow_write(&self->pic_slave_command, 0x11);
 
     // ICW2: remap IRQ base vectors
-    jlos_port8_bit_slow_write(&self->pic_master_data, (uint8_t)hardware_interruptoffset);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, (uint8_t)(hardware_interruptoffset + 8));
+    jlos_port8_bit_slow_write(&self->pic_master_data, (uint8_t)KERNEL_FIRST_INTERRUPT_VECTOR);
+    jlos_port8_bit_slow_write(&self->pic_slave_data, (uint8_t)(KERNEL_FIRST_INTERRUPT_VECTOR + 8));
 
     // ICW3: master has slave at IRQ2, slave cascade id 2
     jlos_port8_bit_slow_write(&self->pic_master_data, 0x04);
@@ -117,9 +118,9 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
     jlos_port8_bit_slow_write(&self->pic_master_data, s_pic_master_mask);
     jlos_port8_bit_slow_write(&self->pic_slave_data, s_pic_slave_mask);
 
-    self->task_manager = task_manager;
-    self->hardware_interrupt_offset = hardware_interruptoffset;
-    uint16_t code_segment = jlos_gdt_code_segment_selector(gdt);
+    self->task_manager = g_task_manager_ptr;
+    self->hardware_interrupt_offset = KERNEL_FIRST_INTERRUPT_VECTOR;
+    uint16_t code_segment = jlos_gdt_code_segment_selector(jlos_gdt_get_kernel());
     const uint8_t IDT_INTERRUPT_GATE = 0xE;
     const uint8_t IDT_TRAP_GATE = 0xF;
     
@@ -131,39 +132,39 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
         jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_ignore_interrupt_request, 0,
             IDT_INTERRUPT_GATE);
     }
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR, code_segment,
         &jlos_handle_interrupt_request0x00, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x01, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x01, code_segment,
         &jlos_handle_interrupt_request0x01, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x02, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x02, code_segment,
         &jlos_handle_interrupt_request0x02, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x03, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x03, code_segment,
         &jlos_handle_interrupt_request0x03, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x04, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x04, code_segment,
         &jlos_handle_interrupt_request0x04, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x05, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x05, code_segment,
         &jlos_handle_interrupt_request0x05, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x06, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x06, code_segment,
         &jlos_handle_interrupt_request0x06, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x07, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x07, code_segment,
         &jlos_handle_interrupt_request0x07, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x08, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x08, code_segment,
         &jlos_handle_interrupt_request0x08, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x09, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x09, code_segment,
         &jlos_handle_interrupt_request0x09, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0A, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0A, code_segment,
         &jlos_handle_interrupt_request0x0a, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0B, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0B, code_segment,
         &jlos_handle_interrupt_request0x0b, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0C, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0C, code_segment,
         &jlos_handle_interrupt_request0x0c, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0D, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0D, code_segment,
         &jlos_handle_interrupt_request0x0d, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0E, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0E, code_segment,
         &jlos_handle_interrupt_request0x0e, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x0F, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x0F, code_segment,
         &jlos_handle_interrupt_request0x0f, 0, IDT_INTERRUPT_GATE);
-    jlos_set_interrupt_descriptor_table_entry(hardware_interruptoffset + 0x31, code_segment,
+    jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x31, code_segment,
         &jlos_handle_interrupt_request0x31, 0, IDT_INTERRUPT_GATE);
 
     /* syscall 入口：DPL=3 允许 ring3 调用，但 handler 运行在 ring0（内核代码段） */
@@ -193,8 +194,8 @@ void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardwa
 
     jlos_port8_bit_slow_write(&self->pic_master_command, 0x11);
     jlos_port8_bit_slow_write(&self->pic_slave_command, 0x11);
-    jlos_port8_bit_slow_write(&self->pic_master_data, hardware_interruptoffset);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, hardware_interruptoffset + 8);
+    jlos_port8_bit_slow_write(&self->pic_master_data, KERNEL_FIRST_INTERRUPT_VECTOR);
+    jlos_port8_bit_slow_write(&self->pic_slave_data, KERNEL_FIRST_INTERRUPT_VECTOR + 8);
     jlos_port8_bit_slow_write(&self->pic_master_data, 0x04);
     jlos_port8_bit_slow_write(&self->pic_slave_data, 0x02); 
     jlos_port8_bit_slow_write(&self->pic_master_data, 0x01);

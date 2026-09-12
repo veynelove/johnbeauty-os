@@ -16,3 +16,4 @@ jlos_hal_context_switch:
     popl %ebp
     ret                      # 回到目标任务当初 call 的下一条
 .size jlos_hal_context_switch, . - jlos_hal_context_switch
+.section .note.GNU-stack,"",%progbits

@@ -47,6 +47,9 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)
     if (!dst || !src || !dst->pc || !src->pc) {
         return false;
     }
+    dst->brk_start = src->brk_start;
+    dst->brk_end = src->brk_end;
+    dst->brk_limit = src->brk_limit;
     jlos_vma_t *svma;
     jlos_list_for_each_entry(svma, &src->vma_list, link) {
         jlos_vma_t *dvma = (jlos_vma_t *)jlos_kalloc(sizeof(jlos_vma_t));
@@ -98,6 +101,8 @@ jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t f
     vma->flags = flags;
     vma->type = type;
     jlos_list_init(&vma->link);
+    vma->file = NULL;
+    vma->offset = 0;
 
     jlos_vma_t *pos;
     jlos_list_for_each_entry(pos, &mm->vma_list, link) {

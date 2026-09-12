@@ -217,3 +217,4 @@ ring3_finish:
     popl %eax
     addl $8, %esp
     iret
+.section .note.GNU-stack,"",%progbits

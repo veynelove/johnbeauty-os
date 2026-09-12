@@ -18,7 +18,9 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_WAIT_PID           = 10,
     JLOS_SYSCALL_CREATE_PIPE        = 11,
     JLOS_SYSCALL_TASK_FD_CLOSE      = 12,
-    JLOS_SYSCALL_TASK_BRK           = 13
+    JLOS_SYSCALL_TASK_BRK           = 13,
+    JLOS_SYSCALL_MMAP               = 14,
+    JLOS_SYSCALL_MUNMAP             = 15
 };
 
 enum jlos_syscall_misscode {

@@ -26,6 +26,8 @@ typedef struct jlos_vma {
     uint32_t            flags;
     jlos_vma_type_t     type;
     jlos_list_head_t    link;
+    void                *file;
+    uint32_t            offset;
 } jlos_vma_t;
 
 typedef struct jlos_mm {

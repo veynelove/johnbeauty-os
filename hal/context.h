@@ -20,7 +20,7 @@ extern void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t
 extern void jlos_arch_task_fork_prepare_child(uint8_t *parent_stack, uint8_t *child_stack, uint32_t fork_esp_ref,
                 uint32_t fork_resume_pc, void *child_task);
 
-extern void jlos_arch_tss_init(uint16_t kernel_data_selector);
+extern void jlos_arch_tss_init(void);
 extern void jlos_arch_tss_set_ctx(uint32_t ctx);
 extern void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size);
 

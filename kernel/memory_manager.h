@@ -43,9 +43,16 @@ typedef struct {
 } jlos_kv_contig_hdr_t;
 
 extern jlos_memory_manager_t *jlos_active_memory_manager;
+extern jlos_memory_manager_t *jlos_low_memory_manager;
+extern jlos_memory_manager_t *jlos_main_memory_manager;
 
-void jlos_memory_manager_init(jlos_memory_manager_t* self, uint8_t *start, size_t size);
-void jlos_memory_manager_init_main(jlos_memory_manager_t *self);
+void jlos_memory_manager_init_low(void);
+void jlos_memory_manager_init_main(void);
+void jlos_memory_manager_init(void);
+
+void jlos_memory_manager_switch_low(void);
+void Jlos_memory_manager_switch_main(void);
+
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self);
 
 void *jlos_memory_manager_malloc(jlos_memory_manager_t* self, size_t size);

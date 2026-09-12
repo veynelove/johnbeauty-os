@@ -40,13 +40,13 @@ typedef struct {
     jlos_port32_bit_t command_port;
 } jlos_pci_controller_t;
 
-void jlos_pci_controller_init(jlos_pci_controller_t* self);
+void jlos_pci_controller_init(void);
 
 uint32_t jlos_pci_controller_read(jlos_pci_controller_t* self, uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset);
 void jlos_pci_controller_write(jlos_pci_controller_t* self, uint16_t bus, uint16_t device, uint16_t function, uint32_t registeroffset, uint32_t value);
 bool jlos_pci_controller_device_has_functions(jlos_pci_controller_t* self, uint16_t bus, uint16_t device);
 
-void jlos_pci_controller_select_drivers(jlos_pci_controller_t* self, jlos_driver_manager_t *driver_manager, jlos_interrupt_manager_t *interrupts);
+void jlos_pci_controller_select_drivers(jlos_driver_manager_t *driver_manager, jlos_interrupt_manager_t *interrupts);
 jlos_driver_t *jlos_pci_controller_get_driver(jlos_pci_controller_t* self, jlos_pci_device_descriptor_t dev, jlos_interrupt_manager_t *interrupts);
 jlos_driver_t *jlos_pci_network_controller_handle(jlos_pci_controller_t* self, jlos_pci_device_descriptor_t dev, jlos_interrupt_manager_t *interrupts);
 

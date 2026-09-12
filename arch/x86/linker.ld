@@ -4,6 +4,13 @@ OUTPUT_ARCH(i386:i386)
 
 KERNEL_VIRTUAL_BASE = 0xC0000000;
 
+PHDRS
+{
+    boot PT_LOAD FLAGS(5);   /* R+X */
+    code PT_LOAD FLAGS(5);   /* R+X */
+    data PT_LOAD FLAGS(6);   /* R+W */
+}
+
 SECTIONS
 {
     . = 0x100000;
@@ -15,7 +22,7 @@ SECTIONS
         *(.multiboot)
         *(.boot)
         . = ALIGN(4K);
-    }
+    } :boot
     __phys_dot = LOADADDR(.boot) + SIZEOF(.boot);
     _boot_end = KERNEL_VIRTUAL_BASE + __phys_dot;
     _boot_end_phys = __phys_dot;
@@ -28,7 +35,7 @@ SECTIONS
         *(.text*)
         . = ALIGN(4K);
         _text_end = .;
-    }
+    } :code
     __phys_dot = LOADADDR(.text) + SIZEOF(.text);
 
     .rodata : AT(__phys_dot)
@@ -37,7 +44,7 @@ SECTIONS
         *(.rodata*)
         . = ALIGN(4K);
         _rodata_end = .;
-    }
+    } :code
     __phys_dot = LOADADDR(.rodata) + SIZEOF(.rodata);
 
     .data : AT(__phys_dot)
@@ -50,7 +57,7 @@ SECTIONS
         *(.data)
         . = ALIGN(4K);
         _data_end = .;
-    }
+    } :data
     __phys_dot = LOADADDR(.data) + SIZEOF(.data);
 
     .bss : AT(__phys_dot)
@@ -60,7 +67,7 @@ SECTIONS
         *(COMMON)
         . = ALIGN(4K);
         _bss_end = .;
-    }
+    } :data
     __phys_dot = LOADADDR(.bss) + SIZEOF(.bss);
 
     . = ALIGN(4K);

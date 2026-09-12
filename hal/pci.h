@@ -20,7 +20,7 @@ typedef jlos_irq_manager_t            jlos_hal_pci_irq_mgr_t;
 typedef jlos_driver_manager_t         jlos_hal_pci_drv_mgr_t;
 
 /* ---------------- 控制器生命周期 ---------------- */
-void jlos_hal_pci_init(jlos_hal_pci_controller_t *self);
+void jlos_hal_pci_init(void);
 
 /* ---------------- Config 空间读写（任意宽度） ---------------- */
 uint32_t jlos_hal_pci_config_read32(jlos_hal_pci_controller_t *self,
@@ -45,9 +45,7 @@ void jlos_hal_pci_config_write8 (jlos_hal_pci_controller_t *self,
 /* ---------------- 枚举与驱动绑定 ---------------- */
 /* 遍历总线上所有设备（0-255 bus，0-31 dev，0-7 func），把能认出的设备绑到 driver manager。
  * 底层包装 arch 的 jlos_pci_controller_select_drivers */
-void jlos_hal_pci_enumerate_and_bind_drivers(jlos_hal_pci_controller_t *self,
-                                             jlos_hal_pci_drv_mgr_t *drv_mgr,
-                                             jlos_hal_pci_irq_mgr_t *irq_mgr);
+void jlos_hal_pci_enumerate_and_bind_drivers(void);
 
 /* ---------------- 设备描述符 / BAR 读取 ---------------- */
 jlos_hal_pci_device_t jlos_hal_pci_get_device_descriptor(jlos_hal_pci_controller_t *self,

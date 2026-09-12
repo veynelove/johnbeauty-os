@@ -10,6 +10,8 @@
 
 #define JLOS_SYSCALL_WRITE_BUF_SIZE_MAX 4096
 
+#define KERNEL_SYSCALL_INTERRUPT_NUM    0x80
+
 typedef struct jlos_syscall_handler jlos_syscall_handler_t;
 
 typedef int32_t (*jlos_syscall_func_t)(uint32_t arg1, uint32_t arg2, uint32_t arg3);
@@ -22,7 +24,7 @@ struct jlos_syscall_handler {
     jlos_syscall_func_t dispatch[JLOS_SYSCALL_MAX];
 };
 
-void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number);
+void jlos_syscall_handler_init(void);
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self);
 int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uint32_t arg1, uint32_t arg2, uint32_t arg3);
 bool jlos_syscall_need_resched(void);

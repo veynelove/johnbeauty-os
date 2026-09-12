@@ -6,10 +6,14 @@
 #include <arch/x86/gdt.h>
 #include <kernel/multitask.h>
 
+#define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
+
 typedef struct jlos_interrupt_manager jlos_interrupt_manager_t;
 typedef struct jlos_interrupt_handler jlos_interrupt_handler_t;
 
 typedef uint32_t (*jlos_interrupt_handler_func_t)(jlos_interrupt_handler_t*, uint32_t);
+
+extern jlos_interrupt_manager_t *jlos_active_interrupt_manager;
 
 struct jlos_interrupt_handler {
     uint8_t                         interrupt_number;
@@ -35,13 +39,11 @@ typedef struct {
     uint16_t    handle_address_high_bits;
 } __attribute__((packed)) jlos_gate_descriptor_t;
 
-extern jlos_interrupt_manager_t *jlos_active_interrupt_manager;
-
 void jlos_interrupt_handler_init(jlos_interrupt_handler_t* self, jlos_interrupt_manager_t *interrupt_manager, uint8_t interrupt_number);
 void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self);
 uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t esp);
 
-void jlos_interrupt_manager_init(jlos_interrupt_manager_t* self, uint16_t hardware_interruptoffset, jlos_gdt_t* gdt, jlos_task_manager_t *task_manager);
+void jlos_interrupt_manager_init();
 
 void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self);
 void jlos_interrupt_manager_deactivate(jlos_interrupt_manager_t* self);
