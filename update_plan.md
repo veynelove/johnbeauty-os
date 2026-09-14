@@ -1,6 +1,6 @@
 # JohnBeauty OS 内核架构升级计划
 
-版本: v2.9 | 日期: 2026-09-03 | 作者: JohnLove
+版本: v2.10 | 日期: 2026-09-13 | 作者: JohnLove
 
 ***
 
@@ -37,6 +37,8 @@
 | 用户进程       | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork COW + exit stub 修复             | Hello from ring3 + Wake up 验证通过          |
 | FPU/SSE        | Lazy 上下文切换 (CR0.TS + #NM handler) + FXSAVE/FXRSTOR + HAL ext\_state 抽象层 + 干净模板初始化 | multitask\_test + ring3 正常运行             |
 | 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页   | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
+| VMA/mmap 阶段1 | VMA 结构统一 brk/stack + page\_fault/fork/destroy VMA 驱动 + mmap 接口预留 + COW 批量锁优化 `jlos_paging_cow_range` | 四套测试 + rbtree 5 项 ALL PASSED    |
+| 红黑树 DSA     | CLRS 风格红黑树（哨兵 nil 节点 + 侵入式 container\_of），find/find\_le/insert/remove/遍历           | rbtree 5 项 ALL PASSED                |
 
 ***
 
@@ -299,6 +301,20 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-13（v2.10）
+
+- **N1 VMA/mmap 阶段1 完成**：brk + stack 两段硬编码区间统一成 VMA 区间，page\_fault/fork/destroy 改为 VMA 驱动；mmap 只留接口（VMA file/offset 字段 + MMAP/MUNMAP syscall 编号 + stub）。brk 字段从 task 冗余副本统一到 mm；栈首页预映射删除改走 demand paging。
+
+- **Manager 全局化**：7 个 manager（low/main memory\_manager、task\_manager、interrupt\_manager、driver\_manager、pci\_controller、syscall\_handler）从 kernel.c 栈上局部变量改为各自 .c 文件 static 全局变量，init 函数去 self 参数，kernel.c 从 133 行精简到 119 行。
+
+- **修复 memory\_manager bug**：`jlos_memory_manager_init_main` 曾调用操作 `s_low_memory_manager` 的 `jlos_memory_manager_init`，导致 `s_main_memory_manager` 从未初始化；提取 `mm_init` static 内部函数解决。
+
+- **2 个编译警告**：`.note.GNU-stack`（每个 .s 末尾加 `.section .note.GNU-stack,"",%progbits`）+ LINKER RWX LOAD segment（linker.ld 加 PHDRS 分离 boot/code RX 与 data RW）。
+
+- **红黑树 DSA 组件**：新增 `dsa/rbtree.h` + `dsa/rbtree.c`（CLRS 风格，哨兵 nil 节点，侵入式 container\_of），5 项测试全 PASSED。
+
+- **P3 fork/COW 遍历优化**：新增 `jlos_paging_cow_range` 接口（paging.c），src/dst 各加一次锁、一遍遍历完成 refcount\_inc + 映射 dst 为 COW + 改 src 为 COW，替代 `jlos_mm_clone_user` 内层逐页 `get_physical_addr`+`map` 的 2N 次加锁；锁 2N+1→2，遍历 3 遍→1 遍。multitask test 3（fork 10 children）/test 4（ring3 smoke）ALL PASSED。
 
 #### 2026-09-03（v2.9）
 

@@ -60,15 +60,7 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)
         dvma->flags |= JLOS_VMA_COW;
         jlos_list_init(&dvma->link);
         jlos_list_add_tail(&dvma->link, &dst->vma_list);
-        for (uint32_t i = svma->start; i < svma->end; i += JLOS_PAGE_SIZE) {
-            uint32_t phys = jlos_paging_get_physical_addr(src->pc, i);
-            if (!phys) {
-                continue;
-            }
-            jlos_page_frame_refcount_inc(phys);
-            jlos_paging_map(dst->pc, i, phys, JLOS_PTE_USER_COW);
-        }
-        jlos_paging_change_flags_range(src->pc, svma->start, svma->end, JLOS_PTE_USER_COW);
+        jlos_paging_cow_range(src->pc, dst->pc, svma->start, svma->end);
     }
     return true;
 }
