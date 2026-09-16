@@ -2,8 +2,9 @@
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <kernel/memory_manager.h>
-#include <kernel/paging.h>
+#include <kernel/console.h>
 #include <kernel/printk.h>
+#include <hal/display.h>
 
 extern jlos_irq_manager_t *jlos_active_irq_manager;
 extern jlos_driver_manager_t *g_driver_manager_ptr;
@@ -17,46 +18,45 @@ typedef struct {
 static void console_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c)
 {
     (void)self;
-    char foo[2] = {c, '\0'};
-    printf(foo);
+    jlos_console_putc(c);
 }
 
 typedef struct {
     jlos_mouse_event_handler_t base;
     int8_t x;
     int8_t y;
+    bool visible;
 } mouse_console_t;
 
 static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)
 {
-    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
     mouse_console_t* console = container_of(self, mouse_console_t, base);
 
-    video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
-        | ((video_memory[80 * console->y + console->x] & 0x0F00) << 4)
-        | ((video_memory[80 * console->y + console->x] & 0x00FF));
+    if (console->visible) {
+        jlos_hal_display_invert_at((uint32_t)console->x, (uint32_t)console->y);
+    }
 
     console->x += xoffset;
-    if (console->x < 0) console->x = 0;
-    if (console->x >= 80) console->x = 79;
+    if (console->x < 0) {
+        console->x = 0;
+    }
+    if (console->x >= (int32_t)jlos_console_get_cols()) {
+        console->x = (int32_t)jlos_console_get_cols() - 1;
+    }
     console->y += yoffset;
-    if (console->y < 0) console->y = 0;
-    if (console->y >= 25) console->y = 24;
-
-    video_memory[80 * console->y + console->x] = ((video_memory[80 * console->y + console->x] & 0xF000) >> 4)
-        | ((video_memory[80 * console->y + console->x] & 0x0F00) << 4)
-        | ((video_memory[80 * console->y + console->x] & 0x00FF));
+    if (console->y >= (int32_t)jlos_console_get_rows()) {
+        console->y = (int32_t)jlos_console_get_rows() - 1;
+    }
+    jlos_hal_display_invert_at((uint32_t)console->x, (uint32_t)console->y);
+    console->visible = true;
 }
 
 void mouse_console_init(mouse_console_t *mouse_handler)
 {
     mouse_handler->base.mouse_move = mouse_console_mouse_move;
-    mouse_handler->x = 40;
-    mouse_handler->y = 12;
-    uint16_t *video_memory = JLOS_VGA_TEXT_BUFFER_VA;
-    video_memory[80 * mouse_handler->y + mouse_handler->x] = ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0xF000) >> 4)
-        | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x0F00) << 4)
-        | ((video_memory[80 * mouse_handler->y + mouse_handler->x] & 0x00FF));
+    mouse_handler->x = (int32_t)(jlos_console_get_cols() / 2);
+    mouse_handler->y = (int32_t)(jlos_console_get_rows() / 2);
+    mouse_handler->visible = false;
 }
 
 static void debug_console_keyboard(jlos_irq_manager_t *interrupts, jlos_driver_manager_t *driver_manager_)

@@ -299,6 +299,7 @@ void jlos_hal_arch_init(void)
     jlos_hal_device_register(&s_dev_pci_cfg);
     jlos_hal_device_register(&s_dev_uart_com1);
 
+    jlos_hal_arch_display_register();
     jlos_hal_kernel_segments_init();
     jlos_hal_arch_syscall_init();
 }

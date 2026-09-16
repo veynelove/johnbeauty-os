@@ -10,7 +10,7 @@
 #define KERNEL_CONFIG_PREEMPTIVE        1
 
 /* ====== 功能开关 ====== */
-#define KERNEL_CONFIG_DEBUG_CONSOLE     0
+#define KERNEL_CONFIG_DEBUG_CONSOLE     1
 
 #define KERNEL_CONFIG_DEBUG_NETWORK     1
 #define KERNEL_CONFIG_DEBUG_MEMORY      1

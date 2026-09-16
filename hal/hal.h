@@ -81,6 +81,9 @@ void jlos_hal_kernel_segments_init(void);
 void jlos_hal_halt(void);
 void jlos_hal_enable_interrupts(void);
 
+void jlos_hal_arch_display_register(void);
+void jlos_hal_arch_display_init_fb(void);
+
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner);
 
 int jlos_hal_register_io_range(uint16_t start, uint16_t end, const char *owner);

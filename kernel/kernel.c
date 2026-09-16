@@ -20,7 +20,7 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/syscall.h>
 #include <kernel/device.h>
-#include <net/network.h>
+#include <kernel/console.h>
 
 #if KERNEL_CONFIG_ENABLE_TESTS
 #include <tools/tests/memory_te.h>
@@ -51,8 +51,8 @@ void call_constructors()
 
 void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kernel_end)
 {
-    jlos_printk_init();
     jlos_hal_arch_init();
+    jlos_printk_init();
     printk_info("princess yihan is safe and happy!\n");
 
     jlos_mmu_init();
@@ -63,6 +63,10 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_paging_initialize_kernel_paging(jlos_pfa_boot_alloc_page);
     jlos_page_frame_allocator_init();
     printk_info("paging initialized\n");
+
+    jlos_hal_arch_display_init_fb();
+    jlos_console_reinit();
+    printk_info("framebuffer console enabled\n");
 
     jlos_memory_manager_init();
 

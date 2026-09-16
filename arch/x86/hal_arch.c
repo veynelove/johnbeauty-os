@@ -1,4 +1,9 @@
 #include <hal/hal.h>
+#include <hal/display.h>
+
+void jlos_hal_arch_display_register(void)
+{
+}
 
 void jlos_hal_halt(void)
 {
