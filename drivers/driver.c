@@ -1,4 +1,5 @@
 #include <drivers/driver.h>
+#include <kernel/initcall.h>
 
 static jlos_driver_manager_t s_driver_manager;
 
@@ -31,3 +32,6 @@ void jlos_driver_manager_activate_all(void)
         g_driver_manager_ptr->drivers[i]->activate(g_driver_manager_ptr->drivers[i]);
     }
 }
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_driver_manager_init);
+JLOS_INITCALL(JLOS_INITCALL_LATE, jlos_driver_manager_activate_all);

@@ -9,17 +9,14 @@
 
 #define KERNEL_CONFIG_PREEMPTIVE        1
 
-/* ====== 功能开关 ====== */
-#define KERNEL_CONFIG_DEBUG_CONSOLE     1
-
-#define KERNEL_CONFIG_DEBUG_NETWORK     1
 #define KERNEL_CONFIG_DEBUG_MEMORY      1
 #define KERNEL_CONFIG_ENABLE_TESTS      1
 #define KERNEL_CONFIG_DEBUG_LOG         1
 
 #define JLOS_KERNEL_DEBUG               1
-#define JLOS_KERNEL_LOG_FUNC            0
-#define JLOS_KERNEL_LOG_PRINT_LEVEL     0
-#define JLOS_KERNEL_LOG_PRINT_SUBSYS    0
 
+#define JLOS_KERNEL_LOG_PRINT_TIME      1
+#define JLOS_KERNEL_LOG_PRINT_LEVEL     1
+#define JLOS_KERNEL_LOG_PRINT_SUBSYS    1
+#define JLOS_KERNEL_LOG_FUNC            1
 #endif

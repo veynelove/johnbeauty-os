@@ -1,6 +1,7 @@
 #include <hal/timer.h>
 #include <hal/io.h>
 #include <hal/diag.h>
+#include <kernel/initcall.h>
 
 static volatile uint32_t s_hal_timer_ticks;
 
@@ -24,7 +25,7 @@ void jlos_hal_timer_start_periodic(uint16_t freq_hz)
 }
 
 uint32_t jlos_hal_timer_get_ticks(void)
-{ 
+{
     return s_hal_timer_ticks;
 }
 
@@ -37,3 +38,10 @@ void jlos_hal_timer_on_tick(void)
 { 
     s_hal_timer_ticks++;
 }
+
+static void timer_device_init(void)
+{
+    jlos_hal_timer_start_periodic(JLOS_HAL_TIME_FREQ_HZ);
+}
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, timer_device_init);

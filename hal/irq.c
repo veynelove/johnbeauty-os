@@ -1,4 +1,5 @@
 #include <hal/irq.h>
+#include <kernel/initcall.h>
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
 
@@ -51,4 +52,8 @@ void jlos_irq_ignore_request(void)
 {
     jlos_ignore_interrupt_request();
 }
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_irq_manager_init);
+JLOS_INITCALL(JLOS_INITCALL_POST, jlos_irq_manager_activate);
+
 #endif

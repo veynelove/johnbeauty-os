@@ -4,6 +4,7 @@
 #include <kernel/ipc.h>
 #include <kernel/printk.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/initcall.h>
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
 
@@ -453,3 +454,5 @@ bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
     }
     return true;
 }
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, jlos_syscall_handler_init);

@@ -4,4 +4,4 @@
 2. tcp test: curl -v http://192.168.159.144:1234
 3. udp test: echo "johnbeauty" | nc -u 192.168.159.144 5678
 
-4. bear --output ./build/compile_commands.json -- make
+4. make compdb

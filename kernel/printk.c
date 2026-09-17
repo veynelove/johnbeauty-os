@@ -130,6 +130,7 @@ static char printk_level_char(int level)
 
 static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, const char *func)
 {
+#if JLOS_KERNEL_LOG_PRINT_TIME
     uint32_t sec = ticks / JLOS_HAL_TIME_FREQ_HZ;
     uint32_t us  = (ticks % JLOS_HAL_TIME_FREQ_HZ) * (1000000 / JLOS_HAL_TIME_FREQ_HZ);
     jlos_console_putc('[');
@@ -138,6 +139,7 @@ static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, c
     printk_put_us_padded(us, 6);
     jlos_console_putc(']');
     jlos_console_putc(' ');
+#endif
 #if JLOS_KERNEL_LOG_PRINT_LEVEL
     jlos_console_putc('[');
     jlos_console_putc(printk_level_char(level));
@@ -146,7 +148,7 @@ static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, c
 #endif
 #if JLOS_KERNEL_LOG_PRINT_SUBSYS
     jlos_console_putc('[');
-    printk_puts(subsys);
+    jlos_console_puts(subsys);
     jlos_console_putc(']');
     jlos_console_putc(' ');
 #endif
@@ -158,6 +160,7 @@ static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, c
     }
     (void)level;
     (void)subsys;
+    (void)ticks;
 }
 
 void printk(int level, const char *subsys, const char *func, const char *fmt, ...)

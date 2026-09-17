@@ -1,7 +1,9 @@
 #include <kernel/console.h>
+#include <kernel/initcall.h>
 #include <hal/display.h>
 #include <hal/serial.h>
 #include <hal/spinlock.h>
+#include <hal/hal.h>
 
 static uint32_t s_cursor_col = 0;
 static uint32_t s_cursor_row = 0;
@@ -177,3 +179,11 @@ void jlos_console_unlock(uint32_t flags)
 {
     jlos_spin_unlock_irqrestore(&s_console_lock, flags);
 }
+
+static void display_device_init(void)
+{
+    jlos_hal_arch_display_init_fb();
+    jlos_console_reinit();
+}
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, display_device_init);

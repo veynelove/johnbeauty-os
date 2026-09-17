@@ -1,6 +1,7 @@
 #include <net/network.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
+#include <kernel/initcall.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
@@ -39,7 +40,7 @@ void network_init(void)
 
     printk_info("initializing etherframe provider\n");
     jlos_ether_frame_provider_init(&g_network_stack->etherframe, eth0);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool ether_ok = true;
     if (g_network_stack->etherframe.handlers.buckets == NULL) {
         printk_err("[FAIL] etherframe handlers allocation failed\n");
@@ -56,10 +57,9 @@ void network_init(void)
     if (ether_ok) {
         printk_info("[OK] etherframe initialized (handlers=%p)\n", g_network_stack->etherframe.handlers.buckets);
     }
-#endif
 
     jlos_arp_init(&g_network_stack->arp, &g_network_stack->etherframe);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool arp_ok = true;
     uint16_t arp_etype = JLOS_SWAP_ENDIAN_16(0x806);
     if (g_network_stack->arp.base_handler.backend == NULL) {
@@ -88,11 +88,11 @@ void network_init(void)
     if (arp_ok) {
         printk_info("[OK] ARP initialized (type=0x0806, cache_size=128)\n");
     }
-#endif
+
 
     printk_info("initializing IPv4 protocol (gateway: 192.168.159.1, subnet: 255.255.255.0)\n");
     jlos_internet_protocol_provider_init(&g_network_stack->ipv4, &g_network_stack->etherframe, &g_network_stack->arp, gateway_ip_be, subnet_be);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool ipv4_ok = true;
     uint16_t ip_etype = JLOS_SWAP_ENDIAN_16(0x800);
     if (g_network_stack->ipv4.base_handler.backend == NULL) {
@@ -130,11 +130,11 @@ void network_init(void)
         printk_info("[OK] IPv4 initialized (type=0x0800, gw=0x%x mask=0x%x)\n",
             g_network_stack->ipv4.gateway_ip, g_network_stack->ipv4.subnet_mask);
     }
-#endif
+
 
     printk_info("initializing ICMP protocol\n");
     jlos_icmp_init(&g_network_stack->icmp, &g_network_stack->ipv4);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool icmp_ok = true;
     if (g_network_stack->icmp.base_handler.backend == NULL) {
         printk_err("[FAIL] ICMP backend is NULL\n");
@@ -156,10 +156,10 @@ void network_init(void)
     if (icmp_ok) {
         printk_info("[OK] ICMP initialized (proto=0x01)\n");
     }
-#endif
+
 
     jlos_udp_provider_init(&g_network_stack->udp, &g_network_stack->ipv4);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool udp_ok = true;
     if (g_network_stack->udp.base_handler.backend == NULL) {
         printk_err("[FAIL] UDP backend is NULL\n");
@@ -193,11 +193,11 @@ void network_init(void)
     if (udp_ok) {
         printk_info("[OK] UDP initialized (proto=0x11, sockets=%p)\n", g_network_stack->udp.sockets.buckets);
     }
-#endif
+
 
     printk_info("initializing TCP protocol\n");
     jlos_tcp_provider_init(&g_network_stack->tcp, &g_network_stack->ipv4);
-#if KERNEL_CONFIG_DEBUG_NETWORK
+
     bool tcp_ok = true;
     if (g_network_stack->tcp.base_handler.backend == NULL) {
         printk_err("[FAIL] TCP backend is NULL\n");
@@ -231,9 +231,11 @@ void network_init(void)
     if (tcp_ok) {
         printk_info("[OK] TCP initialized (proto=0x06, sockets=%p)\n", g_network_stack->tcp.sockets.buckets);
     }
-#endif
+    
 
     printk_info("sending ARP broadcast to resolve gateway\n");
     jlos_arp_broadcast_mac_address(&g_network_stack->arp, gateway_ip_be);
     printk_info("network stack initialization complete\n");
 }
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, network_init);

@@ -50,11 +50,13 @@ SECTIONS
     .data : AT(__phys_dot)
     {
         _data_start = .;
-        __init_array_start = .;
-        KEEP(*( .init_array ));
-        KEEP(*(SORT_BY_INIT_PRIORITY( .init_array.*)));
-        __init_array_end = .;
         *(.data)
+        . = ALIGN(4);
+        __initcall0_start = .; KEEP(*(.initcall0))  __initcall0_end = .;
+        __initcall1_start = .; KEEP(*(.initcall1))  __initcall1_end = .;
+        __initcall2_start = .; KEEP(*(.initcall2))  __initcall2_end = .;
+        __initcall3_start = .; KEEP(*(.initcall3))  __initcall3_end = .;
+        __initcall4_start = .; KEEP(*(.initcall4))  __initcall4_end = .;
         . = ALIGN(4K);
         _data_end = .;
     } :data

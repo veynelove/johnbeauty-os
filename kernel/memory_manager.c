@@ -3,6 +3,7 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/printk.h>
 #include <kernel/device.h>
+#include <kernel/initcall.h>
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 
@@ -772,3 +773,5 @@ void jlos_kfree(const void *obj)
 {
     jlos_kvfree((void *)obj);
 }
+
+JLOS_INITCALL(JLOS_INITCALL_CORE, jlos_memory_manager_init);

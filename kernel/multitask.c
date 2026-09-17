@@ -8,6 +8,7 @@
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 #include <kernel/ipc.h>
+#include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "sched"
 
@@ -238,7 +239,7 @@ static int32_t jlos_task_create_user_stack(jlos_task_t *self)
     self->user_stack = (uint8_t *)stack_base;
     self->user_stack_size = JLOS_TASK_USER_STACK_SIZE;
     jlos_vma_add(self->mm, stack_base,
-        stack_base + JLOS_TASK_USER_STACK_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_STACK);
+        JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_STACK);
     return 0;
 }
 
@@ -779,3 +780,5 @@ const char *jlos_task_status_map_str(uint32_t status)
     }
     return "error";
 }
+
+JLOS_INITCALL(JLOS_INITCALL_CORE, jlos_task_manager_init);

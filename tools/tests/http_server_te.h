@@ -3,6 +3,6 @@
 
 #include <net/tcp.h>
 
-void http_server_test(jlos_tcp_provider_t *tcp);
+void http_server_test(void);
 
 #endif

@@ -1,6 +1,6 @@
 # JohnBeauty OS 内核架构升级计划
 
-版本: v2.10 | 日期: 2026-09-13 | 作者: JohnLove
+版本: v2.11 | 日期: 2026-09-17 | 作者: JohnLove
 
 ***
 
@@ -39,6 +39,9 @@
 | 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页   | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
 | VMA/mmap 阶段1 | VMA 结构统一 brk/stack + page\_fault/fork/destroy VMA 驱动 + mmap 接口预留 + COW 批量锁优化 `jlos_paging_cow_range` | 四套测试 + rbtree 5 项 ALL PASSED    |
 | 红黑树 DSA     | CLRS 风格红黑树（哨兵 nil 节点 + 侵入式 container\_of），find/find\_le/insert/remove/遍历           | rbtree 5 项 ALL PASSED                |
+| Initcall 机制  | 5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST）+ 链接器段 + `jlos_do_initcalls()` 替代 call\_constructors | 全部子系统自动注册，ALL PASSED        |
+| Framebuffer Console | VBE 1024×768×32 framebuffer + 8×16 ASCII 字体 + 软件光标(erase/draw) + 鼠标光标(invert) | 1024×768 显示，键盘/鼠标正常          |
+| 输入子系统     | keyboard/mouse 驱动自动注册 + 事件回调（console 键盘输入 + 鼠标光标移动）                        | initcall DEVICE 级自动注册             |
 
 ***
 
@@ -52,9 +55,10 @@ Phase 1: Paging 修复 ✅  ←── 依赖 PFA                         │
 Phase 2: Memory Manager 升级 ✅ ←── 依赖 PFA + Paging          │
 Phase 3: Multitask 升级 ✅ ←── 依赖 PFA + Paging + MM          │
 Phase 4: SMP 预留  ←── 依赖全部                              │
-                                                             │
-                    ─── 先修 BUG，再做优化 ───               │
-                    ─── 底层改好，上层才好改 ───              │
+Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
+                                                              │
+                     ─── 先修 BUG，再做优化 ───               │
+                     ─── 底层改好，上层才好改 ───              │
 ```
 
 ***
@@ -227,6 +231,71 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 
 ***
 
+## Phase 6: Console/Display 子系统 + Initcall 机制 ✅ 已完成
+
+### 6.1 Initcall 机制（替代 call_constructors + .init_array）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 5 级 initcall 宏 (CORE/SUBSYS/DEVICE/LATE/POST) | ✅ | `kernel/initcall.h`，两层宏 `__JLOS_INITCALL` + `JLOS_INITCALL` 先展开 level 再字符串化 |
+| 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall4` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
+| `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 5 个段执行 |
+| 删除 `call_constructors` | ✅ | `loader.s` 删除调用 + `kernel.c` 删除函数定义 + `linker.ld` 删除 `.init_array` 段 |
+| `john_beauty_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
+
+**Initcall 级别分配：**
+
+| 级别 | 子系统 | 说明 |
+| --- | --- | --- |
+| CORE (0) | memory\_manager, task\_manager | 最底层基础设施 |
+| SUBSYS (1) | irq\_manager, driver\_manager, pci\_subsys | 子系统框架初始化 |
+| DEVICE (2) | timer, network, display\_device, input\_device, syscall\_handler | 设备/驱动注册 |
+| LATE (3) | driver\_manager\_activate\_all | 驱动激活（依赖 DEVICE 注册完成） |
+| POST (4) | irq\_manager\_activate | 中断最终激活（依赖全部初始化完成） |
+
+### 6.2 Framebuffer Console（VBE 1024×768×32）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| VBE multiboot 请求 | ✅ | `loader.s` 添加 `MULTIBOOT_VIDEO_MODE` 标志 + 9 个视频字段 (1024×768×32) |
+| VBE 结构体定义 | ✅ | `common/multiboot.h` 中 `jlos_vbe_mode_info_t` |
+| 8×16 ASCII 字体 | ✅ | `arch/x86/font_8x16.h`/`.c`，256 字符 × 16 字节点阵 |
+| Framebuffer console 实现 | ✅ | `arch/x86/fb_console.c`：putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at |
+| Framebuffer 映射 | ✅ | `jlos_hal_arch_display_init_fb()`：VBE phys\_base → 内核虚拟地址，write-back 缓存（无 CACHE\_DISABLE） |
+| 软件光标 erase/draw 模式 | ✅ | framebuffer 无硬件光标，erase = 反转恢复字符底部 2 行，draw = 反转显示光标 |
+| 鼠标光标 | ✅ | `fb_invert_at` 反转整个字符块（与光标底部 2 行视觉区分），`visible` 标志防首次 erase 空位置 |
+| Display HAL 接口 | ✅ | `hal/display.h`：`GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor` |
+| VGA text ops 保留 | ✅ | `arch/x86/vga_text.c`：erase\_cursor 空操作 + draw\_cursor CRT 寄存器（未激活，备用） |
+| Console 软件层 | ✅ | `kernel/console.c`：erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall |
+
+### 6.3 输入子系统迁移
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `debug_console.c` → `drivers/input/input.c` | ✅ | 键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册 |
+| 删除 `KERNEL_CONFIG_DEBUG_CONSOLE` | ✅ | `tools/config.h` 清理 |
+| 删除 `KERNEL_CONFIG_DEBUG_NETWORK` | ✅ | `tools/config.h` 清理 |
+| 删除 `tools/samples/debug_console.c/.h` | ✅ | 迁移完成，原文件删除 |
+
+### 6.4 Bug 修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| BC-1 | Backspace scancode 0x0E 缺失 | 添加 `case 0x0E: key_down('\b')` | drivers/keyboard.c |
+| BC-2 | `handles[i] = NULL` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
+| BC-3 | syscall initcall 与 IRQ manager 同级，handles 清零覆盖 | syscall 从 SUBSYS 改为 DEVICE | kernel/syscall.c |
+| BC-4 | 用户栈 VMA end 不含栈顶 `0xBFFFF000` | 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE` (= `0xC0000000`) | kernel/multitask.c |
+
+### 6.5 已知遗留
+
+| # | 问题 | 说明 | 优先级 |
+| --- | --- | --- | --- |
+| CON-1 | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看 | printk 全部历史保存，类比 Linux ring buffer + dmesg | 中 |
+| CON-2 | 串口宏开关 `JLOS_SERIAL_ECHO` | 当前串口始终输出，需宏控制开关 | 低 |
+| CON-3 | PCI 从 HAL 拆分到 `drivers/pci/` | arch 相关配置空间访问 vs arch 无关总线枚举 | 低 |
+
+***
+
 ## 实施优先级
 
 | 优先级 | Phase | 任务                                                                | 依赖        |
@@ -239,6 +308,7 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | **P1** | 5.2   | 性能热点（MT-2 直连唤醒、MT-1 wait queue 经典化；PAG-4 内核 4KB PDE 共享可选） | Phase 5.1 完成 |
 | **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
 | **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、MM-5、4.1~4.6）        | Phase 5.3 完成 |
+| **P0** | 6     | Console/Display 子系统 + Initcall 机制                              | ✅ 已完成    |
 
 ***
 
@@ -259,6 +329,8 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4            |
 | F12  | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成 | arch/x86/fpu.c + hal/ext\_state.h | —                  |
 | F13  | O(1) 调度选择（per-level runqueue + bitmap）             | kernel/multitask.c                | 无                 |
+| F14  | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看                  | kernel/console.c + printk.c       | 无                 |
+| F15  | 串口输出宏开关 `JLOS_SERIAL_ECHO`                        | kernel/console.c + hal/serial.h   | 无                 |
 
 ***
 
@@ -301,6 +373,22 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-17（v2.11）
+
+- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_beauty_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
+
+- **Framebuffer Console 完成**：`loader.s` 启用 `MULTIBOOT_VIDEO_MODE`（1024×768×32），`common/multiboot.h` 添加 `jlos_vbe_mode_info_t`。`arch/x86/font_8x16.h`/`.c` 256 字符 × 16 字节点阵。`arch/x86/fb_console.c` 完整实现 putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at，软件光标 erase/draw 分离模式（反转字符底部 2 行），鼠标光标反转整个字符块（`visible` 标志防首次 erase）。framebuffer 映射用 write-back 缓存（去掉 CACHE\_DISABLE）。`hal/display.h` 中 `GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor`。`kernel/console.c` 改为 erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall（DEVICE 级）。
+
+- **输入子系统迁移**：`tools/samples/debug_console.c` → `drivers/input/input.c`，键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册。删除 `KERNEL_CONFIG_DEBUG_CONSOLE` 和 `KERNEL_CONFIG_DEBUG_NETWORK` 宏，删除原 `debug_console.c/.h`。
+
+- **Bug 修复**：① keyboard.c 添加 Backspace scancode 0x0E（原缺失，按键被丢弃）；② interrupts.c 删除冗余 `handles[i] = NULL` 清零（BSS 已为零，清零覆盖已注册 handler）；③ syscall.c initcall 从 SUBSYS 改为 DEVICE（依赖 IRQ manager 先初始化）；④ multitask.c VMA end 从 `stack_base + stack_size` 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE`（`[start,end)` 语义不含栈顶）。
+
+- **方向变更**：原计划阶段 A（VGA 文本模式三层重构 + 日志环形缓冲 + 键盘翻页 + 硬件光标 + 串口宏开关）改为直接实现 framebuffer console（原阶段 B 内容）。VBE framebuffer 与 VGA 文本互斥，一旦 loader.s 请求 VIDEO\_MODE，0xB8000 文本显存失效，因此直接跳到 framebuffer 方案。日志环形缓冲 + 键盘翻页 + 串口宏开关仍为后续待办。
+
+- 全流程验证通过：memory/pfa/paging/multitask ALL PASSED + http/udp server 正常启动
+
+- 更新计划至 v2.11
 
 #### 2026-09-13（v2.10）
 

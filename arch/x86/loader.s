@@ -91,7 +91,6 @@ _stop_bad_magic:
 /* high_half: 链接在 .text, VMA = 0xC01xxxxx */
 .section .text
 .extern john_beauty_main
-.extern call_constructors
 .extern _kernel_end
 .extern _bss_start
 .extern _bss_end
@@ -112,8 +111,6 @@ high_half:
     xorl  %eax, %eax
     cld
     rep   stosb
-
-    call  call_constructors
 
     /* mbinfo 物理地址 → 虚拟地址 */
     movl  boot_mbinfo_pa, %ebx

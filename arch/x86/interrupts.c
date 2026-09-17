@@ -128,7 +128,6 @@ void jlos_interrupt_manager_init()
     jlos_arch_tss_init_for_asm();
     
     for (uint16_t i = 0; i < 256; i++) {
-        self->handles[i] = NULL;
         jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_ignore_interrupt_request, 0,
             IDT_INTERRUPT_GATE);
     }

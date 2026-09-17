@@ -1,5 +1,7 @@
 #include <hal/pci.h>
 #include <hal/diag.h>
+#include <kernel/initcall.h>
+#include <kernel/memory_manager.h>
 
 #if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
 
@@ -86,5 +88,15 @@ jlos_hal_pci_bar_t jlos_hal_pci_get_bar(jlos_hal_pci_controller_t *self, uint16_
 { 
     return jlos_pci_controller_get_base_address_register(self, bus, dev, func, bar_index);
 }
+
+static void pci_subsys_init(void)
+{
+    jlos_hal_pci_init();
+    jlos_memory_manager_switch_low();
+    jlos_hal_pci_enumerate_and_bind_drivers();
+    Jlos_memory_manager_switch_main();
+}
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, pci_subsys_init);
 
 #endif

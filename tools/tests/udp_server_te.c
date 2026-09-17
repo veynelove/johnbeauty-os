@@ -1,6 +1,7 @@
 #include <tools/tests/udp_server_te.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
+#include <net/network.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 
@@ -15,8 +16,9 @@ static void udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_so
     socket->send(socket, data, size);
 }
 
-void udp_server_test(jlos_udp_provider_t *udp)
+void udp_server_test(void)
 {
+    jlos_udp_provider_t *udp = &g_network_stack->udp;
     udp_handler_t *udphandler = jlos_kalloc(sizeof(udp_handler_t));
     jlos_udp_handler_init(&udphandler->base);
     udphandler->base.handle_udp_message = udp_handler_handle_udp_message;
