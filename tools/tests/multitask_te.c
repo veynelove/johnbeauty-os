@@ -7,7 +7,7 @@
 #include <hal/hal.h>
 #include <hal/context.h>
 #include <hal/timer.h>
-#include <hal/user_syscall.h>
+#include <lib/user_syscall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 

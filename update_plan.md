@@ -1,6 +1,6 @@
-# JohnBeauty OS 内核架构升级计划
+# JohnSunshine OS 内核架构升级计划
 
-版本: v2.11 | 日期: 2026-09-17 | 作者: JohnLove
+版本: v2.12 | 日期: 2026-09-18 | 作者: JohnLove
 
 ***
 
@@ -42,6 +42,7 @@
 | Initcall 机制  | 5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST）+ 链接器段 + `jlos_do_initcalls()` 替代 call\_constructors | 全部子系统自动注册，ALL PASSED        |
 | Framebuffer Console | VBE 1024×768×32 framebuffer + 8×16 ASCII 字体 + 软件光标(erase/draw) + 鼠标光标(invert) | 1024×768 显示，键盘/鼠标正常          |
 | 输入子系统     | keyboard/mouse 驱动自动注册 + 事件回调（console 键盘输入 + 鼠标光标移动）                        | initcall DEVICE 级自动注册             |
+| HAL 层重构     | timer B2 链表选优 + serial/dma/pci/ext\_state A 分层 + 职责归属 + 去 drivers 依赖                | 编译通过 + 全测试 PASSED               |
 
 ***
 
@@ -292,7 +293,83 @@ Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
 | --- | --- | --- | --- |
 | CON-1 | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看 | printk 全部历史保存，类比 Linux ring buffer + dmesg | 中 |
 | CON-2 | 串口宏开关 `JLOS_SERIAL_ECHO` | 当前串口始终输出，需宏控制开关 | 低 |
-| CON-3 | PCI 从 HAL 拆分到 `drivers/pci/` | arch 相关配置空间访问 vs arch 无关总线枚举 | 低 |
+| CON-3 | PCI 总线枚举从 HAL 拆到 `drivers/pci/` | arch 无关总线枚举逻辑可上提 drivers 层 | 低 |
+
+***
+
+## Phase 7: HAL 层架构合规重构 ✅ 已完成
+
+### 7.1 分层模式判定
+
+HAL 层三种经典分层做法及判定标准：
+
+| 模式 | 做法 | 适用场景 |
+| ---- | ---- | -------- |
+| A    | HAL 声明 + arch 定义（编译期绑定） | 单实现、编译期选定架构 |
+| B    | ops 表 + 转发（运行时切一个） | 需运行时切换单一实现 |
+| B2   | 实例注册链表 + rating 选优（多实例共存） | 多实现共存、按优先级选优 |
+
+**判定关键**：是否需要运行时多实现共存。多架构不构成 B/B2 的理由（编译期链接选不同 arch 目录即可），多核只影响 timer 和 irq。
+
+各子系统决策：
+
+| 子系统 | 模式 | 理由 |
+| ------ | ---- | ---- |
+| timer  | B2   | 多时钟源共存 + SMP per-cpu timer 演进路径，dsa/list 链表注册 + rating 选优 |
+| serial | A    | 16550 单芯片族，编译期绑定 |
+| dma    | A    | 8237 遗留 ISA DMA，单实现 |
+| pci    | A    | 单配置机制；HAL 拥通用类型 + read16/8/write16/8 位操作，arch 拥 controller 结构 + read32/write32 硬件原语 |
+| display| B    | 已有 ops，多后端共存（framebuffer/VGA） |
+| block  | B    | 已有 ops，多控制器共存 |
+| ext\_state | A | HAL 自定义不透明结构（raw[512]+used），arch 实现 fxsave/fxrstor |
+
+### 7.2 第 1 批：局部修复
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| L1 | dma.c count 端口 bug + 死代码 + 重复 OR | hal/dma.c |
+| L2 | serial.c UART 命名规范化 | hal/serial.c |
+| L3 | pci.h 0x80000000u 魔数宏化（JLOS_HAL_PCI_CONFIG_ADDR_ENABLE） | hal/pci.h |
+| L4 | block.h/c ATA28 LBA 魔数宏化 | hal/block.h, hal/block.c |
+| L5 | device.h/c mmio owner 改 char[24] + jlos_strlcpy 复制 | hal/device.h, hal/device.c |
+| L6 | display.c 单语句 if 花括号统一 | hal/display.c |
+
+### 7.3 第 2 批：职责归属
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| O1 | 4 个 syscall 全局变量移出 hal.c → 新建 hal/kernel_syscall.c | hal/kernel_syscall.c |
+| O2 | hal.c 自持 s_hal_info + jlos_hal_info_get_for_init() 替代 g_hal_info extern | hal/hal.c, hal/hal.h |
+| O3 | 新建 hal/hal_arch.h 拆出 arch 注入函数声明（11 个文件加 include） | hal/hal_arch.h |
+| O4 | user_syscall 移到 user/ 目录 + Makefile 加 user | user/user_syscall.h, user/user_syscall.c, Makefile |
+
+### 7.4 第 3 批：下沉 arch
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| S1 | timer B2：hal/timer.h 定义 jlos_timer_device + dsa/list 链表注册 + rating 选优；arch/x86/pit.c SUBSYS 级注册 | hal/timer.h, hal/timer.c, arch/x86/pit.c |
+| S2 | serial A：hal/serial.h 纯声明，删 hal/serial.c，新建 arch/x86/uart_8250.c | hal/serial.h, arch/x86/uart_8250.c |
+| S3 | dma A：hal/dma.h 纯声明，删 hal/dma.c，新建 arch/x86/dma_8237.c | hal/dma.h, arch/x86/dma_8237.c |
+| S4 | ext_state A：hal/ext_state.h 自定义 raw[512]+used 结构，arch/x86/fpu.c 改用 raw，删 arch/x86/fpu_state.h | hal/ext_state.h, arch/x86/fpu.c |
+
+### 7.5 第 4 批：PCI 分层 + block 去 drivers
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| P1 | PCI A 分层：hal/pci.h 自定义类型 + 不透明 controller，hal/pci.c 只留 read16/8/write16/8 通用逻辑 + initcall | hal/pci.h, hal/pci.c |
+| P2 | arch/x86/pci.h 定义 controller 结构，arch/x86/pci.c 实现全部 arch 部分，函数名统一 jlos_hal_pci_ 前缀 | arch/x86/pci.h, arch/x86/pci.c |
+| P3 | drivers/amd_am79c973 参数类型跟随改名 | drivers/amd_am79c973.h, drivers/amd_am79c973.c |
+| P4 | block C1：hal/block.h 去掉 #include drivers/ata.h，union dev_priv 改 uint8_t priv[64] + _Static_assert | hal/block.h, hal/block.c |
+
+### 7.6 PCI read32/write32 由 arch 定义的设计理由
+
+read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch 特有），read16/8 是"在结果上做位操作"的通用算法（调 read32 再移位，所有 arch 复用，避免 DRY 违反）。因此 HAL 拥有 read16/8/write16/8，arch 拥有 read32/write32。
+
+### 7.7 验证
+
+- 编译通过（`make clean && make`）
+- 全测试 PASSED：memory/pfa/paging/multitask + 网络栈 + timer 选优生效
+- 12 项遗留检查全部通过：hal/ 下无架构宏、无 #include arch、无 #include drivers（仅 block.c .c 文件保留）、无 g_hal_info extern、无 typedef 别名、timer.c 无 PIT 端口、serial.c/dma.c 已删、fpu_state.h 已删、user_syscall 已移走、block.h 不依赖 drivers、ext_state.h 不 include arch
 
 ***
 
@@ -309,6 +386,7 @@ Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
 | **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
 | **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、MM-5、4.1~4.6）        | Phase 5.3 完成 |
 | **P0** | 6     | Console/Display 子系统 + Initcall 机制                              | ✅ 已完成    |
+| **P0** | 7     | HAL 层架构合规重构（分层模式 + 职责归属 + 下沉 arch + 去 drivers） | ✅ 已完成    |
 
 ***
 
@@ -373,6 +451,26 @@ Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
 | —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-18（v2.12）
+
+- **HAL 层架构合规重构完成**：分析 hal/ 33 个文件，识别 18 个问题，分 4 批修改全部完成。
+
+- **分层模式判定**：确立 A（hal 声明 + arch 定义）、B（ops 表转发）、B2（实例注册链表 + rating 选优）三种模式。判定关键是"是否需要运行时多实现共存"。多架构不构成 B/B2 理由（编译期链接选不同 arch 目录），多核只影响 timer/irq。
+
+- **第 1 批局部修复**：dma.c count 端口 bug + 死代码 + 重复 OR；serial.c UART 命名；pci.h 0x80000000u 宏化；block.h/c ATA28 LBA 魔数宏化；device.h/c mmio owner 改 char[24] + jlos_strlcpy；display.c 花括号统一。
+
+- **第 2 批职责归属**：新建 hal/kernel_syscall.c 移出 4 个 syscall 全局变量；hal.c 自持 s_hal_info + jlos_hal_info_get_for_init() 替代 g_hal_info extern；新建 hal/hal_arch.h 拆出 arch 注入函数声明（11 个文件加 include）；user_syscall 移到 user/ 目录 + Makefile 加 user。
+
+- **第 3 批下沉 arch**：timer B2（hal/timer.h 定义 jlos_timer_device + dsa/list 链表注册 + rating 选优，arch/x86/pit.c SUBSYS 级注册）；serial A（hal/serial.h 纯声明，删 hal/serial.c，新建 arch/x86/uart_8250.c）；dma A（hal/dma.h 纯声明，删 hal/dma.c，新建 arch/x86/dma_8237.c）；ext_state A（hal/ext_state.h 自定义 raw[512]+used 结构，arch/x86/fpu.c 改用 raw，删 arch/x86/fpu_state.h）。
+
+- **第 4 批 PCI 分层 + block 去 drivers**：PCI A（hal/pci.h 自定义类型 + 不透明 controller，hal/pci.c 只留 read16/8/write16/8 通用逻辑 + initcall，arch/x86/pci.h 定义 controller 结构，arch/x86/pci.c 实现全部 arch 部分，函数名统一 jlos_hal_pci_ 前缀，drivers/amd_am79c973 参数类型跟随改名）；block C1（hal/block.h 去掉 #include drivers/ata.h，union dev_priv 改 uint8_t priv[64] + _Static_assert，hal/block.c 用 block_ata() helper 访问）。
+
+- **PCI read32/write32 由 arch 定义的理由**：read32 是"发起硬件访问"原语（地址编码 + 端口操作整体 arch 特有），read16/8 是"在结果上做位操作"通用算法（调 read32 再移位，所有 arch 复用，避免 DRY 违反）。
+
+- **验证**：编译通过 + 全测试 PASSED（memory/pfa/paging/multitask + 网络栈 + timer 选优生效）。12 项遗留检查全部通过。
+
+- 更新计划至 v2.12
 
 #### 2026-09-17（v2.11）
 

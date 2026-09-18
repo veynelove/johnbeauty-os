@@ -1,7 +1,6 @@
 #ifndef _JLOS_HAL_SPINLOCK_H
 #define _JLOS_HAL_SPINLOCK_H
 
-#include <tools/config.h>
 #include <common/types.h>
 #include <hal/barrier.h>
 

@@ -1,9 +1,11 @@
 #ifndef _JLOS_HAL_BLOCK_H
 #define _JLOS_HAL_BLOCK_H
 
-#include <tools/config.h>
 #include <common/types.h>
-#include <drivers/ata.h>
+
+#define JLOS_HAL_BLOCK_PRIV_SIZE 64
+
+#define JLOS_ATA28_LBA_MAX 0x0FFFFFFFu
 
 typedef enum {
     JLOS_HAL_BLOCK_DEV_ATA_PIO28 = 1,
@@ -28,9 +30,7 @@ typedef struct jlos_hal_block_dev {
     uint32_t                    bytes_per_sector;
     uint64_t                    total_sectors;
     const jlos_hal_block_ops_t  *ops;
-    union {
-        jlos_ata_t ata;
-    }                           dev_priv;
+    uint8_t                     priv[JLOS_HAL_BLOCK_PRIV_SIZE];
     uint8_t                     inited;
 } jlos_hal_block_dev_t;
 

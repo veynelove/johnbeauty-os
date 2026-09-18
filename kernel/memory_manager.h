@@ -60,9 +60,6 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr);
 
 void *jlos_kvalloc(size_t size);
 void jlos_kvfree(void *ptr);
-void jlos_memset(void *ptr, uint8_t value, size_t size);
-void *jlos_memcpy(void *dst, const void *src, size_t size);
-size_t jlos_strlcpy(char *dst, const char *src, size_t dsize);
 
 void jlos_kvalloc_stats(jlos_memory_manager_t *self);
 

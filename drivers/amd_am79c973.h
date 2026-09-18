@@ -70,7 +70,7 @@ void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self);
 bool jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size);
 void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size);
 
-void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descriptor_t *dev, jlos_irq_manager_t *interrupts);
+void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *dev, jlos_irq_manager_t *interrupts);
 void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self);
 
 void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self);

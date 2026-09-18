@@ -46,4 +46,8 @@ typedef uint32_t                   size_t;
 
 #define JLOS_CAP_UPPER(val, max)   ((val) < (max) ? (val) : (max))
 
+void jlos_memset(void *ptr, uint8_t value, size_t size);
+void *jlos_memcpy(void *dst, const void *src, size_t size);
+size_t jlos_strlcpy(char *dst, const char *src, size_t dsize);
+
 #endif

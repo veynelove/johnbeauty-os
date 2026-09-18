@@ -1,10 +1,15 @@
 #include <arch/x86/interrupts.h>
 #include <arch/x86/cpu_state.h>
+#include <arch/x86/io.h>
+#include <arch/x86/gdt.h>
 #include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
 #include <hal/hal.h>
+#include <hal/mmu.h>
+#include <hal/hal_arch.h>
+#include <kernel/initcall.h>
 #include <kernel/paging.h>
 #include <kernel/printk.h>
 
@@ -13,8 +18,8 @@
 extern void jlos_arch_tss_init_for_asm(void);
 extern jlos_task_t *g_current_task_ptr;
 
-static jlos_interrupt_manager_t s_interrupt_manager;
-jlos_interrupt_manager_t        *jlos_active_interrupt_manager = &s_interrupt_manager;
+static jlos_irq_manager_t s_interrupt_manager;
+jlos_irq_manager_t        *jlos_active_irq_manager = &s_interrupt_manager;
 
 /* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
 uint32_t                        jlos_syscall_ring3_ctx = 0;
@@ -48,79 +53,72 @@ static void jlos_set_interrupt_descriptor_table_entry(uint8_t interrupt_number,
     jlos_interrupt_descriptor_table[interrupt_number].reserved = 0;
 }
 
-static void jlos_irq_pic_unmask(jlos_interrupt_manager_t* self, uint8_t vector)
+static void jlos_irq_pic_unmask(jlos_irq_manager_t* self, uint8_t vector)
 {
     uint16_t base = self->hardware_interrupt_offset;
     if (vector < base || vector >= base + 16) return; /* 非 PIC IRQ 范围，不管 */
     uint8_t irq = vector - base;
     if (irq < 8) {
         s_pic_master_mask &= ~(1U << irq);
-        jlos_port8_bit_slow_write(&self->pic_master_data, s_pic_master_mask);
+        jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     } else {
         irq -= 8;
         s_pic_slave_mask &= ~(1U << irq);
-        jlos_port8_bit_slow_write(&self->pic_slave_data, s_pic_slave_mask);
+        jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask);
         /* Slave 通过 IRQ2 接 master，确保 master IRQ2 不被屏蔽 */
         s_pic_master_mask &= ~(1U << 2);
-        jlos_port8_bit_slow_write(&self->pic_master_data, s_pic_master_mask);
+        jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     }
 }
 
-void jlos_interrupt_handler_init(jlos_interrupt_handler_t* self, jlos_interrupt_manager_t *interrupt_manager, uint8_t interrupt_number)
+void jlos_irq_handler_init(jlos_irq_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number)
 {
     self->interrupt_number = interrupt_number;
     self->interrupt_manager = interrupt_manager;
-    self->handle_interrupt = (jlos_interrupt_handler_func_t)jlos_interrupt_handler_handle_interrupt;
+    self->handle_interrupt = jlos_irq_handler_handle_interrupt;
     interrupt_manager->handles[interrupt_number] = self;
     jlos_irq_pic_unmask(interrupt_manager, interrupt_number); /* 注册即 unmask */
 }
 
-void jlos_interrupt_handler_destroy(jlos_interrupt_handler_t* self)
-{
-    if (self->interrupt_manager->handles[self->interrupt_number] == self) {
-        self->interrupt_manager->handles[self->interrupt_number] = NULL;
-    }
-}
-
-uint32_t jlos_interrupt_handler_handle_interrupt(jlos_interrupt_handler_t* self, uint32_t esp)
+uint32_t jlos_irq_handler_handle_interrupt(jlos_irq_handler_t* self, uint32_t esp)
 {
     return esp;
     (void)self;
 }
 
-void jlos_interrupt_manager_init()
+void jlos_irq_manager_init(void)
 {
-    jlos_interrupt_manager_t *self = &s_interrupt_manager;
-    jlos_port8_bit_slow_init(&self->pic_master_command, 0x20);
-    jlos_port8_bit_slow_init(&self->pic_master_data, 0x21);
-    jlos_port8_bit_slow_init(&self->pic_slave_command, 0xA0);
-    jlos_port8_bit_slow_init(&self->pic_slave_data, 0xA1);
+    jlos_irq_manager_t *self = &s_interrupt_manager;
+    jlos_port_io8_slow_init(&self->pic_master_command, 0x20);
+    jlos_port_io8_slow_init(&self->pic_master_data, 0x21);
+    jlos_port_io8_slow_init(&self->pic_slave_command, 0xA0);
+    jlos_port_io8_slow_init(&self->pic_slave_data, 0xA1);
 
     // ICW1: start initialization, edge triggered, cascade mode, ICW4 needed
-    jlos_port8_bit_slow_write(&self->pic_master_command, 0x11);
-    jlos_port8_bit_slow_write(&self->pic_slave_command, 0x11);
+    jlos_port_io8_slow_write(&self->pic_master_command, 0x11);
+    jlos_port_io8_slow_write(&self->pic_slave_command, 0x11);
 
     // ICW2: remap IRQ base vectors
-    jlos_port8_bit_slow_write(&self->pic_master_data, (uint8_t)KERNEL_FIRST_INTERRUPT_VECTOR);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, (uint8_t)(KERNEL_FIRST_INTERRUPT_VECTOR + 8));
+    jlos_port_io8_slow_write(&self->pic_master_data, (uint8_t)KERNEL_FIRST_INTERRUPT_VECTOR);
+    jlos_port_io8_slow_write(&self->pic_slave_data, (uint8_t)(KERNEL_FIRST_INTERRUPT_VECTOR + 8));
 
     // ICW3: master has slave at IRQ2, slave cascade id 2
-    jlos_port8_bit_slow_write(&self->pic_master_data, 0x04);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, 0x02);
+    jlos_port_io8_slow_write(&self->pic_master_data, 0x04);
+    jlos_port_io8_slow_write(&self->pic_slave_data, 0x02);
 
     // ICW4: 8086 mode, no auto EOI, non-buffered, fully nested
-    jlos_port8_bit_slow_write(&self->pic_master_data, 0x01);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, 0x01);
+    jlos_port_io8_slow_write(&self->pic_master_data, 0x01);
+    jlos_port_io8_slow_write(&self->pic_slave_data, 0x01);
 
     // OCW1：动态策略——默认只开 IRQ0(PIT)+IRQ2(cascade)，驱动注册 handler 时自动 unmask
     s_pic_master_mask = 0xFA;
     s_pic_slave_mask  = 0xFF;
-    jlos_port8_bit_slow_write(&self->pic_master_data, s_pic_master_mask);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, s_pic_slave_mask);
+    jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
+    jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask);
 
     self->task_manager = g_task_manager_ptr;
     self->hardware_interrupt_offset = KERNEL_FIRST_INTERRUPT_VECTOR;
-    uint16_t code_segment = jlos_gdt_code_segment_selector(jlos_gdt_get_kernel());
+    uint16_t code_segment = jlos_mmu_code_selector(jlos_mmu_get_kernel());
     const uint8_t IDT_INTERRUPT_GATE = 0xE;
     const uint8_t IDT_TRAP_GATE = 0xF;
     
@@ -128,7 +126,7 @@ void jlos_interrupt_manager_init()
     jlos_arch_tss_init_for_asm();
     
     for (uint16_t i = 0; i < 256; i++) {
-        jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_ignore_interrupt_request, 0,
+        jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_irq_ignore_request, 0,
             IDT_INTERRUPT_GATE);
     }
     jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR, code_segment,
@@ -191,16 +189,16 @@ void jlos_interrupt_manager_init()
     jlos_set_interrupt_descriptor_table_entry(0x12, code_segment, &jlos_handle_exception0x12, 0, IDT_INTERRUPT_GATE);
     jlos_set_interrupt_descriptor_table_entry(0x13, code_segment, &jlos_handle_exception0x13, 0, IDT_INTERRUPT_GATE);
 
-    jlos_port8_bit_slow_write(&self->pic_master_command, 0x11);
-    jlos_port8_bit_slow_write(&self->pic_slave_command, 0x11);
-    jlos_port8_bit_slow_write(&self->pic_master_data, KERNEL_FIRST_INTERRUPT_VECTOR);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, KERNEL_FIRST_INTERRUPT_VECTOR + 8);
-    jlos_port8_bit_slow_write(&self->pic_master_data, 0x04);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, 0x02); 
-    jlos_port8_bit_slow_write(&self->pic_master_data, 0x01);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, 0x01); 
-    jlos_port8_bit_slow_write(&self->pic_master_data, s_pic_master_mask);
-    jlos_port8_bit_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
+    jlos_port_io8_slow_write(&self->pic_master_command, 0x11);
+    jlos_port_io8_slow_write(&self->pic_slave_command, 0x11);
+    jlos_port_io8_slow_write(&self->pic_master_data, KERNEL_FIRST_INTERRUPT_VECTOR);
+    jlos_port_io8_slow_write(&self->pic_slave_data, KERNEL_FIRST_INTERRUPT_VECTOR + 8);
+    jlos_port_io8_slow_write(&self->pic_master_data, 0x04);
+    jlos_port_io8_slow_write(&self->pic_slave_data, 0x02); 
+    jlos_port_io8_slow_write(&self->pic_master_data, 0x01);
+    jlos_port_io8_slow_write(&self->pic_slave_data, 0x01); 
+    jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
+    jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
 
     jlos_idt_pointer_t idt;
     idt.size = 256 * sizeof(jlos_gate_descriptor_t) - 1;
@@ -208,42 +206,34 @@ void jlos_interrupt_manager_init()
     __asm__ __volatile__("lidt %0" : : "m" (idt));
 }
 
-void jlos_interrupt_manager_destroy(jlos_interrupt_manager_t* self)
-{
-    (void)self;
-}
 
-void jlos_interrupt_manager_activate(jlos_interrupt_manager_t* self)
+void jlos_irq_manager_activate(void)
 {
-    if (jlos_active_interrupt_manager != NULL) {
-        jlos_interrupt_manager_deactivate(jlos_active_interrupt_manager);
-    }
-    jlos_active_interrupt_manager = self;
     __asm__("sti");
 }
 
-void jlos_interrupt_manager_deactivate(jlos_interrupt_manager_t* self)
+void jlos_irq_manager_deactivate(jlos_irq_manager_t* self)
 {
-    if (jlos_active_interrupt_manager == self) {
-        jlos_active_interrupt_manager = NULL;
+    if (jlos_active_irq_manager == self) {
+        jlos_active_irq_manager = NULL;
         __asm__("cli");
     }
 }
 
-uint32_t jlos_interrupt_manager_handle_interrupt(uint8_t interrupt, uint32_t esp)
+uint32_t jlos_irq_manager_handle(uint8_t interrupt, uint32_t esp)
 {
-    if (jlos_active_interrupt_manager != NULL) {
-        return jlos_interrupt_manager_do_handle_interrupt(jlos_active_interrupt_manager, interrupt, esp);
+    if (jlos_active_irq_manager != NULL) {
+        return jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
     }
     return esp;
 }
 
-uint16_t jlos_interrupt_manager_hardware_interrupt_offset(jlos_interrupt_manager_t* self)
+uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)
 {
     return self->hardware_interrupt_offset;
 }
 
-uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* self, uint8_t interrupt, uint32_t esp)
+uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uint32_t esp)
 {
     /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
     if (interrupt == 0x0E) {
@@ -290,7 +280,7 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
     }
 
     if (self->handles[vector] != NULL) {
-        jlos_interrupt_handler_t *handler = (jlos_interrupt_handler_t*)self->handles[vector];
+        jlos_irq_handler_t *handler = (jlos_irq_handler_t*)self->handles[vector];
         esp = handler->handle_interrupt(handler, esp);
     }
     else if (interrupt >= 16) {
@@ -313,15 +303,15 @@ uint32_t jlos_interrupt_manager_do_handle_interrupt(jlos_interrupt_manager_t* se
         }
     }
     if (vector >= 0x20 && vector < 0x30) {
-        jlos_port8_bit_slow_write(&self->pic_master_command, 0x20);
+        jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
         if (vector >= 0x28) {
-            jlos_port8_bit_slow_write(&self->pic_slave_command, 0x20);
+            jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
         }
     }
     return esp;
 }
 
-void jlos_interrupt_manager_register_handler(jlos_interrupt_manager_t* self, uint8_t interrupt, jlos_interrupt_handler_t* handler)
+void jlos_irq_manager_register(jlos_irq_manager_t* self, uint8_t interrupt, jlos_irq_handler_t* handler)
 {
     self->handles[interrupt] = handler;
     jlos_irq_pic_unmask(self, interrupt);  /* 注册即 unmask */
@@ -335,3 +325,6 @@ void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
     context->code_segment = cpu->cs;
     context->flags = cpu->eflags;
 }
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_irq_manager_init);
+JLOS_INITCALL(JLOS_INITCALL_POST, jlos_irq_manager_activate);

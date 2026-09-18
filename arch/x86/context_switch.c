@@ -1,8 +1,10 @@
 #include <arch/x86/tss.h>
 #include <arch/x86/cpu_state.h>
+#include <arch/x86/gdt.h>
 #include <hal/context.h>
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
+#include <hal/hal_arch.h>
 #include <kernel/printk.h>
 #include <kernel/multitask.h>
 #include <kernel/paging.h>
@@ -118,10 +120,10 @@ void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, 
 
 void jlos_arch_tss_init(void)
 {
-    jlos_gdt_t *gdt = jlos_gdt_get_kernel();
+    jlos_mmu_t *gdt = jlos_mmu_get_kernel();
     uint16_t tss_sel = jlos_gdt_tss_selector(gdt);
     jlos_gdt_set_tss(gdt, (uint32_t)&s_tss, sizeof(jlos_x86_tss_t) - 1);
-    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, jlos_gdt_data_segment_selector(gdt));
+    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, jlos_mmu_data_selector(gdt));
     jlos_x86_tss_load(tss_sel);
 }
 

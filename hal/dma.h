@@ -1,15 +1,7 @@
 #ifndef _JLOS_HAL_DMA_H
 #define _JLOS_HAL_DMA_H
 
-#include <tools/config.h>
 #include <common/types.h>
-
-#define JLOS_HAL_DMA_CHANNELS       8
-#define JLOS_HAL_DMA_CHAN_CASCADE   4
-
-#define JLOS_HAL_DMA_CH03_MAX_BYTES  0x10000
-#define JLOS_HAL_DMA_CH57_MAX_BYTES  0x20000
-#define JLOS_HAL_DMA_PHYS_MAX        0x00FFFFFFu  
 
 typedef enum {
     JLOS_HAL_DMA_DIR_READ_FROM_DEV = 0,

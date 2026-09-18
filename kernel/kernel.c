@@ -4,6 +4,7 @@
 #include <hal/mmu.h>
 #include <hal/hal.h>
 #include <hal/context.h>
+#include <hal/hal_arch.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>

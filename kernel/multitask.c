@@ -2,6 +2,7 @@
 #include <hal/timer.h>
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
+#include <hal/hal_arch.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>

@@ -5,6 +5,7 @@
 #include <kernel/printk.h>
 #include <hal/spinlock.h>
 #include <hal/hal.h>
+#include <hal/hal_arch.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "pfa"
 
