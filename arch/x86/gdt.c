@@ -7,7 +7,7 @@ extern uint32_t _data_start, _data_end;
 extern uint32_t _bss_start, _bss_end;
 
 static jlos_hal_kernel_segments_t s_kernel_segments = {0};
-static jlos_gdt_t s_kernel_gdt;
+static jlos_mmu_t s_kernel_gdt;
 
 void jlos_hal_kernel_segments_init(void)
 {
@@ -76,9 +76,9 @@ uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self)
     return result;
 }
 
-void jlos_gdt_init()
+void jlos_mmu_init()
 {
-    jlos_gdt_t *gdt = &s_kernel_gdt;
+    jlos_mmu_t *gdt = &s_kernel_gdt;
     jlos_gdt_segment_descriptor_init(&gdt->null_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->unused_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 0xFFFFFFFF, 0x9A);
@@ -89,7 +89,7 @@ void jlos_gdt_init()
     jlos_gdt_segment_descriptor_init(&gdt->tss_segment_selector, 0, 0, 0x89);
     uint32_t i[2];
     i[1] = (uint32_t)gdt;
-    i[0] = sizeof(jlos_gdt_t) << 16;
+    i[0] = sizeof(jlos_mmu_t) << 16;
     
     __asm__ __volatile__(
         "lgdt %0                           \n\t"
@@ -109,32 +109,32 @@ void jlos_gdt_init()
     );
 }
 
-uint16_t jlos_gdt_data_segment_selector(jlos_gdt_t* self)
+uint16_t jlos_mmu_data_selector(jlos_mmu_t* self)
 {
     return (uint8_t *)&self->data_segment_selector - (uint8_t *)self;
 }
 
-uint16_t jlos_gdt_code_segment_selector(jlos_gdt_t* self)
+uint16_t jlos_mmu_code_selector(jlos_mmu_t* self)
 {
     return (uint8_t *)&self->code_segment_selector - (uint8_t *)self;
 }
 
-uint16_t jlos_gdt_user_code_segment_selector(jlos_gdt_t *self)
+uint16_t jlos_mmu_user_code_selector(jlos_mmu_t *self)
 {
     return (uint16_t)((uint8_t *)&self->user_code_segment_selector - (uint8_t *)self) | 3;
 }
 
-uint16_t jlos_gdt_user_data_segment_selector(jlos_gdt_t *self)
+uint16_t jlos_mmu_user_data_selector(jlos_mmu_t *self)
 {
     return (uint16_t)((uint8_t *)&self->user_data_segment_selector - (uint8_t *)self) | 3;
 }
 
-uint16_t jlos_gdt_tss_selector(jlos_gdt_t *self)
+uint16_t jlos_gdt_tss_selector(jlos_mmu_t *self)
 {
     return (uint16_t)((uint8_t *)&self->tss_segment_selector - (uint8_t *)self);
 }
 
-void jlos_gdt_set_tss(jlos_gdt_t *self, uint32_t base, uint32_t limit)
+void jlos_gdt_set_tss(jlos_mmu_t *self, uint32_t base, uint32_t limit)
 {
     /* 只改内存中的 descriptor，不需要再次 lgdt（GDTR base/limit 没变）。
      * 多余 lgdt 会让一些 CPU 误以为要重刷 descriptor 缓存，
@@ -143,7 +143,7 @@ void jlos_gdt_set_tss(jlos_gdt_t *self, uint32_t base, uint32_t limit)
     jlos_gdt_segment_descriptor_init(&self->tss_segment_selector, base, limit, 0x89);
 }
 
-jlos_gdt_t *jlos_gdt_get_kernel(void)
+jlos_mmu_t *jlos_mmu_get_kernel(void)
 {
     return &s_kernel_gdt;
 }

@@ -17,6 +17,8 @@ typedef struct {
     jlos_tcp_provider_t                 tcp;
 } network_stack_t;
 
-void network_init(network_stack_t *stack, jlos_driver_manager_t *driver_manager_);
+extern network_stack_t *g_network_stack;
+
+void network_init(void);
 
 #endif

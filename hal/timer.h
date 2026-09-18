@@ -1,15 +1,20 @@
 #ifndef _JLOS_HAL_TIMER_H
 #define _JLOS_HAL_TIMER_H
 
-#include <tools/config.h>
 #include <common/types.h>
+#include <dsa/list.h>
 
 #define JLOS_HAL_TIME_FREQ_HZ       100
 
-#define JLOS_HAL_TIMER_INPUT_HZ     1193180U
-#define JLOS_HAL_TIMER_CMD_PORT     0x43
-#define JLOS_HAL_TIMER_CH0_PORT     0x40
-#define JLOS_HAL_TIMER_CMD_MODE3    0x36
+typedef struct jlos_timer_device {
+    const char          *name;
+    uint32_t            rating;
+    void                (*start_periodic)(uint16_t freq_hz);
+    jlos_list_head_t    list;
+} jlos_timer_device_t;
+
+void jlos_hal_timer_register(jlos_timer_device_t *dev);
+jlos_timer_device_t *jlos_hal_timer_get_active(void);
 
 void jlos_hal_timer_start_periodic(uint16_t freq_hz);
 uint32_t jlos_hal_timer_get_ticks(void);

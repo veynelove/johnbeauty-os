@@ -1,5 +1,5 @@
 .text
-.global jlos_ignore_interrupt_request
+.global jlos_irq_ignore_request
 .global jlos_handle_interrupt_request0x00
 .global jlos_handle_interrupt_request0x01
 .global jlos_handle_interrupt_request0x02
@@ -41,7 +41,7 @@
 
 # 外部符号
 .extern jlos_arch_tss_base_addr
-.extern jlos_interrupt_manager_handle_interrupt
+.extern jlos_irq_manager_handle
 
 .global interruptnumber
 interruptnumber:
@@ -49,7 +49,7 @@ interruptnumber:
 
 .section .text
 
-jlos_ignore_interrupt_request:
+jlos_irq_ignore_request:
     cli
     movl $0xFF, (interruptnumber)
     pushl $0
@@ -182,7 +182,7 @@ ring3_err:
 common_entry:
     pushl %esp
     pushl (interruptnumber)
-    call jlos_interrupt_manager_handle_interrupt
+    call jlos_irq_manager_handle
 
     cli                     # 调度器 / 中断处理可能开中断 (sti). 从现在到 iret
                             # 必须关中断保证原子性
@@ -217,3 +217,4 @@ ring3_finish:
     popl %eax
     addl $8, %esp
     iret
+.section .note.GNU-stack,"",%progbits

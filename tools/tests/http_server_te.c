@@ -1,6 +1,7 @@
 #include <tools/tests/http_server_te.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
+#include <net/network.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 
@@ -49,8 +50,9 @@ static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_t
     return true;
 }
 
-void http_server_test(jlos_tcp_provider_t *tcp)
+void http_server_test(void)
 {
+    jlos_tcp_provider_t *tcp = &g_network_stack->tcp;
     http_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(http_tcp_handler_t));
     jlos_tcp_handler_init(&tcphandler->base);
     tcphandler->base.handle_tcp_message = http_tcp_handler_handle_tcp_message;

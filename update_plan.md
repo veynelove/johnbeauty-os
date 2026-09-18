@@ -1,6 +1,6 @@
-# JohnBeauty OS 内核架构升级计划
+# JohnSunshine OS 内核架构升级计划
 
-版本: v2.9 | 日期: 2026-09-03 | 作者: JohnLove
+版本: v2.12 | 日期: 2026-09-18 | 作者: JohnLove
 
 ***
 
@@ -37,6 +37,12 @@
 | 用户进程       | ring3 用户态进程 + 用户栈(64KB多页)映射 + TSS 特权级切换 + fork COW + exit stub 修复             | Hello from ring3 + Wake up 验证通过          |
 | FPU/SSE        | Lazy 上下文切换 (CR0.TS + #NM handler) + FXSAVE/FXRSTOR + HAL ext\_state 抽象层 + 干净模板初始化 | multitask\_test + ring3 正常运行             |
 | 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页   | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
+| VMA/mmap 阶段1 | VMA 结构统一 brk/stack + page\_fault/fork/destroy VMA 驱动 + mmap 接口预留 + COW 批量锁优化 `jlos_paging_cow_range` | 四套测试 + rbtree 5 项 ALL PASSED    |
+| 红黑树 DSA     | CLRS 风格红黑树（哨兵 nil 节点 + 侵入式 container\_of），find/find\_le/insert/remove/遍历           | rbtree 5 项 ALL PASSED                |
+| Initcall 机制  | 5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST）+ 链接器段 + `jlos_do_initcalls()` 替代 call\_constructors | 全部子系统自动注册，ALL PASSED        |
+| Framebuffer Console | VBE 1024×768×32 framebuffer + 8×16 ASCII 字体 + 软件光标(erase/draw) + 鼠标光标(invert) | 1024×768 显示，键盘/鼠标正常          |
+| 输入子系统     | keyboard/mouse 驱动自动注册 + 事件回调（console 键盘输入 + 鼠标光标移动）                        | initcall DEVICE 级自动注册             |
+| HAL 层重构     | timer B2 链表选优 + serial/dma/pci/ext\_state A 分层 + 职责归属 + 去 drivers 依赖                | 编译通过 + 全测试 PASSED               |
 
 ***
 
@@ -50,9 +56,10 @@ Phase 1: Paging 修复 ✅  ←── 依赖 PFA                         │
 Phase 2: Memory Manager 升级 ✅ ←── 依赖 PFA + Paging          │
 Phase 3: Multitask 升级 ✅ ←── 依赖 PFA + Paging + MM          │
 Phase 4: SMP 预留  ←── 依赖全部                              │
-                                                             │
-                    ─── 先修 BUG，再做优化 ───               │
-                    ─── 底层改好，上层才好改 ───              │
+Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
+                                                              │
+                     ─── 先修 BUG，再做优化 ───               │
+                     ─── 底层改好，上层才好改 ───              │
 ```
 
 ***
@@ -213,7 +220,6 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | ~~PFA-4~~ | ~~引入 `struct jlos_page` 数组~~ | **已实现**：`s_pages[]` 已是 `jlos_page_t` 数组，含 flags/refcount/order/type/u(free_list|owner)，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c | — | ✅ 已完成 |
-| MM-3 | size class 从纯 2^n 改精细粒度表，平均膨胀 < 15% | 当前 `mm_size_to_class(513)` → 1024B 浪费 50%；高频 80~1500B 浪费严重 | memory_manager.h / .c | 中 | 待做 |
 | MT-4 | `tasks[256]` 静态数组动态化 | 256 上限对网络服务很快打顶；pid wrap 无冲突判定 | multitask.h / multitask.c | 中 | 待做 |
 
 ### 5.4 SMP / 多架构预留接口
@@ -223,6 +229,147 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | PAG-5 | HAL 层加 `jlos_hal_paging_global_pages(enable)`（x86 CR4.PGE）+ `jlos_hal_paging_asid_alloc/free`（ARM/RISC-V 留占位，x86 返回 0）；内核页 PTE 统一加 `JLOS_PTE_GLOBAL` 标志 | 减少 CR3 切换导致的内核 TLB 全刷；为 ARM 等有 ASID 的架构预留钩子 | hal/paging.h + 各 arch 实现占位 / paging.c | 低 |
 | PFA-5 | 对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)` | 目前 malloc 单帧 + reserve_bulk 多帧两条独立路径，调用方用错会泄漏；统一出口便于批量优化 | page_frame_allocator.h / .c | 低 |
 | MM-5 | `memset`/`memcpy` 32B 展开 + SSE2 宽写（`movdqa`/`movdqu`），函数头 `clts` 清 CR0.TS + 尾 `mov %cr0` 恢复 | 现在 32-bit 逐字写 4B/cycle，COW 4KB 拷贝慢 2~3 倍；CR0.TS 置位保证 #NM lazy FPU 语义不变 | memory_manager.c（汇编块或内联 asm） | 中 |
+
+***
+
+## Phase 6: Console/Display 子系统 + Initcall 机制 ✅ 已完成
+
+### 6.1 Initcall 机制（替代 call_constructors + .init_array）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 5 级 initcall 宏 (CORE/SUBSYS/DEVICE/LATE/POST) | ✅ | `kernel/initcall.h`，两层宏 `__JLOS_INITCALL` + `JLOS_INITCALL` 先展开 level 再字符串化 |
+| 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall4` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
+| `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 5 个段执行 |
+| 删除 `call_constructors` | ✅ | `loader.s` 删除调用 + `kernel.c` 删除函数定义 + `linker.ld` 删除 `.init_array` 段 |
+| `john_beauty_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
+
+**Initcall 级别分配：**
+
+| 级别 | 子系统 | 说明 |
+| --- | --- | --- |
+| CORE (0) | memory\_manager, task\_manager | 最底层基础设施 |
+| SUBSYS (1) | irq\_manager, driver\_manager, pci\_subsys | 子系统框架初始化 |
+| DEVICE (2) | timer, network, display\_device, input\_device, syscall\_handler | 设备/驱动注册 |
+| LATE (3) | driver\_manager\_activate\_all | 驱动激活（依赖 DEVICE 注册完成） |
+| POST (4) | irq\_manager\_activate | 中断最终激活（依赖全部初始化完成） |
+
+### 6.2 Framebuffer Console（VBE 1024×768×32）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| VBE multiboot 请求 | ✅ | `loader.s` 添加 `MULTIBOOT_VIDEO_MODE` 标志 + 9 个视频字段 (1024×768×32) |
+| VBE 结构体定义 | ✅ | `common/multiboot.h` 中 `jlos_vbe_mode_info_t` |
+| 8×16 ASCII 字体 | ✅ | `arch/x86/font_8x16.h`/`.c`，256 字符 × 16 字节点阵 |
+| Framebuffer console 实现 | ✅ | `arch/x86/fb_console.c`：putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at |
+| Framebuffer 映射 | ✅ | `jlos_hal_arch_display_init_fb()`：VBE phys\_base → 内核虚拟地址，write-back 缓存（无 CACHE\_DISABLE） |
+| 软件光标 erase/draw 模式 | ✅ | framebuffer 无硬件光标，erase = 反转恢复字符底部 2 行，draw = 反转显示光标 |
+| 鼠标光标 | ✅ | `fb_invert_at` 反转整个字符块（与光标底部 2 行视觉区分），`visible` 标志防首次 erase 空位置 |
+| Display HAL 接口 | ✅ | `hal/display.h`：`GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor` |
+| VGA text ops 保留 | ✅ | `arch/x86/vga_text.c`：erase\_cursor 空操作 + draw\_cursor CRT 寄存器（未激活，备用） |
+| Console 软件层 | ✅ | `kernel/console.c`：erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall |
+
+### 6.3 输入子系统迁移
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `debug_console.c` → `drivers/input/input.c` | ✅ | 键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册 |
+| 删除 `KERNEL_CONFIG_DEBUG_CONSOLE` | ✅ | `tools/config.h` 清理 |
+| 删除 `KERNEL_CONFIG_DEBUG_NETWORK` | ✅ | `tools/config.h` 清理 |
+| 删除 `tools/samples/debug_console.c/.h` | ✅ | 迁移完成，原文件删除 |
+
+### 6.4 Bug 修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| BC-1 | Backspace scancode 0x0E 缺失 | 添加 `case 0x0E: key_down('\b')` | drivers/keyboard.c |
+| BC-2 | `handles[i] = NULL` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
+| BC-3 | syscall initcall 与 IRQ manager 同级，handles 清零覆盖 | syscall 从 SUBSYS 改为 DEVICE | kernel/syscall.c |
+| BC-4 | 用户栈 VMA end 不含栈顶 `0xBFFFF000` | 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE` (= `0xC0000000`) | kernel/multitask.c |
+
+### 6.5 已知遗留
+
+| # | 问题 | 说明 | 优先级 |
+| --- | --- | --- | --- |
+| CON-1 | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看 | printk 全部历史保存，类比 Linux ring buffer + dmesg | 中 |
+| CON-2 | 串口宏开关 `JLOS_SERIAL_ECHO` | 当前串口始终输出，需宏控制开关 | 低 |
+| CON-3 | PCI 总线枚举从 HAL 拆到 `drivers/pci/` | arch 无关总线枚举逻辑可上提 drivers 层 | 低 |
+
+***
+
+## Phase 7: HAL 层架构合规重构 ✅ 已完成
+
+### 7.1 分层模式判定
+
+HAL 层三种经典分层做法及判定标准：
+
+| 模式 | 做法 | 适用场景 |
+| ---- | ---- | -------- |
+| A    | HAL 声明 + arch 定义（编译期绑定） | 单实现、编译期选定架构 |
+| B    | ops 表 + 转发（运行时切一个） | 需运行时切换单一实现 |
+| B2   | 实例注册链表 + rating 选优（多实例共存） | 多实现共存、按优先级选优 |
+
+**判定关键**：是否需要运行时多实现共存。多架构不构成 B/B2 的理由（编译期链接选不同 arch 目录即可），多核只影响 timer 和 irq。
+
+各子系统决策：
+
+| 子系统 | 模式 | 理由 |
+| ------ | ---- | ---- |
+| timer  | B2   | 多时钟源共存 + SMP per-cpu timer 演进路径，dsa/list 链表注册 + rating 选优 |
+| serial | A    | 16550 单芯片族，编译期绑定 |
+| dma    | A    | 8237 遗留 ISA DMA，单实现 |
+| pci    | A    | 单配置机制；HAL 拥通用类型 + read16/8/write16/8 位操作，arch 拥 controller 结构 + read32/write32 硬件原语 |
+| display| B    | 已有 ops，多后端共存（framebuffer/VGA） |
+| block  | B    | 已有 ops，多控制器共存 |
+| ext\_state | A | HAL 自定义不透明结构（raw[512]+used），arch 实现 fxsave/fxrstor |
+
+### 7.2 第 1 批：局部修复
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| L1 | dma.c count 端口 bug + 死代码 + 重复 OR | hal/dma.c |
+| L2 | serial.c UART 命名规范化 | hal/serial.c |
+| L3 | pci.h 0x80000000u 魔数宏化（JLOS_HAL_PCI_CONFIG_ADDR_ENABLE） | hal/pci.h |
+| L4 | block.h/c ATA28 LBA 魔数宏化 | hal/block.h, hal/block.c |
+| L5 | device.h/c mmio owner 改 char[24] + jlos_strlcpy 复制 | hal/device.h, hal/device.c |
+| L6 | display.c 单语句 if 花括号统一 | hal/display.c |
+
+### 7.3 第 2 批：职责归属
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| O1 | 4 个 syscall 全局变量移出 hal.c → 新建 hal/kernel_syscall.c | hal/kernel_syscall.c |
+| O2 | hal.c 自持 s_hal_info + jlos_hal_info_get_for_init() 替代 g_hal_info extern | hal/hal.c, hal/hal.h |
+| O3 | 新建 hal/hal_arch.h 拆出 arch 注入函数声明（11 个文件加 include） | hal/hal_arch.h |
+| O4 | user_syscall 移到 user/ 目录 + Makefile 加 user | user/user_syscall.h, user/user_syscall.c, Makefile |
+
+### 7.4 第 3 批：下沉 arch
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| S1 | timer B2：hal/timer.h 定义 jlos_timer_device + dsa/list 链表注册 + rating 选优；arch/x86/pit.c SUBSYS 级注册 | hal/timer.h, hal/timer.c, arch/x86/pit.c |
+| S2 | serial A：hal/serial.h 纯声明，删 hal/serial.c，新建 arch/x86/uart_8250.c | hal/serial.h, arch/x86/uart_8250.c |
+| S3 | dma A：hal/dma.h 纯声明，删 hal/dma.c，新建 arch/x86/dma_8237.c | hal/dma.h, arch/x86/dma_8237.c |
+| S4 | ext_state A：hal/ext_state.h 自定义 raw[512]+used 结构，arch/x86/fpu.c 改用 raw，删 arch/x86/fpu_state.h | hal/ext_state.h, arch/x86/fpu.c |
+
+### 7.5 第 4 批：PCI 分层 + block 去 drivers
+
+| # | 修复 | 文件 |
+| - | ---- | ---- |
+| P1 | PCI A 分层：hal/pci.h 自定义类型 + 不透明 controller，hal/pci.c 只留 read16/8/write16/8 通用逻辑 + initcall | hal/pci.h, hal/pci.c |
+| P2 | arch/x86/pci.h 定义 controller 结构，arch/x86/pci.c 实现全部 arch 部分，函数名统一 jlos_hal_pci_ 前缀 | arch/x86/pci.h, arch/x86/pci.c |
+| P3 | drivers/amd_am79c973 参数类型跟随改名 | drivers/amd_am79c973.h, drivers/amd_am79c973.c |
+| P4 | block C1：hal/block.h 去掉 #include drivers/ata.h，union dev_priv 改 uint8_t priv[64] + _Static_assert | hal/block.h, hal/block.c |
+
+### 7.6 PCI read32/write32 由 arch 定义的设计理由
+
+read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch 特有），read16/8 是"在结果上做位操作"的通用算法（调 read32 再移位，所有 arch 复用，避免 DRY 违反）。因此 HAL 拥有 read16/8/write16/8，arch 拥有 read32/write32。
+
+### 7.7 验证
+
+- 编译通过（`make clean && make`）
+- 全测试 PASSED：memory/pfa/paging/multitask + 网络栈 + timer 选优生效
+- 12 项遗留检查全部通过：hal/ 下无架构宏、无 #include arch、无 #include drivers（仅 block.c .c 文件保留）、无 g_hal_info extern、无 typedef 别名、timer.c 无 PIT 端口、serial.c/dma.c 已删、fpu_state.h 已删、user_syscall 已移走、block.h 不依赖 drivers、ext_state.h 不 include arch
 
 ***
 
@@ -238,6 +385,8 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | **P1** | 5.2   | 性能热点（MT-2 直连唤醒、MT-1 wait queue 经典化；PAG-4 内核 4KB PDE 共享可选） | Phase 5.1 完成 |
 | **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
 | **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、MM-5、4.1~4.6）        | Phase 5.3 完成 |
+| **P0** | 6     | Console/Display 子系统 + Initcall 机制                              | ✅ 已完成    |
+| **P0** | 7     | HAL 层架构合规重构（分层模式 + 职责归属 + 下沉 arch + 去 drivers） | ✅ 已完成    |
 
 ***
 
@@ -258,6 +407,8 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4            |
 | F12  | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成 | arch/x86/fpu.c + hal/ext\_state.h | —                  |
 | F13  | O(1) 调度选择（per-level runqueue + bitmap）             | kernel/multitask.c                | 无                 |
+| F14  | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看                  | kernel/console.c + printk.c       | 无                 |
+| F15  | 串口输出宏开关 `JLOS_SERIAL_ECHO`                        | kernel/console.c + hal/serial.h   | 无                 |
 
 ***
 
@@ -300,6 +451,56 @@ Phase 4: SMP 预留  ←── 依赖全部                              │
 | —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-18（v2.12）
+
+- **HAL 层架构合规重构完成**：分析 hal/ 33 个文件，识别 18 个问题，分 4 批修改全部完成。
+
+- **分层模式判定**：确立 A（hal 声明 + arch 定义）、B（ops 表转发）、B2（实例注册链表 + rating 选优）三种模式。判定关键是"是否需要运行时多实现共存"。多架构不构成 B/B2 理由（编译期链接选不同 arch 目录），多核只影响 timer/irq。
+
+- **第 1 批局部修复**：dma.c count 端口 bug + 死代码 + 重复 OR；serial.c UART 命名；pci.h 0x80000000u 宏化；block.h/c ATA28 LBA 魔数宏化；device.h/c mmio owner 改 char[24] + jlos_strlcpy；display.c 花括号统一。
+
+- **第 2 批职责归属**：新建 hal/kernel_syscall.c 移出 4 个 syscall 全局变量；hal.c 自持 s_hal_info + jlos_hal_info_get_for_init() 替代 g_hal_info extern；新建 hal/hal_arch.h 拆出 arch 注入函数声明（11 个文件加 include）；user_syscall 移到 user/ 目录 + Makefile 加 user。
+
+- **第 3 批下沉 arch**：timer B2（hal/timer.h 定义 jlos_timer_device + dsa/list 链表注册 + rating 选优，arch/x86/pit.c SUBSYS 级注册）；serial A（hal/serial.h 纯声明，删 hal/serial.c，新建 arch/x86/uart_8250.c）；dma A（hal/dma.h 纯声明，删 hal/dma.c，新建 arch/x86/dma_8237.c）；ext_state A（hal/ext_state.h 自定义 raw[512]+used 结构，arch/x86/fpu.c 改用 raw，删 arch/x86/fpu_state.h）。
+
+- **第 4 批 PCI 分层 + block 去 drivers**：PCI A（hal/pci.h 自定义类型 + 不透明 controller，hal/pci.c 只留 read16/8/write16/8 通用逻辑 + initcall，arch/x86/pci.h 定义 controller 结构，arch/x86/pci.c 实现全部 arch 部分，函数名统一 jlos_hal_pci_ 前缀，drivers/amd_am79c973 参数类型跟随改名）；block C1（hal/block.h 去掉 #include drivers/ata.h，union dev_priv 改 uint8_t priv[64] + _Static_assert，hal/block.c 用 block_ata() helper 访问）。
+
+- **PCI read32/write32 由 arch 定义的理由**：read32 是"发起硬件访问"原语（地址编码 + 端口操作整体 arch 特有），read16/8 是"在结果上做位操作"通用算法（调 read32 再移位，所有 arch 复用，避免 DRY 违反）。
+
+- **验证**：编译通过 + 全测试 PASSED（memory/pfa/paging/multitask + 网络栈 + timer 选优生效）。12 项遗留检查全部通过。
+
+- 更新计划至 v2.12
+
+#### 2026-09-17（v2.11）
+
+- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_beauty_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
+
+- **Framebuffer Console 完成**：`loader.s` 启用 `MULTIBOOT_VIDEO_MODE`（1024×768×32），`common/multiboot.h` 添加 `jlos_vbe_mode_info_t`。`arch/x86/font_8x16.h`/`.c` 256 字符 × 16 字节点阵。`arch/x86/fb_console.c` 完整实现 putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at，软件光标 erase/draw 分离模式（反转字符底部 2 行），鼠标光标反转整个字符块（`visible` 标志防首次 erase）。framebuffer 映射用 write-back 缓存（去掉 CACHE\_DISABLE）。`hal/display.h` 中 `GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor`。`kernel/console.c` 改为 erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall（DEVICE 级）。
+
+- **输入子系统迁移**：`tools/samples/debug_console.c` → `drivers/input/input.c`，键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册。删除 `KERNEL_CONFIG_DEBUG_CONSOLE` 和 `KERNEL_CONFIG_DEBUG_NETWORK` 宏，删除原 `debug_console.c/.h`。
+
+- **Bug 修复**：① keyboard.c 添加 Backspace scancode 0x0E（原缺失，按键被丢弃）；② interrupts.c 删除冗余 `handles[i] = NULL` 清零（BSS 已为零，清零覆盖已注册 handler）；③ syscall.c initcall 从 SUBSYS 改为 DEVICE（依赖 IRQ manager 先初始化）；④ multitask.c VMA end 从 `stack_base + stack_size` 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE`（`[start,end)` 语义不含栈顶）。
+
+- **方向变更**：原计划阶段 A（VGA 文本模式三层重构 + 日志环形缓冲 + 键盘翻页 + 硬件光标 + 串口宏开关）改为直接实现 framebuffer console（原阶段 B 内容）。VBE framebuffer 与 VGA 文本互斥，一旦 loader.s 请求 VIDEO\_MODE，0xB8000 文本显存失效，因此直接跳到 framebuffer 方案。日志环形缓冲 + 键盘翻页 + 串口宏开关仍为后续待办。
+
+- 全流程验证通过：memory/pfa/paging/multitask ALL PASSED + http/udp server 正常启动
+
+- 更新计划至 v2.11
+
+#### 2026-09-13（v2.10）
+
+- **N1 VMA/mmap 阶段1 完成**：brk + stack 两段硬编码区间统一成 VMA 区间，page\_fault/fork/destroy 改为 VMA 驱动；mmap 只留接口（VMA file/offset 字段 + MMAP/MUNMAP syscall 编号 + stub）。brk 字段从 task 冗余副本统一到 mm；栈首页预映射删除改走 demand paging。
+
+- **Manager 全局化**：7 个 manager（low/main memory\_manager、task\_manager、interrupt\_manager、driver\_manager、pci\_controller、syscall\_handler）从 kernel.c 栈上局部变量改为各自 .c 文件 static 全局变量，init 函数去 self 参数，kernel.c 从 133 行精简到 119 行。
+
+- **修复 memory\_manager bug**：`jlos_memory_manager_init_main` 曾调用操作 `s_low_memory_manager` 的 `jlos_memory_manager_init`，导致 `s_main_memory_manager` 从未初始化；提取 `mm_init` static 内部函数解决。
+
+- **2 个编译警告**：`.note.GNU-stack`（每个 .s 末尾加 `.section .note.GNU-stack,"",%progbits`）+ LINKER RWX LOAD segment（linker.ld 加 PHDRS 分离 boot/code RX 与 data RW）。
+
+- **红黑树 DSA 组件**：新增 `dsa/rbtree.h` + `dsa/rbtree.c`（CLRS 风格，哨兵 nil 节点，侵入式 container\_of），5 项测试全 PASSED。
+
+- **P3 fork/COW 遍历优化**：新增 `jlos_paging_cow_range` 接口（paging.c），src/dst 各加一次锁、一遍遍历完成 refcount\_inc + 映射 dst 为 COW + 改 src 为 COW，替代 `jlos_mm_clone_user` 内层逐页 `get_physical_addr`+`map` 的 2N 次加锁；锁 2N+1→2，遍历 3 遍→1 遍。multitask test 3（fork 10 children）/test 4（ring3 smoke）ALL PASSED。
 
 #### 2026-09-03（v2.9）
 

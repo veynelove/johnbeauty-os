@@ -32,7 +32,7 @@ void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, ui
     (void)size;
 }
 
-void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_pci_device_descriptor_t *dev, jlos_irq_manager_t *interrupts)
+void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *dev, jlos_irq_manager_t *interrupts)
 {
     jlos_driver_init(&self->base_driver);
     self->base_driver.activate = (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate;

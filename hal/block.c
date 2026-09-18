@@ -1,28 +1,36 @@
 #include <hal/block.h>
 #include <hal/diag.h>
+#include <drivers/ata.h>
+
+_Static_assert(sizeof(jlos_ata_t) <= JLOS_HAL_BLOCK_PRIV_SIZE, "block priv too small for ata");
+
+static jlos_ata_t *block_ata(jlos_hal_block_dev_t *self)
+{
+    return (jlos_ata_t *)self->priv;
+}
 
 static void ata_pio28_init(jlos_hal_block_dev_t *self)
 {
-    jlos_ata_init(&self->dev_priv.ata, self->dev_priv.ata.data_port.portnumber,
-                  self->dev_priv.ata.master);
-    self->bytes_per_sector = self->dev_priv.ata.bytes_per_sector;
+    jlos_ata_init(block_ata(self), block_ata(self)->data_port.portnumber,
+                  block_ata(self)->master);
+    self->bytes_per_sector = block_ata(self)->bytes_per_sector;
     self->inited = 1;
 }
 
 static void ata_pio28_destroy(jlos_hal_block_dev_t *self)
 {
-    jlos_ata_destroy(&self->dev_priv.ata);
+    jlos_ata_destroy(block_ata(self));
     self->inited = 0;
 }
 
 static void ata_pio28_identify(jlos_hal_block_dev_t *self)
 {
-    jlos_ata_identify(&self->dev_priv.ata);
+    jlos_ata_identify(block_ata(self));
 }
 
 static void ata_pio28_flush(jlos_hal_block_dev_t *self)
 { 
-    jlos_ata_flush(&self->dev_priv.ata);
+    jlos_ata_flush(block_ata(self));
 }
 
 static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba, uint8_t *buf, uint32_t count)
@@ -34,13 +42,13 @@ static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba, uint
     if (count == 0) {
         return 0;
     }
-    if (lba > 0x0FFFFFFFull || (lba + (uint64_t)count - 1) > 0x0FFFFFFFull) {
+    if (lba > JLOS_ATA28_LBA_MAX || (lba + (uint64_t)count - 1) > JLOS_ATA28_LBA_MAX) {
         return -2;
     }
     uint32_t total_bytes = count * self->bytes_per_sector;
     (void)total_bytes;
     for (uint32_t i = 0; i < count; i++) {
-        jlos_ata_read28(&self->dev_priv.ata, (uint32_t)lba + i, buf + i * self->bytes_per_sector,
+        jlos_ata_read28(block_ata(self), (uint32_t)lba + i, buf + i * self->bytes_per_sector,
             (int)self->bytes_per_sector);
     }
     return 0;
@@ -56,11 +64,11 @@ static int ata_pio28_write_sectors(jlos_hal_block_dev_t *self, uint64_t lba,
     if (count == 0) {
         return 0;
     }
-    if (lba > 0x0FFFFFFFull || (lba + (uint64_t)count - 1) > 0x0FFFFFFFull) {
+    if (lba > JLOS_ATA28_LBA_MAX || (lba + (uint64_t)count - 1) > JLOS_ATA28_LBA_MAX) {
         return -2;
     }
     for (uint32_t i = 0; i < count; i++) {
-        jlos_ata_write28(&self->dev_priv.ata, (uint32_t)lba + i, (uint8_t *)buf + i * self->bytes_per_sector,
+        jlos_ata_write28(block_ata(self), (uint32_t)lba + i, (uint8_t *)buf + i * self->bytes_per_sector,
             (int)self->bytes_per_sector);
     }
     return 0;
@@ -85,8 +93,8 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self, uint16_t port_b
     self->total_sectors = 0;
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;
-    jlos_ata_init(&self->dev_priv.ata, port_base, master);
-    self->bytes_per_sector = self->dev_priv.ata.bytes_per_sector;
+    jlos_ata_init(block_ata(self), port_base, master);
+    self->bytes_per_sector = block_ata(self)->bytes_per_sector;
     self->inited = 1;
 }
 

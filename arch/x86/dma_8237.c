@@ -3,11 +3,17 @@
 #include <hal/hal.h>
 #include <hal/diag.h>
 
-static jlos_hal_dma_chan_state_t s_state[JLOS_HAL_DMA_CHANNELS];
+#define JLOS_DMA_CHANNELS         8
+#define JLOS_DMA_CHAN_CASCADE     4
+#define JLOS_DMA_CH03_MAX_BYTES   0x10000
+#define JLOS_DMA_CH57_MAX_BYTES   0x20000
+#define JLOS_DMA_PHYS_MAX         0x00FFFFFFu
+
+static jlos_hal_dma_chan_state_t s_state[JLOS_DMA_CHANNELS];
 
 const jlos_hal_dma_chan_state_t *jlos_hal_dma_get_state_table(int *out_count)
 {
-    if (out_count) *out_count = JLOS_HAL_DMA_CHANNELS;
+    if (out_count) *out_count = JLOS_DMA_CHANNELS;
     return s_state;
 }
 
@@ -43,8 +49,7 @@ static void dma_write_mode(uint8_t channel, jlos_hal_dma_dir_t dir, int is_write
         mode = (uint8_t)((channel - 4) & 3);
     }
     uint8_t xfer_type = (dir == JLOS_HAL_DMA_DIR_WRITE_TO_DEV) ? 0x08 : 0x04;
-    mode = (uint8_t)(mode | xfer_type | 0x40 | 0x00 );
-    mode |= 0x40;
+    mode = (uint8_t)(mode | xfer_type | 0x40);
     (void)is_write;
     jlos_io8_slow_t port;
     jlos_io8_slow_init(&port, (channel <= 3) ? 0x0B : 0xD6);
@@ -78,10 +83,10 @@ void jlos_hal_dma_init(void)
     jlos_hal_register_io_range(0x80, 0x8F, "DMA Page Registers (74LS612)");
     jlos_hal_register_io_range(0xC0, 0xDF, "8237 DMA-2 (ch4-7 cascade)");
     
-    for (int i = 0; i < JLOS_HAL_DMA_CHANNELS; i++) {
+    for (int i = 0; i < JLOS_DMA_CHANNELS; i++) {
         s_state[i].used = 0;
         s_state[i].status = JLOS_HAL_DMA_STATUS_IDLE;
-        if (i != JLOS_HAL_DMA_CHAN_CASCADE) {
+        if (i != JLOS_DMA_CHAN_CASCADE) {
             dma_write_mask((uint8_t)i, 1);
         }
     }
@@ -97,13 +102,13 @@ void jlos_hal_dma_init(void)
 int jlos_hal_dma_prepare(uint8_t channel, uint32_t phys_buf_addr, uint32_t length_bytes, jlos_hal_dma_dir_t dir)
 {
     HAL_TRACE_MSG("8237 DMA prepare channel");
-    if (channel >= JLOS_HAL_DMA_CHANNELS) return -1;
-    if (channel == JLOS_HAL_DMA_CHAN_CASCADE) return -4;
-    if (phys_buf_addr > JLOS_HAL_DMA_PHYS_MAX) return -2;
+    if (channel >= JLOS_DMA_CHANNELS) return -1;
+    if (channel == JLOS_DMA_CHAN_CASCADE) return -4;
+    if (phys_buf_addr > JLOS_DMA_PHYS_MAX) return -2;
 
     uint32_t max_bytes;
-    if (channel <= 3) max_bytes = JLOS_HAL_DMA_CH03_MAX_BYTES;
-    else              max_bytes = JLOS_HAL_DMA_CH57_MAX_BYTES;
+    if (channel <= 3) max_bytes = JLOS_DMA_CH03_MAX_BYTES;
+    else              max_bytes = JLOS_DMA_CH57_MAX_BYTES;
     if (length_bytes == 0 || length_bytes > max_bytes) return -3;
 
     int is_dma2 = (channel >= 4);
@@ -112,9 +117,6 @@ int jlos_hal_dma_prepare(uint8_t channel, uint32_t phys_buf_addr, uint32_t lengt
     dma_write_mode(channel, dir, 1);
 
     uint16_t bc_start = dma_basecount_start(channel);
-    jlos_io8_slow_t base_lo, base_hi;
-    jlos_io8_slow_init(&base_lo, bc_start);
-    jlos_io8_slow_init(&base_hi, (uint16_t)(bc_start + 1));
 
     uint32_t effective_phys = phys_buf_addr;
     if (is_dma2) {
@@ -126,8 +128,10 @@ int jlos_hal_dma_prepare(uint8_t channel, uint32_t phys_buf_addr, uint32_t lengt
     } else {
         addr16 = (uint16_t)(effective_phys & 0xFFFFu);
     }
-    jlos_io8_slow_write(&base_lo, (uint8_t)(addr16 & 0xFF));
-    jlos_io8_slow_write(&base_hi, (uint8_t)((addr16 >> 8) & 0xFF));
+    jlos_io8_slow_t addr_port;
+    jlos_io8_slow_init(&addr_port, bc_start);
+    jlos_io8_slow_write(&addr_port, (uint8_t)(addr16 & 0xFF));
+    jlos_io8_slow_write(&addr_port, (uint8_t)((addr16 >> 8) & 0xFF));
 
     uint16_t pgport = dma_page_port(channel);
     if (pgport != 0) {
@@ -143,17 +147,12 @@ int jlos_hal_dma_prepare(uint8_t channel, uint32_t phys_buf_addr, uint32_t lengt
     } else {
         count_reg = (uint16_t)(length_bytes - 1u);
     }
-    jlos_io8_slow_t cnt_lo, cnt_hi;
-    jlos_io8_slow_init(&cnt_lo, (uint16_t)(bc_start + 0));
-    jlos_io8_slow_init(&cnt_hi, (uint16_t)(bc_start + 1));
-    (void)cnt_lo; (void)cnt_hi;
     
-    jlos_io8_slow_t count_port_lo, count_port_hi;
-    jlos_io8_slow_init(&count_port_lo, (uint16_t)(bc_start + 1));
-    jlos_io8_slow_init(&count_port_hi, (uint16_t)(bc_start + 1));
+    jlos_io8_slow_t count_port;
+    jlos_io8_slow_init(&count_port, (uint16_t)(bc_start + 1));
     dma_clear_ff((uint8_t)is_dma2);
-    jlos_io8_slow_write(&count_port_lo, (uint8_t)(count_reg & 0xFF));
-    jlos_io8_slow_write(&count_port_hi, (uint8_t)((count_reg >> 8) & 0xFF));
+    jlos_io8_slow_write(&count_port, (uint8_t)(count_reg & 0xFF));
+    jlos_io8_slow_write(&count_port, (uint8_t)((count_reg >> 8) & 0xFF));
     
     s_state[channel].phys_buf = effective_phys;
     s_state[channel].length = length_bytes;
@@ -166,8 +165,8 @@ int jlos_hal_dma_prepare(uint8_t channel, uint32_t phys_buf_addr, uint32_t lengt
 int jlos_hal_dma_start(uint8_t channel)
 {
     HAL_TRACE_MSG("8237 DMA start channel");
-    if (channel >= JLOS_HAL_DMA_CHANNELS) return -1;
-    if (channel == JLOS_HAL_DMA_CHAN_CASCADE) return -4;
+    if (channel >= JLOS_DMA_CHANNELS) return -1;
+    if (channel == JLOS_DMA_CHAN_CASCADE) return -4;
     if (!s_state[channel].used ||
         !(s_state[channel].status & JLOS_HAL_DMA_STATUS_PREPARED)) return -1;
     dma_write_mask(channel, 0);
@@ -177,8 +176,8 @@ int jlos_hal_dma_start(uint8_t channel)
 
 int jlos_hal_dma_stop(uint8_t channel)
 {
-    if (channel >= JLOS_HAL_DMA_CHANNELS) return -1;
-    if (channel == JLOS_HAL_DMA_CHAN_CASCADE) return -4;
+    if (channel >= JLOS_DMA_CHANNELS) return -1;
+    if (channel == JLOS_DMA_CHAN_CASCADE) return -4;
     dma_write_mask(channel, 1);
     if (s_state[channel].status == JLOS_HAL_DMA_STATUS_RUNNING) {
         s_state[channel].status = JLOS_HAL_DMA_STATUS_PREPARED;
@@ -188,7 +187,7 @@ int jlos_hal_dma_stop(uint8_t channel)
 
 jlos_hal_dma_status_t jlos_hal_dma_status(uint8_t channel, uint32_t *out_remaining)
 {
-    if (channel >= JLOS_HAL_DMA_CHANNELS) return JLOS_HAL_DMA_STATUS_ERROR;
+    if (channel >= JLOS_DMA_CHANNELS) return JLOS_HAL_DMA_STATUS_ERROR;
     if (out_remaining) {
         if (!s_state[channel].used) {
             *out_remaining = 0;

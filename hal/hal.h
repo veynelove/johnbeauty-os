@@ -1,7 +1,6 @@
 #ifndef _JLOS_HAL_H
 #define _JLOS_HAL_H
 
-#include <tools/config.h>
 #include <common/types.h>
 #include <hal/io.h>
 
@@ -73,13 +72,6 @@ typedef struct {
 } jlos_hal_info_t;
 
 extern const jlos_hal_io_ops_t *jlos_hal_io_ops;
-extern const jlos_hal_io_ops_t  jlos_hal_x86_fast_io_ops;
-extern const jlos_hal_io_ops_t  jlos_hal_x86_slow_io_ops;
-
-void jlos_hal_arch_init(void);
-void jlos_hal_kernel_segments_init(void);
-void jlos_hal_halt(void);
-void jlos_hal_enable_interrupts(void);
 
 int jlos_hal_io_sanity_check(uint16_t port, int is_write, const char *owner);
 
@@ -93,6 +85,7 @@ int jlos_hal_irq_is_claimed(uint8_t irq, char *out_owner, int owner_bufsz);
 const jlos_hal_irq_info_t *jlos_hal_get_irq_table(int *out_count);
 
 const jlos_hal_info_t *jlos_hal_get_info(void);
+jlos_hal_info_t *jlos_hal_info_get_for_init(void);
 
 void jlos_hal_irq_refresh_reserved_bitmap(void);
 

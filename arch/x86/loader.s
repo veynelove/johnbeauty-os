@@ -1,7 +1,7 @@
 .include "arch/x86/multiboot.inc"
 
 .set MAGIC, MULTIBOOT_HEADER_MAGIC
-.set FLAGS, MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO
+.set FLAGS, MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO | MULTIBOOT_VIDEO_MODE
 .set CHECKSUM, -(MAGIC + FLAGS)
 
 /* Multiboot 头 (ALLOC: GRUB 在首 8KB 内找 magic) */
@@ -10,6 +10,15 @@
     .long MAGIC
     .long FLAGS
     .long CHECKSUM
+    .long 0             /* header_addr (AOUT_KLUDGE 未设置, 占位) */
+    .long 0             /* load_addr */
+    .long 0             /* load_end_addr */
+    .long 0             /* bss_end_addr */
+    .long 0             /* entry_addr */
+    .long 0             /* mode_type: 0 = linear framebuffer */
+    .long 1024          /* width */
+    .long 768           /* height */
+    .long 32            /* depth (bpp) */
 
 /* .boot 段: VMA == LMA == 物理地址, GRUB 未开分页时直接执行 */
 .section .boot, "awx"
@@ -82,7 +91,6 @@ _stop_bad_magic:
 /* high_half: 链接在 .text, VMA = 0xC01xxxxx */
 .section .text
 .extern john_beauty_main
-.extern call_constructors
 .extern _kernel_end
 .extern _bss_start
 .extern _bss_end
@@ -103,8 +111,6 @@ high_half:
     xorl  %eax, %eax
     cld
     rep   stosb
-
-    call  call_constructors
 
     /* mbinfo 物理地址 → 虚拟地址 */
     movl  boot_mbinfo_pa, %ebx
@@ -128,3 +134,4 @@ kernel_stack_bottom:
     .space 4 * 1024 * 1024
 .global kernel_stack
 kernel_stack:
+.section .note.GNU-stack,"",%progbits

@@ -96,8 +96,8 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
 void jlos_paging_enable(jlos_paging_context_t *self);
 void jlos_paging_switch(jlos_paging_context_t *self);
 void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t flags);
-void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end,
-    uint32_t flags);
+void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtual_addr_start, uint32_t virtual_addr_end, uint32_t flags);
+bool jlos_paging_cow_range(jlos_paging_context_t *src, jlos_paging_context_t *dst, uint32_t start, uint32_t end);
 
 void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn);
 bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual_addr, uint32_t len);

@@ -1,5 +1,5 @@
-#ifndef _JLOS_HAL_USER_SYSCALL_H
-#define _JLOS_HAL_USER_SYSCALL_H
+#ifndef _JLOS_LIB_USER_SYSCALL_H
+#define _JLOS_LIB_USER_SYSCALL_H
 
 #include <common/types.h>
 #include <hal/syscall_abi.h>

@@ -4,15 +4,17 @@
 #include <kernel/ipc.h>
 #include <kernel/printk.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/initcall.h>
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
 
-extern jlos_task_manager_t *g_task_manager_ptr;
-extern jlos_task_t *g_current_task_ptr;
+extern jlos_task_manager_t      *g_task_manager_ptr;
+extern jlos_task_t              *g_current_task_ptr;
 
-jlos_syscall_handler_t *s_syscall_handler = NULL;
+static jlos_syscall_handler_t   s_syscall_handler;
+jlos_syscall_handler_t          *s_syscall_handler_ptr = &s_syscall_handler;
 
 static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
@@ -179,30 +181,45 @@ static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3
 
 static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
-    if (!g_current_task_ptr) {
+    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
         return -SYSCALL_ENOMEM;
     }
+    jlos_mm_t *mm = g_current_task_ptr->mm;
     if (arg1 == 0) {
-        return (int32_t)g_current_task_ptr->brk_end;
+        return (int32_t)mm->brk_end;
     }
     uint32_t new_brk = arg1;
-    if (new_brk < g_current_task_ptr->brk_start || new_brk > g_current_task_ptr->brk_limit) {
-        return (int32_t)g_current_task_ptr->brk_end;
+    if (new_brk < mm->brk_start || new_brk > mm->brk_limit) {
+        return (int32_t)mm->brk_end;
     }
-    uint32_t old_brk = g_current_task_ptr->brk_end;
+    uint32_t old_brk = mm->brk_end;
     
-    //brk扩容时，不分配页帧，缺页补帧
-    if (new_brk < old_brk) {
-        uint32_t old_page = JLOS_PAGE_ALIGN_DOWN(old_brk);
-        uint32_t new_page = JLOS_PAGE_ALIGN_UP(new_brk);
-        for (uint32_t addr = new_page; addr < old_page; addr += JLOS_PAGE_FRAME_SIZE) {
-            jlos_paging_unmap(g_current_task_ptr->mm, addr);
-        }
+    if (new_brk > old_brk) {
+        jlos_vma_grow_tail(mm,
+            mm->brk_start, new_brk, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_BRK);
+    } else if (new_brk < old_brk) {
+        jlos_vma_shrink_tail(mm, new_brk, JLOS_VMA_TYPE_BRK);
     }
-    g_current_task_ptr->brk_end = new_brk;
+    mm->brk_end = new_brk;
     (void)arg2;
     (void)arg3;
     return (int32_t)new_brk;
+}
+
+static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    return -SYSCALL_ENOSYS;
+}
+
+static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    return -SYSCALL_ENOSYS;
 }
 
 static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
@@ -244,8 +261,7 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    g_current_task_ptr->wake_tick = jlos_hal_timer_get_ticks() + arg1;
-    g_current_task_ptr->sleeping = true;
+    jlos_task_sleep_until(g_task_manager_ptr, jlos_hal_timer_get_ticks() + arg1);
     (void)arg2;
     (void)arg3;
     return 0;
@@ -279,8 +295,8 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
     for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
         if (t) {
-            printk_info("[%d] name = %s, pid = %u, status = %d, task_type = %s\n", i, t->name,
-                t->pid, t->status, t->is_user_process ? "user" : "kernel");
+            printk_info("[%d] name = %s, pid = %u, status = %s, task_type = %s\n", i, t->name,
+                t->pid, jlos_task_status_map_str(t->status), t->is_user_process ? "user" : "kernel");
         }
     }
     printk_info("---\n");
@@ -302,32 +318,33 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!target || target->parent_pid != g_current_task_ptr->pid) {
         return -SYSCALL_ENINVAL;
     }
-    if (target->status == JLOS_TASK_ZOMBIE) {
-        if (exit_code) {
-            if (!jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
-                return -SYSCALL_EFAULT;
-            }
+    while (target->status != JLOS_TASK_ZOMBIE) {
+        JLOS_TASK_SET_WAITING(g_current_task_ptr, target_pid);
+        jlos_task_manager_schedule(g_task_manager_ptr);
+        target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
+        if (!target) {
+            return -SYSCALL_ENINVAL;
         }
-        uint32_t pid = target->pid;
-        jlos_task_free(g_task_manager_ptr, target);
-        return (int32_t)pid;
     }
-    jlos_task_set_waiting(g_current_task_ptr, target_pid);
+    if (exit_code && !jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
+            return -SYSCALL_EFAULT;
+    }
     (void)arg3;
-    return 0;
+    jlos_task_free(g_task_manager_ptr, target);
+    return (int32_t)target->pid;
 }
 
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
 {
-    if (!s_syscall_handler) {
+    if (!s_syscall_handler_ptr) {
         return;
     }
-    s_syscall_handler->dispatch[num] = handler;
+    s_syscall_handler_ptr->dispatch[num] = handler;
 }
 
 static int32_t s_syscall_dispatch(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3)
 {
-    return jlos_syscall_do_dispatch(s_syscall_handler, num, a1, a2, a3);
+    return jlos_syscall_do_dispatch(s_syscall_handler_ptr, num, a1, a2, a3);
 }
 
 static uint32_t s_syscall_resched_do(uint32_t ctx)
@@ -339,12 +356,12 @@ static uint32_t s_syscall_resched_do(uint32_t ctx)
     return ctx;
 }
 
-void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number)
+void jlos_syscall_handler_init(void)
 {
-    s_syscall_handler = self;
-    self->interrupt_manager = interrupt_manager;
-    self->interrupt_number = interrupt_number;
-    jlos_irq_handler_init((jlos_irq_handler_t *)self, interrupt_manager, interrupt_number);
+    jlos_syscall_handler_t *self = &s_syscall_handler;
+    self->interrupt_manager = jlos_active_irq_manager;
+    self->interrupt_number = KERNEL_SYSCALL_INTERRUPT_NUM;
+    jlos_irq_handler_init((jlos_irq_handler_t *)self, jlos_active_irq_manager, KERNEL_SYSCALL_INTERRUPT_NUM);
     
     self->handle_interrupt = (jlos_syscall_handle_interrupt_func_t)jlos_hal_syscall_entry;
     jlos_hal_syscall_dispatch = s_syscall_dispatch;
@@ -367,6 +384,8 @@ void jlos_syscall_handler_init(jlos_syscall_handler_t* self, jlos_irq_manager_t 
     jlos_syscall_register(JLOS_SYSCALL_CREATE_PIPE, syscall_create_pipe);
     jlos_syscall_register(JLOS_SYSCALL_TASK_FD_CLOSE, syscall_task_fd_close);
     jlos_syscall_register(JLOS_SYSCALL_TASK_BRK, syscall_task_brk);
+    jlos_syscall_register(JLOS_SYSCALL_MMAP, syscall_mmap);
+    jlos_syscall_register(JLOS_SYSCALL_MUNMAP, syscall_munmap);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
@@ -406,7 +425,7 @@ bool jlos_syscall_need_resched()
 bool jlos_access_ok(const void *addr, size_t n)
 {
     jlos_paging_context_t *ctx =
-        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm : jlos_active_paging_context;
+        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm->pc : jlos_active_paging_context;
     return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
 }
 
@@ -435,3 +454,5 @@ bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
     }
     return true;
 }
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, jlos_syscall_handler_init);

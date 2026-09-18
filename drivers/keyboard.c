@@ -119,6 +119,7 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
         case 0x32: if(shift) keyboard->handler->key_down(keyboard->handler, 'M'); else keyboard->handler->key_down(keyboard->handler, 'm'); break;
 
         case 0x1C: keyboard->handler->key_down(keyboard->handler, '\n'); break;
+        case 0x0E: keyboard->handler->key_down(keyboard->handler, '\b'); break;
         case 0x39: keyboard->handler->key_down(keyboard->handler, ' '); break;
         
         case 0x2A: case 0x36: shift = true; break;

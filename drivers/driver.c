@@ -1,4 +1,9 @@
 #include <drivers/driver.h>
+#include <kernel/initcall.h>
+
+static jlos_driver_manager_t s_driver_manager;
+
+jlos_driver_manager_t *g_driver_manager_ptr = &s_driver_manager;
 
 void jlos_driver_init(jlos_driver_t* self)
 {
@@ -10,9 +15,9 @@ void jlos_driver_activate(jlos_driver_t* self)
     (void)self;
 }
 
-void jlos_driver_manager_init(jlos_driver_manager_t* self)
+void jlos_driver_manager_init(void)
 {
-    self->num_drivers = 0;
+    s_driver_manager.num_drivers = 0;
 }
 
 void jlos_driver_manager_add_driver(jlos_driver_manager_t* self, jlos_driver_t *drv)
@@ -21,9 +26,12 @@ void jlos_driver_manager_add_driver(jlos_driver_manager_t* self, jlos_driver_t *
     self->num_drivers++;
 }
 
-void jlos_driver_manager_activate_all(jlos_driver_manager_t* self)
+void jlos_driver_manager_activate_all(void)
 {
-    for (int i = 0; i < self->num_drivers; i++) {
-        self->drivers[i]->activate(self->drivers[i]);
+    for (int i = 0; i < g_driver_manager_ptr->num_drivers; i++) {
+        g_driver_manager_ptr->drivers[i]->activate(g_driver_manager_ptr->drivers[i]);
     }
 }
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_driver_manager_init);
+JLOS_INITCALL(JLOS_INITCALL_LATE, jlos_driver_manager_activate_all);

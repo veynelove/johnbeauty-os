@@ -1,13 +1,14 @@
 #ifndef _JLOS_HAL_DEVICE_H
 #define _JLOS_HAL_DEVICE_H
 
-#include <tools/config.h>
 #include <common/types.h>
-#include <drivers/driver.h>
 
-#define JLOS_HAL_MAX_DEVICES    32
-#define JLOS_HAL_MAX_RESOURCES  8
-#define JLOS_MMIO_TRACK_MAX     64
+#define JLOS_HAL_MAX_DEVICES        32
+#define JLOS_HAL_MAX_RESOURCES      8
+#define JLOS_MMIO_TRACK_MAX         64
+#define JLOS_HAL_MMIO_OWNER_LEN     24
+
+typedef struct jlos_driver jlos_driver_t;
 
 typedef enum {
     JLOS_DEV_BUS_NONE     = 0,
@@ -35,20 +36,19 @@ typedef struct jlos_device {
     const char              *name;
     jlos_dev_bus_t          bus_type;
     bool                    registered;
-
-    union {
-    struct {
-        uint8_t  bus;
-        uint8_t  dev;
-        uint8_t  func;
-        uint32_t bar[6];
-    } pci;
-    struct {
-        uint32_t mmio_base;
-        uint32_t mmio_size;
-        uint8_t  irq;
-    } platform;
-    }                       businfo;
+union {
+struct {
+    uint8_t  bus;
+    uint8_t  dev;
+    uint8_t  func;
+    uint32_t bar[6];
+}   pci;
+struct {
+    uint32_t mmio_base;
+    uint32_t mmio_size;
+    uint8_t  irq;
+}   platform;
+}                           businfo;
     jlos_resource_t         resources[JLOS_HAL_MAX_RESOURCES];
     jlos_driver_t           *drv;
 } jlos_device_t;
@@ -57,7 +57,7 @@ typedef struct {
     bool        used;
     uint32_t    start;
     uint32_t    end;
-    const char  *owner;
+    char        owner[JLOS_HAL_MMIO_OWNER_LEN];
 } jlos_hal_mmio_track_t;
 
 int jlos_hal_device_register(jlos_device_t *dev);

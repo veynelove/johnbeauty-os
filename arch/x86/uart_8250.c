@@ -14,8 +14,11 @@
 #define REG_MSR           6
 #define REG_SCRATCH       7
 
-#define LCR_DLAB_BIT      0x80
-#define UART_INPUT_DIV16  115200U
+#define LCR_DLAB_BIT        0x80
+#define UART_INPUT_CLOCK_HZ 115200U
+
+#define JLOS_UART_DEFAULT_COM   0x3F8
+#define JLOS_UART_DEFAULT_BAUD  38400
 
 static uint16_t s_default_com;
 static uint8_t  s_default_inited;
@@ -49,20 +52,20 @@ void jlos_hal_serial_puts(uint16_t com_base, const char *s)
 void jlos_hal_serial_default_init(void)
 {
     s_default_inited = 0;
-    s_default_com = JLOS_HAL_SERIAL_DEFAULT_COM;
+    s_default_com = JLOS_UART_DEFAULT_COM;
 
     jlos_io8_t ier, lcr, fcr, mcr;
-    jlos_io8_init(&ier, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + REG_IER));
-    jlos_io8_init(&lcr, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + REG_LCR));
-    jlos_io8_init(&fcr, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + REG_FCR));
-    jlos_io8_init(&mcr, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + REG_MCR));
+    jlos_io8_init(&ier, (uint16_t)(JLOS_UART_DEFAULT_COM + REG_IER));
+    jlos_io8_init(&lcr, (uint16_t)(JLOS_UART_DEFAULT_COM + REG_LCR));
+    jlos_io8_init(&fcr, (uint16_t)(JLOS_UART_DEFAULT_COM + REG_FCR));
+    jlos_io8_init(&mcr, (uint16_t)(JLOS_UART_DEFAULT_COM + REG_MCR));
 
     jlos_io8_write(&ier, 0x00);
     jlos_io8_write(&lcr, LCR_DLAB_BIT);
-    uint32_t divisor = UART_INPUT_DIV16 / (uint32_t)JLOS_HAL_SERIAL_DEFAULT_BAUD;
+    uint32_t divisor = UART_INPUT_CLOCK_HZ / (uint32_t)JLOS_UART_DEFAULT_BAUD;
     jlos_io8_t dll, dlm;
-    jlos_io8_init(&dll, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + 0));
-    jlos_io8_init(&dlm, (uint16_t)(JLOS_HAL_SERIAL_DEFAULT_COM + 1));
+    jlos_io8_init(&dll, (uint16_t)(JLOS_UART_DEFAULT_COM + 0));
+    jlos_io8_init(&dlm, (uint16_t)(JLOS_UART_DEFAULT_COM + 1));
     jlos_io8_write(&dll, (uint8_t)(divisor & 0xFF));
     jlos_io8_write(&dlm, (uint8_t)((divisor >> 8) & 0xFF));
     jlos_io8_write(&lcr, 0x03);
@@ -78,7 +81,7 @@ void jlos_hal_serial_default_putc(char c)
     jlos_hal_serial_putc(s_default_com, c);
 }
 
-void jlos_hal_serial_default_puts(const char *s)
+void uart_default_puts(const char *s)
 {
     if (!s || !s_default_inited) return;
     jlos_hal_serial_puts(s_default_com, s);

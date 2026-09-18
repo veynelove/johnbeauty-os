@@ -22,7 +22,7 @@ static int mmio_claim(uint32_t start, uint32_t end, const char *owner)
         s_mmio_track[i].used  = true;
         s_mmio_track[i].start = start;
         s_mmio_track[i].end   = end;
-        s_mmio_track[i].owner = owner;
+        jlos_strlcpy(s_mmio_track[i].owner, owner ? owner : "(null)", JLOS_HAL_MMIO_OWNER_LEN);
         return 0;
     }
     return -3;
@@ -34,7 +34,7 @@ static void mmio_release(uint32_t start, uint32_t end)
         if (!s_mmio_track[i].used) continue;
         if (s_mmio_track[i].start == start && s_mmio_track[i].end == end) {
             s_mmio_track[i].used = false;
-            s_mmio_track[i].owner = 0;
+            s_mmio_track[i].owner[0] = '\0';
             return;
         }
     }

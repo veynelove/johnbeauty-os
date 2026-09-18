@@ -1,4 +1,4 @@
-#include <hal/user_syscall.h>
+#include <lib/user_syscall.h>
 
 void jlos_user_printf(const char *fmt, ...)
 {

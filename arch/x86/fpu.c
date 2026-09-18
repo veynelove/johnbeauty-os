@@ -1,5 +1,5 @@
 #include <arch/x86/cpu_state.h>
-#include <arch/x86/fpu_state.h>
+#include <hal/ext_state.h>
 #include <hal/hal.h>
 #include <hal/spinlock.h>
 #include <kernel/multitask.h>
@@ -8,7 +8,8 @@
 static jlos_task_t      *s_fpu_owner = NULL;
 static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
 static bool             s_init_template_done = false;
-static uint8_t          s_fxsave_template[512] __attribute__((aligned(16)));
+
+static uint8_t          s_fxsave_template[JLOS_ARCH_EXT_STATE_SIZE] __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN)));
 
 extern jlos_task_t *g_current_task_ptr;
 
@@ -32,7 +33,7 @@ static void build_clean_template(void)
 void jlos_arch_task_ext_init(jlos_task_t *task)
 {
     build_clean_template();
-    jlos_memcpy(task->ext_state.fxsave_area, s_fxsave_template, JLOS_ARCH_X86_FXSAVE_AREA_SIZE);
+    jlos_memcpy(task->ext_state.raw, s_fxsave_template, JLOS_ARCH_EXT_STATE_SIZE);
     task->ext_state.used = false;
 }
 
@@ -69,7 +70,7 @@ void jlos_arch_task_ext_trap_body(void)
     if (s_fpu_owner) {
         __asm__ __volatile__(
             "fxsave %0\n\t"
-            : "=m"(s_fpu_owner->ext_state.fxsave_area)
+            : "=m"(s_fpu_owner->ext_state.raw)
             :
             : "memory"
         );
@@ -77,7 +78,7 @@ void jlos_arch_task_ext_trap_body(void)
     __asm__ __volatile__(
         "fxrstor %0\n\t"
         :
-        : "m"(curr->ext_state.fxsave_area)
+        : "m"(curr->ext_state.raw)
         : "memory"
     );
     s_fpu_owner = curr;

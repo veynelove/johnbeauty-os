@@ -19,7 +19,7 @@ CLANGD_CPARAMS = $(filter-out -fno-leading-underscore,$(CPARAMS))
 ASPARAMS = --32 -I.
 LDPARAMS = -melf_i386
 
-SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa
+SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa common lib
 OBJ_DIR := obj
 
 C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")

@@ -2,15 +2,10 @@
 #include <hal/hal.h>
 #include <hal/diag.h>
 
-#if KERNEL_CONFIG_HARDWARE_ARCH == KERNEL_CONFIG_ARCH_X86
-
 #define HAL_IO_OWNER  "hal_io"
 
 static inline const jlos_hal_io_ops_t *ops_safe(void)
 {
-    if (!jlos_hal_io_ops) {
-        return &jlos_hal_x86_fast_io_ops;
-    }
     return jlos_hal_io_ops;
 }
 
@@ -92,4 +87,3 @@ uint32_t jlos_io32_read(jlos_io32_t *self)
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_RD32, self->portnumber, v);
     return v;
 }
-#endif
