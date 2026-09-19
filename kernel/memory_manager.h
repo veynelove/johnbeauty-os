@@ -51,7 +51,7 @@ void jlos_memory_manager_init_main(void);
 void jlos_memory_manager_init(void);
 
 void jlos_memory_manager_switch_low(void);
-void Jlos_memory_manager_switch_main(void);
+void jlos_memory_manager_switch_main(void);
 
 void jlos_memory_manager_destroy(jlos_memory_manager_t* self);
 

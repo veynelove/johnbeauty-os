@@ -1,4 +1,5 @@
 #include <hal/display.h>
+#include <hal/paging.h>
 #include <common/multiboot.h>
 #include <kernel/paging.h>
 #include <kernel/memory_manager.h>
@@ -140,8 +141,7 @@ void jlos_hal_arch_display_init_fb(void)
     uint32_t fb_virt = KERNEL_VIRTUAL_BASE + jlos_device_physical_memory_end;
     fb_virt = JLOS_ALIGN_UP(fb_virt, 4 * 1024 * 1024);
 
-    jlos_paging_map_range(jlos_active_paging_context,
-            fb_virt, fb_phys, fb_size, JLOS_PTE_KERNEL_RW);
+    jlos_paging_map_range(jlos_hal_paging_get_active_context(), fb_virt, fb_phys, fb_size, JLOS_PTE_KERNEL_RW);
 
     s_fb_base         = (uint32_t *)fb_virt;
     s_fb_pitch        = vbe->bytes_per_scanline;

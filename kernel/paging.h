@@ -59,6 +59,7 @@
 #define JLOS_PAGE_IS_ALIGNED(addr)  (((addr) & (JLOS_PAGE_SIZE - 1)) == 0)
 #define JLOS_PAGE_ADDR_MASK         (~(JLOS_PAGE_SIZE - 1))
 #define JLOS_PDE_4MB_ADDR_MASK      (~(JLOS_PAGE_SIZE * JLOS_PAGE_TABLE_ENTRIES - 1))
+#define JLOS_PDE_4MB_SIZE           (JLOS_PAGE_SIZE * JLOS_PAGE_TABLE_ENTRIES)
 
 #define JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD 32
 
@@ -80,8 +81,6 @@ typedef struct jlos_paging_context {
     uint32_t        num_page_tables;
     jlos_spinlock_t lock;
 } jlos_paging_context_t;
-
-extern jlos_paging_context_t *jlos_active_paging_context;
 
 void jlos_paging_context_init(jlos_paging_context_t *self);
 void jlos_paging_context_destroy(jlos_paging_context_t *self);

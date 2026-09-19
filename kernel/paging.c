@@ -10,13 +10,10 @@
 
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
 
-extern uint32_t _boot_end_phys;
-extern jlos_task_t *g_current_task_ptr;
-
-jlos_paging_context_t *jlos_active_paging_context = NULL;
-jlos_paging_context_t s_kernel_paging_context;
-
-static page_table_alloc_fn s_page_table_alloc = NULL;
+extern uint32_t             _boot_end_phys;
+extern jlos_task_t          *g_current_task_ptr;
+jlos_paging_context_t       s_kernel_paging_context;
+static page_table_alloc_fn  s_page_table_alloc = NULL;
 
 void jlos_paging_context_init(jlos_paging_context_t *self)
 {
@@ -178,11 +175,8 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         } else {
             page_table = s_page_table_alloc ? s_page_table_alloc() : jlos_page_frame_malloc();
             if (!page_table) {
-                for (uint32_t i = 0; i < pages_done; i++) {
-                    virtual_addr -= JLOS_PAGE_SIZE;
-                    jlos_paging_unmap_nolock(self, virtual_addr);
-                }
-                return false;
+                printk_err("alloc page_table failed\n");
+                goto rool_back;
             }
             jlos_memset(page_table, 0, sizeof(jlos_page_table_t));
             pt_phys = VIRT_TO_PHYS(page_table);
@@ -194,22 +188,24 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
         if (*pte & JLOS_PTE_PRESENT) {
             printk_err("remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
-            goto halt;
+            goto rool_back;
         }
         *pte = (physical_addr & JLOS_PAGE_ADDR_MASK) | flags;
         jlos_page_frame_pt_present_count_inc(pt_phys);
         virtual_addr += JLOS_PAGE_SIZE;
         physical_addr += JLOS_PAGE_SIZE;
-        if ((virtual_addr & 0x3FFFFF) == 0) {
+        if ((virtual_addr & (JLOS_PDE_4MB_SIZE - 1)) == 0) {
             pd_index++;
         }
         pages_done++;
     }
     return true;
-halt:
-    for (;;) {
-        jlos_hal_halt();
+rool_back:
+    for (uint32_t i = 0; i < pages_done; i++) {
+        virtual_addr -= JLOS_PAGE_SIZE;
+        jlos_paging_unmap_nolock(self, virtual_addr);
     }
+    return false;
 }
 
 static bool jlos_paging_map_nolock(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t flags)
@@ -307,7 +303,7 @@ bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     bool ret = jlos_paging_map_nolock(self, virtual_addr, physical_addr, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (ret && self == jlos_active_paging_context) {
+    if (ret && self == jlos_hal_paging_get_active_context()) {
         jlos_hal_paging_flush_tlb(virtual_addr);
     }
     return ret;
@@ -322,7 +318,7 @@ bool jlos_paging_map_range(jlos_paging_context_t *self, uint32_t virtual_addr_st
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     bool ret = jlos_paging_map_range_nolock(self, virtual_addr_start, physical_addr_start, size, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (ret && self == jlos_active_paging_context) {
+    if (ret && self == jlos_hal_paging_get_active_context()) {
         uint32_t num_pages = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
         if (num_pages < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD) {
             for (uint32_t va = virtual_addr_start; va < virtual_addr_start + size; va += JLOS_PAGE_SIZE) {
@@ -343,7 +339,7 @@ bool jlos_paging_unmap(jlos_paging_context_t *self, uint32_t virtual_addr)
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     bool ret = jlos_paging_unmap_nolock(self, virtual_addr);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (ret && self == jlos_active_paging_context) {
+    if (ret && self == jlos_hal_paging_get_active_context()) {
         jlos_hal_paging_flush_tlb(virtual_addr);
     }
     return ret;
@@ -365,13 +361,13 @@ extern jlos_paging_context_t s_kernel_paging_context;
 
 void jlos_paging_enable(jlos_paging_context_t *self)
 {
-    jlos_active_paging_context = self;
+    jlos_hal_paging_set_active_context(self);
     jlos_hal_paging_enable(VIRT_TO_PHYS(self->page_dir));
 }
 
 void jlos_paging_switch(jlos_paging_context_t *self)
 {
-    jlos_active_paging_context = self;
+    jlos_hal_paging_set_active_context(self);
     jlos_hal_paging_switch(VIRT_TO_PHYS(self->page_dir));
 }
 
@@ -383,7 +379,7 @@ void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     jlos_paging_change_flags_nolock(self, virtual_addr, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (self == jlos_active_paging_context) {
+    if (self == jlos_hal_paging_get_active_context()) {
         jlos_hal_paging_flush_tlb(virtual_addr);
     }
 }
@@ -396,7 +392,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     }
     uint32_t start = JLOS_PAGE_ALIGN_DOWN(virtual_addr_start);
     uint32_t page_num = (virtual_addr_end - start) / JLOS_PAGE_SIZE;
-    bool active = (self == jlos_active_paging_context);
+    bool active = (self == jlos_hal_paging_get_active_context());
     bool flush_one = active && page_num < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD;
 
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
@@ -420,7 +416,7 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
 
 bool jlos_paging_cow_range(jlos_paging_context_t *src, jlos_paging_context_t *dst, uint32_t start, uint32_t end)
 {
-    if (!src || !dst || !src->page_dir || !dst->page_dir || end <= start) {
+    if (!src || !dst || !src->page_dir || !dst->page_dir || end <= start || src == dst) {
         return false;
     }
     start = JLOS_PAGE_ALIGN_DOWN(start);
@@ -449,7 +445,7 @@ bool jlos_paging_cow_range(jlos_paging_context_t *src, jlos_paging_context_t *ds
         jlos_paging_map_nolock(dst, va, phys, JLOS_PTE_USER_COW);
         src_pt->entries[pt_idx] = src_pte & ~JLOS_PTE_WRITABLE;
     }
-    if (src == jlos_active_paging_context) {
+    if (src == jlos_hal_paging_get_active_context()) {
         jlos_hal_paging_flush_all_tlb();
     }
     jlos_spin_unlock_irqrestore(&dst->lock, dst_fl);

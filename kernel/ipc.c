@@ -125,6 +125,20 @@ uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len)
     return read;
 }
 
+void jlos_pipe_ref_inc(jlos_pipe_t *pipe)
+{
+    if (pipe) {
+        pipe->refcount++;
+    }
+}
+
+void jlos_pipe_ref_dec(jlos_pipe_t *pipe)
+{
+    if (pipe && --pipe->refcount == 0) {
+        jlos_pipe_destroy(pipe);
+    }
+}
+
 void jlos_mq_init(jlos_mq_t *mq)
 {
     mq->head = NULL;

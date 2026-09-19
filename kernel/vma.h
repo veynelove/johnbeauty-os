@@ -2,7 +2,7 @@
 #define _JLOS_KERNEL_VMA_H
 
 #include <common/types.h>
-#include <dsa/list.h>
+#include <dsa/rbtree.h>
 #include <hal/spinlock.h>
 
 typedef struct jlos_paging_context jlos_paging_context_t;
@@ -25,14 +25,14 @@ typedef struct jlos_vma {
     uint32_t            end;
     uint32_t            flags;
     jlos_vma_type_t     type;
-    jlos_list_head_t    link;
+    jlos_rbtree_node_t  rb_node;
     void                *file;
     uint32_t            offset;
 } jlos_vma_t;
 
 typedef struct jlos_mm {
     jlos_paging_context_t   *pc;
-    jlos_list_head_t        vma_list;
+    jlos_rbtree_t           vma_tree;
     uint32_t                brk_start;
     uint32_t                brk_end;
     uint32_t                brk_limit;

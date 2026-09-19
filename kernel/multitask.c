@@ -3,6 +3,7 @@
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
+#include <hal/paging.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
@@ -303,7 +304,7 @@ static void jlos_task_unmap_user_stack(jlos_task_t *task)
         jlos_vma_remove_range(task->mm, base, top);
     } else {
         for (uint32_t addr = base; addr < top; addr += JLOS_PAGE_FRAME_SIZE) {
-            jlos_paging_unmap(jlos_active_paging_context, addr);
+            jlos_paging_unmap(jlos_hal_paging_get_active_context(), addr);
         }
     }
     task->user_stack = NULL;
@@ -315,9 +316,6 @@ void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task)
         return;
     }
     jlos_hash_chain_remove(&self->pid_hash, &task->pid_hash_node);
-    if (task->zombie_node.next && task->zombie_node.next != &task->zombie_node) {
-        jlos_list_del_init(&task->zombie_node);
-    }
     jlos_arch_task_ext_destroy(task);
     if (task->stack && task->pid != 0) {
         jlos_kfree(task->stack);
@@ -614,11 +612,6 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, u
         child->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
         if (child->fds) {
             jlos_memcpy(child->fds, parent->fds, sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
-            for (int i = 0; i < JLOS_TASK_FDS_NUM; i++) {
-                if (child->fds[i].type == JLOS_TASK_FD_PIPE && child->fds[i].obj) {
-                    ((jlos_pipe_t *)child->fds[i].obj)->refcount++;
-                }
-            }
         } else {
             child->fds = NULL;
         }
@@ -652,6 +645,13 @@ ROLLBACK_OOM:
         }
         jlos_kfree(child);
         return NULL;
+    }
+    if (child->fds) {
+        for (int i = 0; i < JLOS_TASK_FDS_NUM; i++) {
+            if (child->fds[i].type == JLOS_TASK_FD_PIPE && child->fds[i].obj) {
+                jlos_pipe_ref_inc((jlos_pipe_t *)child->fds[i].obj);
+            }
+        }
     }
     return child;
 }
@@ -729,10 +729,10 @@ void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid)
     if (!self) {
         return;
     }
-    jlos_task_t *waiter = jlos_task_manager_find_pid(self, exited_pid);
-    if (waiter) {
-        if (waiter->parent_pid && waiter->parent_pid != exited_pid) {
-            jlos_task_t *parent = jlos_task_manager_find_pid(self, waiter->parent_pid);
+    jlos_task_t *exited = jlos_task_manager_find_pid(self, exited_pid);
+    if (exited) {
+        if (exited->parent_pid && exited->parent_pid != exited_pid) {
+            jlos_task_t *parent = jlos_task_manager_find_pid(self, exited->parent_pid);
             if (parent && parent->status == JLOS_TASK_WAITING && parent->waiting_pid == exited_pid) {
                 parent->waiting_pid = parent->pid;
                 JLOS_TASK_SET_READY(parent);

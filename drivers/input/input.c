@@ -6,8 +6,8 @@
 #include <kernel/initcall.h>
 #include <hal/display.h>
 
-extern jlos_irq_manager_t *jlos_active_irq_manager;
-extern jlos_driver_manager_t *g_driver_manager_ptr;
+extern jlos_irq_manager_t       *jlos_active_irq_manager;
+extern jlos_driver_manager_t    *g_driver_manager_ptr;
 
 typedef struct {
     jlos_keyboard_event_handler_t base;
@@ -20,10 +20,10 @@ static void console_keyboard_key_down(jlos_keyboard_event_handler_t* self, char 
 }
 
 typedef struct {
-    jlos_mouse_event_handler_t base;
-    int8_t x;
-    int8_t y;
-    bool visible;
+    jlos_mouse_event_handler_t  base;
+    int8_t                      x;
+    int8_t                      y;
+    bool                        visible;
 } mouse_console_t;
 
 static void mouse_console_mouse_move(jlos_mouse_event_handler_t* self, int32_t xoffset, int32_t yoffset)

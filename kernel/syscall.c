@@ -7,6 +7,7 @@
 #include <kernel/initcall.h>
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
+#include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
 
@@ -141,7 +142,7 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     fd_w->type = JLOS_TASK_FD_PIPE;
     fd_w->obj = pipe;
     fd_w->flags = JLOS_TASK_FD_WRITE_ONLY;
-    pipe->refcount++;
+    jlos_pipe_ref_inc(pipe);
     int32_t fds[2] = {fd_read, fd_write};
     if (!jlos_copy_to_user((void *)arg1, fds, sizeof(fds))) {
         jlos_task_fd_free(g_current_task_ptr, fd_read);
@@ -168,9 +169,7 @@ static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
         if (pipe) {
             jlos_pipe_close(pipe);
-            if (--pipe->refcount == 0) {
-                jlos_pipe_destroy(pipe);
-            }
+            jlos_pipe_ref_dec(pipe);
         }
     }
     jlos_task_fd_free(g_current_task_ptr, fd);
@@ -425,7 +424,7 @@ bool jlos_syscall_need_resched()
 bool jlos_access_ok(const void *addr, size_t n)
 {
     jlos_paging_context_t *ctx =
-        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm->pc : jlos_active_paging_context;
+        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm->pc : jlos_hal_paging_get_active_context();
     return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
 }
 

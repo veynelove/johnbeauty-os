@@ -1,5 +1,7 @@
 #include <hal/paging.h>
 
+static struct jlos_paging_context *s_active_paging_context = NULL;
+
 void jlos_hal_paging_enable(uint32_t page_dir_physical_addr)
 {
     __asm__ __volatile__(
@@ -68,4 +70,14 @@ bool jlos_hal_paging_supports_4mb_pages(void)
     );
     
     return (edx & (1 << 6)) && (edx & (1 << 3));
+}
+
+struct jlos_paging_context *jlos_hal_paging_get_active_context(void)
+{
+    return s_active_paging_context;
+}
+
+void jlos_hal_paging_set_active_context(struct jlos_paging_context *ctx)
+{
+    s_active_paging_context = ctx;
 }
