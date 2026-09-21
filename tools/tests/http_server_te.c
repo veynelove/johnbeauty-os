@@ -1,9 +1,9 @@
 #include <tools/tests/http_server_te.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <net/network.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 typedef struct {
     jlos_tcp_handler_t base;

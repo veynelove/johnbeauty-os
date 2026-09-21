@@ -1,8 +1,8 @@
 #include <hal/timer.h>
 #include <kernel/initcall.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "timer"
+#include <kernel/printk.h>
 
 static volatile uint32_t s_hal_timer_ticks;
 static JLOS_LIST_HEAD(s_timer_devs);

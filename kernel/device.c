@@ -1,9 +1,9 @@
 #include <kernel/device.h>
-#include <kernel/printk.h>
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "dev"
+#include <kernel/printk.h>
 
 uint32_t jlos_device_physical_memory_end = 0;
 uint32_t jlos_device_available_ram_bytes = 0;

@@ -20,7 +20,8 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_TASK_FD_CLOSE      = 12,
     JLOS_SYSCALL_TASK_BRK           = 13,
     JLOS_SYSCALL_MMAP               = 14,
-    JLOS_SYSCALL_MUNMAP             = 15
+    JLOS_SYSCALL_MUNMAP             = 15,
+    JLOS_SYSCALL_EXECVE             = 16,
 };
 
 enum jlos_syscall_misscode {
@@ -29,6 +30,7 @@ enum jlos_syscall_misscode {
     SYSCALL_EFAULT                  = 3,
     SYSCALL_EPERM                   = 4,
     SYSCALL_ENOMEM                  = 5,
+    SYSCALL_EPBIG                   = 6,
 };
 
 enum jlos_task_fd_std {

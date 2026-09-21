@@ -2,7 +2,14 @@
 JLOS := johnkernel
 ARCH := x86
 
+# 磁盘镜像构建开关（1=构建, 0=跳过）
+BUILD_DISK ?= 1
+
+ifeq ($(BUILD_DISK),1)
+all: $(JLOS).iso disk
+else
 all: $(JLOS).iso
+endif
 
 # 实际编译用的完整参数
 CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
@@ -19,7 +26,7 @@ CLANGD_CPARAMS = $(filter-out -fno-leading-underscore,$(CPARAMS))
 ASPARAMS = --32 -I.
 LDPARAMS = -melf_i386
 
-SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa common lib
+SRC_DIRS := kernel arch/$(ARCH) drivers net filesystem tools hal dsa common
 OBJ_DIR := obj
 
 C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")
@@ -57,8 +64,14 @@ $(JLOS).iso: $(JLOS).bin
 	@grub-mkrescue --output=$@ iso
 	@rm -rf iso
 
+# ==================用户态程序（jlcy 子项目）==================
+.PHONY: disk
+disk:
+	@$(MAKE) -C jlcy disk
+
 clean:
 	@rm -rf $(OBJ_DIR) $(JLOS).bin $(JLOS).iso
+	@$(MAKE) -C jlcy clean
 	@echo 'clean success.'
 
 # ==================clangd 支持==================

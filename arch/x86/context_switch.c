@@ -5,11 +5,11 @@
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
-#include <kernel/printk.h>
 #include <kernel/multitask.h>
 #include <kernel/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "arch"
+#include <kernel/printk.h>
 
 jlos_task_t *g_current_task_ptr = NULL;
 uint32_t jlos_arch_tss_base_addr = 0;
@@ -55,7 +55,7 @@ __attribute__((naked)) void jlos_task_entry_stub(void)
 __attribute__((naked)) void jlos_task_user_entry_stub(void)
 {
     __asm__ __volatile__(
-        "movw $0x2B, %%ax\n\t"
+        "movw $" JLOS_X86_ASM_XSTR(JLOS_X86_USER_DS) ", %%ax\n\t"
         "movw %%ax, %%ds\n\t"
         "movw %%ax, %%es\n\t"
         "movw %%ax, %%fs\n\t"
@@ -94,7 +94,7 @@ void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate,
 }
 
 void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
-    uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top, uint16_t user_ss)
+    uint8_t *stack, uint32_t stack_size, uint32_t user_stack_top)
 {
     (void)mmu;
     jlos_task_t *task = container_of(cpustate, jlos_task_t, cpustate);
@@ -102,10 +102,10 @@ void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, 
     /* iret frame（最顶 5 dword, 供 user_entry_stub iret 到 ring3） */
     top -= 5;
     top[0] = (uint32_t)entrypoint;   /* eip */
-    top[1] = 0x23;                   /* cs (user) */
+    top[1] = JLOS_X86_USER_CS;                   /* cs (user) */
     top[2] = 0x0200;                 /* eflags IF=1 */
     top[3] = user_stack_top;         /* user esp */
-    top[4] = user_ss;                /* user ss (0x2B) */
+    top[4] = JLOS_X86_USER_DS;                /* user ss (0x2B) */
 
     /* swtch 帧紧贴其下: swtch ret 后 esp 正好落在 iret frame 基址 */
     top -= 5;
@@ -161,4 +161,24 @@ void jlos_arch_task_fork_prepare_child(
     f[3] = 0;                       /* ebp */
     f[4] = (uint32_t)jlos_task_fork_entry_stub;
     child->sp.value = (uint32_t)f;
+}
+
+void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top)
+{
+    jlos_paging_switch(pc);
+    __asm__ __volatile__(
+        "movw %w2, %%ax\n\t"
+        "movw %%ax, %%ds\n\t"
+        "movw %%ax, %%es\n\t"
+        "movw %%ax, %%fs\n\t"
+        "movw %%ax, %%gs\n\t"
+        "pushl %2\n\t"
+        "pushl %1\n\t"
+        "pushl $0x0200\n\t"
+        "pushl %3\n\t"
+        "pushl %0\n\t"
+        "iret\n\t"
+        :: "r"(entry), "r"(stack_top), "i"(JLOS_X86_USER_DS), "i"(JLOS_X86_USER_CS)
+        : "eax"
+    );
 }

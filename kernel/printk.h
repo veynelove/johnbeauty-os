@@ -23,6 +23,10 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
  #define printk_func ((const char *)0)
 #endif
 
+#ifndef JLOS_KERNEL_LOG_SUBSYS
+#define JLOS_KERNEL_LOG_SUBSYS "john_sunshine"
+#endif
+
 #define printk_emerg(fmt,...)  printk(JLOS_KERNEL_LOG_EMERG,  JLOS_KERNEL_LOG_SUBSYS, printk_func, fmt, ##__VA_ARGS__)
 #define printk_alert(fmt,...)  printk(JLOS_KERNEL_LOG_ALERT,  JLOS_KERNEL_LOG_SUBSYS, printk_func, fmt, ##__VA_ARGS__)
 #define printk_crit(fmt,...)  printk(JLOS_KERNEL_LOG_CRIT,   JLOS_KERNEL_LOG_SUBSYS, printk_func, fmt, ##__VA_ARGS__)

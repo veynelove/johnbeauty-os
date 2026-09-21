@@ -4,9 +4,9 @@
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 /* buf[i] = i ^ seed ^ (i>>8 & 0xFF) */
 static void fill_pattern(uint8_t *buf, size_t size, uint8_t seed)

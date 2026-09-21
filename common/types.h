@@ -49,5 +49,13 @@ typedef uint32_t                   size_t;
 void jlos_memset(void *ptr, uint8_t value, size_t size);
 void *jlos_memcpy(void *dst, const void *src, size_t size);
 size_t jlos_strlcpy(char *dst, const char *src, size_t dsize);
+size_t jlos_strlen(const char *s);
+int jlos_strcmp(const char *a, const char *b);
+int jlos_strncmp(const char *a, const char *b, size_t n);
+char *jlos_strchr(const char *s, char c);
+int jlos_memcmp(const void *a, const void *b, size_t n);
+void *jlos_memmove(void *dst, const void *src, size_t n);
+
+uint32_t jlos_popcount32(uint32_t x);
 
 #endif

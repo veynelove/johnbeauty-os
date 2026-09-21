@@ -1,7 +1,7 @@
 #include <net/icmp.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "icmp"
+#include <kernel/printk.h>
 
 void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend)
 {

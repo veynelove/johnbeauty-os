@@ -2,14 +2,16 @@
 #include <kernel/paging.h>
 #include <kernel/memory_manager.h>
 #include <kernel/ipc.h>
-#include <kernel/printk.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/initcall.h>
+#include <kernel/multitask.h>
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
 #include <hal/paging.h>
+#include <filesystem/vfs.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
+#include <kernel/printk.h>
 
 extern jlos_task_manager_t      *g_task_manager_ptr;
 extern jlos_task_t              *g_current_task_ptr;
@@ -221,6 +223,80 @@ static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return -SYSCALL_ENOSYS;
 }
 
+static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char *strbuf, size_t *strbuf_off, int *count)
+{
+    if (!user_ptr_arr) {
+        return 0;
+    }
+    *count = 0;
+    for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
+        kernel_ptrs[i] = NULL;
+    }
+    for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
+        uint32_t user_str;
+        if (!jlos_copy_from_user(&user_str, (const void *)(user_ptr_arr + i * sizeof(uint32_t)), sizeof(uint32_t))) {
+            return - SYSCALL_EFAULT;
+        }
+        if (user_str == 0) {
+            break;
+        }
+        if (*strbuf_off + JLOS_EXECVE_MAX_STRLEN > (size_t)JLOS_EXECVE_MAX_ARGS * JLOS_EXECVE_MAX_STRLEN) {
+            return - SYSCALL_EPBIG;
+        }
+        char *kstr = strbuf + *strbuf_off;
+        for (uint32_t j = 0; j < JLOS_EXECVE_MAX_STRLEN; j++) {
+            if (!jlos_copy_from_user(&kstr[j], (const void *)(user_str + j), 1)) {
+                return -SYSCALL_EFAULT;
+            }
+            if (kstr[j] == '\0') {
+                break;
+            }
+        }
+        kstr[JLOS_EXECVE_MAX_STRLEN - 1] = '\0';
+        *strbuf_off += jlos_strlen(kstr) + 1;
+        kernel_ptrs[i] = kstr;
+        *count = i + 1;
+    }
+    return 0;
+}
+
+static int32_t syscall_execve(uint32_t path, uint32_t argv, uint32_t envp)
+{
+    if (!g_current_task_ptr) {
+        return -SYSCALL_ENINVAL;
+    }
+    char kernel_path[JLOS_VFS_PATH_MAX];
+    for (uint32_t i = 0; i < JLOS_VFS_PATH_MAX; i++) {
+        if (!jlos_copy_from_user(&kernel_path[i], (const void *)(path + i), 1)) {
+            return -SYSCALL_EFAULT;
+        }
+        if (kernel_path[i] == '\0') {
+            break;
+        }
+    }
+    kernel_path[JLOS_VFS_PATH_MAX - 1] = '\0';
+    char *strbuf = (char *)jlos_kalloc(((size_t)JLOS_EXECVE_MAX_ARGS * JLOS_EXECVE_MAX_STRLEN));
+    if (!strbuf) {
+        return -SYSCALL_ENOMEM;
+    }
+    size_t strbuf_off = 0;
+    char *kernel_argv[JLOS_EXECVE_MAX_ARGS];
+    char *kernel_envp[JLOS_EXECVE_MAX_ARGS];
+    int argc = 0;
+    int envc = 0;
+    int err = syscall_copy_strings(argv, kernel_argv, strbuf, &strbuf_off, &argc);
+    if (err == 0) {
+        err = syscall_copy_strings(envp, kernel_envp, strbuf, &strbuf_off, &envc);
+    }
+    if (err < 0) {
+        jlos_kfree(strbuf);
+        return err;
+    }
+    int ret = jlos_process_exec_elf(g_current_task_ptr, kernel_path, argc, kernel_argv, kernel_envp);
+    jlos_kfree(strbuf);
+    return ret;
+}
+
 static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     if (!g_current_task_ptr) {
@@ -291,7 +367,7 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
         return - SYSCALL_ENOMEM;
     }
     printk_info("--- task list ---\n");
-    for (int i = 0; i < g_task_manager_ptr->num_tasks; i++) {
+    for (uint32_t i = 0; i < g_task_manager_ptr->num_tasks; i++) {
         jlos_task_t *t = g_task_manager_ptr->tasks[i];
         if (t) {
             printk_info("[%d] name = %s, pid = %u, status = %s, task_type = %s\n", i, t->name,
@@ -385,6 +461,7 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_TASK_BRK, syscall_task_brk);
     jlos_syscall_register(JLOS_SYSCALL_MMAP, syscall_mmap);
     jlos_syscall_register(JLOS_SYSCALL_MUNMAP, syscall_munmap);
+    jlos_syscall_register(JLOS_SYSCALL_EXECVE, syscall_execve);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

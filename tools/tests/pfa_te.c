@@ -1,9 +1,9 @@
 #include <tools/tests/pfa_te.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 static void fill_frames(void *va, uint32_t bytes, uint8_t seed)
 {

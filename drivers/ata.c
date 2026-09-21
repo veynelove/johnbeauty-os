@@ -1,4 +1,11 @@
 #include <drivers/ata.h>
+#include <kernel/initcall.h>
+
+#define JLOS_KERNEL_LOG_SUBSYS "ata"
+#include <kernel/printk.h>
+
+static jlos_hal_block_dev_t s_ata_primary_dev;
+static bool s_ata_primary_ready = false;
 
 void jlos_ata_init(jlos_ata_t* self, uint16_t port_base, bool master)
 {
@@ -26,22 +33,42 @@ void jlos_ata_destroy(jlos_ata_t* self)
 
 void jlos_ata_identify(jlos_ata_t* self)
 {
-    // Disable interrupts
+    self->total_sectors = 0;
     jlos_io8_write(&self->control_port, 0x02);
-
     jlos_io8_write(&self->device_port, self->master ? 0xA0 : 0xB0);
-
-    jlos_io8_write(&self->device_port, 0xA0);
+    for (int i = 0; i < 4; i++) {
+        (void)jlos_io8_read(&self->command_port);
+    }
     uint8_t status = jlos_io8_read(&self->command_port);
     if (status == 0xFF) {
         return;
     }
-    jlos_io8_write(&self->device_port, self->master ? 0xA0 : 0xB0);
     jlos_io8_write(&self->sector_count_port, 0);
     jlos_io8_write(&self->lba_low_port, 0);
     jlos_io8_write(&self->lba_mid_port, 0);
     jlos_io8_write(&self->lba_hi_port, 0);
     jlos_io8_write(&self->command_port, 0xEC);
+    status = jlos_io8_read(&self->command_port);
+    while ((status & 0x80) == 0x80) {
+        status = jlos_io8_read(&self->command_port);
+    }
+    if ((status & 0x01) == 0x01) {
+        return;
+    }
+    if ((status & 0x08) != 0x08) {
+        return;
+    }
+    uint16_t id[256];
+    for (int i = 0; i < 256; i++) {
+        id[i] = jlos_io16_read(&self->data_port);
+    }
+
+    uint32_t lba28 = ((uint32_t)id[61] << 16) | id[60];
+    if (lba28 > 0) {
+        self->total_sectors = lba28;
+    } else {
+        self->total_sectors = ((uint32_t)id[58] << 16) | id[57];
+    }
 }
 
 void jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size)
@@ -66,6 +93,11 @@ void jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size)
         status = jlos_io8_read(&self->command_port);
     }
     if (status & 0x01) {
+        printk_err("read28 sector %u ERR, status=%x\n", sector, status);
+        return;
+    }
+    if ((status & 0x08) != 0x08) {
+        printk_err("read28 sector %u no DRQ, status=%x\n", sector, status);
         return;
     }
     for (uint16_t i = 0; i < size; i += 2) {
@@ -75,6 +107,7 @@ void jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size)
             data[i + 1] = (wdata >> 8) & 0x00FF;
         }
     }
+
     for (uint16_t i = size + (size % 2); i < self->bytes_per_sector; i += 2) {
         jlos_io16_read(&self->data_port);
     }
@@ -119,3 +152,21 @@ void jlos_ata_flush(jlos_ata_t* self)
         status = jlos_io8_read(&self->command_port);
     }
 }
+
+jlos_hal_block_dev_t *jlos_ata_get_primary_dev(void)
+{
+    return s_ata_primary_ready ? &s_ata_primary_dev : NULL;
+}
+
+static void jlos_ata_block_dev_init(void)
+{
+    jlos_hal_block_ata_pio28_create(&s_ata_primary_dev, jlos_ata_primary_port_base, true);
+    if (s_ata_primary_dev.inited) {
+        s_ata_primary_ready = true;
+        printk_debug("ata primary device ready, sectors = %u\n", (unsigned long long)s_ata_primary_dev.total_sectors);
+    } else {
+        printk_err("ata primary device init failed\n");
+    }
+}
+
+JLOS_INITCALL(JLOS_INITCALL_DEVICE, jlos_ata_block_dev_init);

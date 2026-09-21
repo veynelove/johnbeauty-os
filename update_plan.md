@@ -1,6 +1,6 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v2.12 | 日期: 2026-09-18 | 作者: JohnLove
+版本: v3.0 | 日期: 2026-09-21 | 作者: JohnLove
 
 ***
 
@@ -43,6 +43,11 @@
 | Framebuffer Console | VBE 1024×768×32 framebuffer + 8×16 ASCII 字体 + 软件光标(erase/draw) + 鼠标光标(invert) | 1024×768 显示，键盘/鼠标正常          |
 | 输入子系统     | keyboard/mouse 驱动自动注册 + 事件回调（console 键盘输入 + 鼠标光标移动）                        | initcall DEVICE 级自动注册             |
 | HAL 层重构     | timer B2 链表选优 + serial/dma/pci/ext\_state A 分层 + 职责归属 + 去 drivers 依赖                | 编译通过 + 全测试 PASSED               |
+| F4 文件系统    | VFS 抽象 + FAT32 驱动 + MBR 分区层 + 块设备抽象 + dsa 补充 + init 集成                            | FAT32 挂载成功，hello.elf 可读        |
+| ELF 加载器     | ELF32 EXEC + i386 校验 + PT\_LOAD 按页映射 + VMA 计入                                             | filesystem/elf.h + elf.c              |
+| execve 系统调用 | execve + argv/envp 栈布局（System V ABI x86 32-bit）+ copy\_from\_user 拷贝                      | argc/argv 正确传递，hello.elf 运行   |
+| 用户态子项目   | jlcy/ 独立子项目 + crt0.S 汇编入口 + user\_syscall stub + 0x08048000 经典基址                    | hello.elf 编译 + 链接 + 运行通过      |
+| MM-5 SSE2 优化 | weak/strong 链接模式 + SSE2 32B 宽写 + CR4.OSFXSR 安全检查 + movdqu 栈保存                       | memset/memcpy 性能提升，ALL PASSED    |
 
 ***
 
@@ -228,7 +233,7 @@ Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
 | --- | --- | --- | --- | --- |
 | PAG-5 | HAL 层加 `jlos_hal_paging_global_pages(enable)`（x86 CR4.PGE）+ `jlos_hal_paging_asid_alloc/free`（ARM/RISC-V 留占位，x86 返回 0）；内核页 PTE 统一加 `JLOS_PTE_GLOBAL` 标志 | 减少 CR3 切换导致的内核 TLB 全刷；为 ARM 等有 ASID 的架构预留钩子 | hal/paging.h + 各 arch 实现占位 / paging.c | 低 |
 | PFA-5 | 对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)` | 目前 malloc 单帧 + reserve_bulk 多帧两条独立路径，调用方用错会泄漏；统一出口便于批量优化 | page_frame_allocator.h / .c | 低 |
-| MM-5 | `memset`/`memcpy` 32B 展开 + SSE2 宽写（`movdqa`/`movdqu`），函数头 `clts` 清 CR0.TS + 尾 `mov %cr0` 恢复 | 现在 32-bit 逐字写 4B/cycle，COW 4KB 拷贝慢 2~3 倍；CR0.TS 置位保证 #NM lazy FPU 语义不变 | memory_manager.c（汇编块或内联 asm） | 中 |
+| ~~MM-5~~ | ~~`memset`/`memcpy` SSE2 32B 宽写~~ | **已实现**：common/types.c 标 weak，arch/x86/lib/memset.s + memcpy.s strong 覆盖，SSE2 安全模式（保存 CR0→clts→保存 xmm0→操作→恢复） | common/types.c + arch/x86/lib/memset.s + memcpy.s | ✅ 已完成 |
 
 ***
 
@@ -294,6 +299,78 @@ Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
 | CON-1 | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看 | printk 全部历史保存，类比 Linux ring buffer + dmesg | 中 |
 | CON-2 | 串口宏开关 `JLOS_SERIAL_ECHO` | 当前串口始终输出，需宏控制开关 | 低 |
 | CON-3 | PCI 总线枚举从 HAL 拆到 `drivers/pci/` | arch 无关总线枚举逻辑可上提 drivers 层 | 低 |
+
+***
+
+## Phase 8: 文件系统 + ELF 加载器 + execve + 用户态程序 ✅ 已完成
+
+### 8.1 F4 FAT32 文件系统
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| VFS 抽象层 | ✅ | `filesystem/vfs.h/c`：inode/dentry/super\_block/file/fs\_type/mount 抽象 + ops 向量 + inode/dentry hash 缓存 + 路径解析 |
+| FAT32 驱动 | ✅ | `filesystem/fat32.h/c`：完整 BPB + 短目录项 + FAT 链遍历 + cluster 读写 |
+| MBR 分区层 | ✅ | `filesystem/partition.h/c`：解析 4 个主分区 + FAT32 LBA 类型识别 + partition\_dev 偏移封装 |
+| 块设备抽象 | ✅ | `hal/block.h/c`：ops 表转发模式 + uint8\_t priv[64] 不透明私有数据 |
+| dsa 补充 | ✅ | `dsa/hash\_chain.h/c` + `dsa/bitmap.h/c` + `dsa/ringbuf.h/c` 供 VFS inode/dentry 缓存使用 |
+| init 集成 | ✅ | `kernel/rootfs.c`：ATA 主盘 → MBR 解析 → FAT32 分区 → mount("/")，JLOS\_INITCALL\_LATE 级自动注册 |
+
+### 8.2 ELF 加载器
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| ELF32 解析 | ✅ | `filesystem/elf.h/c`：ELF32 header + program header + i386 校验 |
+| PT\_LOAD 映射 | ✅ | 按页对齐映射到用户地址空间 + VMA 计入 + 文件内容拷贝 |
+| 用户地址布局 | ✅ | 0x08048000 ELF 加载区 + brk 堆 + 0xBFFFF000 用户栈顶 + 0xC0000000 内核空间 |
+
+### 8.3 execve 系统调用
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| execve 方案 A | ✅ | 经典做法：复用内核栈，修改 trapframe（eip/cs/user\_esp/user\_ss/eflags），正常 return 由 iret 到新程序 |
+| trapframe 修改 | ✅ | `jlos\_cpu\_state\_set\_user\_entry`（hal/cpu\_state.h + arch/x86/cpu\_state.c） |
+| 全局 trapframe | ✅ | `g\_hal\_syscall\_trapframe`（hal/kernel\_syscall.c）在 syscall entry 设置/清除 |
+| argv/envp 栈布局 | ✅ | System V ABI x86 32-bit 经典栈布局：环境字符串 → 参数字符串 → NULL → envp\[\] → NULL → argv\[\] → argc |
+| 用户空间拷贝 | ✅ | `syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈 |
+
+### 8.4 用户态子项目（jlcy/）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 独立子项目 | ✅ | `jlcy/` 与内核隔离，Makefile 用 find+patsubst 自动收集 .c/.S |
+| crt0.S 汇编入口 | ✅ | `jlcy/lib/x86/crt0.S`：\_start 从 esp 取 argc/argv → call main → exit syscall |
+| syscall stub | ✅ | `jlcy/lib/x86/user\_syscall.c`：int $0x80 入口（eax=num, ebx/ecx/edx=args） |
+| syscall\_abi.h | ✅ | `jlcy/include/syscall\_abi.h`：syscall 号从 enum 改 #define（C 和汇编通用）+ \_\_ASSEMBLY\_\_ 保护 |
+| hello.c 示例 | ✅ | `jlcy/user/hello.c`：int main(int argc, char \*\*argv) 纯 C，get\_pid + printf + return 7 |
+| 构建集成 | ✅ | 根 Makefile：jlcy/user/hello.elf → FAT32 镜像 → VMDK 磁盘 → 内核 rootfs 挂载后 execve |
+
+### 8.5 MM-5 SSE2 优化
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| weak/strong 链接模式 | ✅ | `common/types.c` 标 `__attribute__((weak))`，`arch/x86/lib/memset.s` + `memcpy.s` strong 覆盖 |
+| SSE2 32B 宽写 | ✅ | movdqa/movdqu + pshufd 广播 + 32B 循环（16B×2） |
+| CR4.OSFXSR 安全检查 | ✅ | 启动早期 CR4.OSFXSR 未置位时回退字节循环，避免 #UD |
+| CR0.TS 安全模式 | ✅ | 保存 CR0 → clts → 保存 xmm0 → SSE2 操作 → 恢复 xmm0 → 恢复 CR0 |
+| 栈对齐安全 | ✅ | movdqu 保存 xmm0 到栈（32 位内核栈不保证 16B 对齐） |
+| 小尺寸阈值 | ✅ | < 64B 直接字节循环，避免 SSE2 开销 |
+
+### 8.6 验证
+
+```
+memory:    ALL PASSED
+pfa:       ALL PASSED
+paging:    ALL PASSED
+multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf)
+```
+
+### 8.7 已知遗留
+
+| # | 问题 | 说明 | 优先级 |
+| --- | --- | --- | --- |
+| FS-1 | FAT32 只读挂载 | 写操作（create/write/delete）未实现 | 中 |
+| FS-2 | open/close/read/write syscall 未实现 | 当前只有 execve，无通用文件 syscall | 高 |
+| FS-3 | VFS dentry cache 未做 LRU 淘汰 | 当前 hash 缓存无上限 | 低 |
 
 ***
 
@@ -381,12 +458,16 @@ read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch
 | **P0** | 1     | Paging 全部修复 (per-context lock + clone 浅拷贝 + COW 锁合并等)    | ✅ 已完成    |
 | **P0** | 2     | Memory Manager 修复 (prev 合并方向 + tail 更新 + 批量 expand\_heap) | ✅ 已完成    |
 | **P0** | 3     | Multitask 升级 (exit stub 修复 + pid hash + O(1) zombie/wait_pid)  | ✅ 已完成    |
-| **P1** | 5.1   | 锁粒度细化 + 正确性收紧（MM-2 收尾、PAG-7 HAL 化）                | Phase 0-3 ✅ |
-| **P1** | 5.2   | 性能热点（MT-2 直连唤醒、MT-1 wait queue 经典化；PAG-4 内核 4KB PDE 共享可选） | Phase 5.1 完成 |
-| **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
-| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、MM-5、4.1~4.6）        | Phase 5.3 完成 |
 | **P0** | 6     | Console/Display 子系统 + Initcall 机制                              | ✅ 已完成    |
 | **P0** | 7     | HAL 层架构合规重构（分层模式 + 职责归属 + 下沉 arch + 去 drivers） | ✅ 已完成    |
+| **P0** | 8     | 文件系统 + ELF 加载器 + execve + 用户态程序 + SSE2 优化             | ✅ 已完成    |
+| **P1** | 5.1   | 锁粒度细化 + 正确性收紧（MM-2 收尾、PAG-7 HAL 化）                | Phase 0-3 ✅ |
+| **P1** | 5.2   | 性能热点（MT-2 直连唤醒、MT-1 wait queue 经典化；PAG-4 内核 4KB PDE 共享可选） | Phase 5.1 完成 |
+| **P1** | F5/F7 | open/close/read/write syscall + signal/kill 信号机制                | Phase 8 ✅  |
+| **P2** | 5.3   | 经典化 / 扩展性（MM-3 size class 精化、MT-4 task 表动态化、per-type cache） | Phase 5.2 完成 |
+| **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | Phase 8 ✅  |
+| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口（PAG-5、PFA-5、4.1~4.6）              | Phase 5.3 完成 |
+| **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | 无          |
 
 ***
 
@@ -397,15 +478,15 @@ read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch
 | F1   | 按需分页 (demand paging, 已实现 brk + stack)             | paging.c                          | 无                 |
 | F2   | COW 写时复制 (已实现)                                    | paging.c + multitask.c            | —                  |
 | F3   | 用户态 malloc/free                                       | user                              | 依赖 brk（已完成） |
-| F4   | FAT32 完善 (mount/open/close/read/write/seek/readdir)    | filesystem                        | 依赖块设备完善     |
-| F5   | open/close 系统调用                                      | syscall.c                         | 依赖 F4            |
-| F6   | ELF 用户态程序加载                                       | user                              | 依赖 F4            |
+| ~~F4~~ | ~~FAT32 完善 (mount/open/close/read/write/seek/readdir)~~ | **已实现**：VFS + FAT32 + MBR + ELF 加载器 | — |
+| F5   | open/close/read/write 系统调用                            | syscall.c                         | 依赖 F4            |
+| ~~F6~~ | ~~ELF 用户态程序加载~~                                   | **已实现**：jlcy/ + crt0.S + execve | —            |
 | F7   | signal/kill 信号机制                                     | syscall.c + multitask.c           | 无                 |
 | F8   | 线程支持（共享地址空间）                                 | multitask.c                       | 依赖 COW (F2)      |
 | F9   | DHCP 自动获取 IP                                         | net                               | 无                 |
 | F10  | DNS 域名解析                                             | net                               | 依赖 F9            |
 | F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4            |
-| F12  | FPU/SSE 上下文切换（CR0.TS + lazy save/restore）✅ 已完成 | arch/x86/fpu.c + hal/ext\_state.h | —                  |
+| ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
 | F13  | O(1) 调度选择（per-level runqueue + bitmap）             | kernel/multitask.c                | 无                 |
 | F14  | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看                  | kernel/console.c + printk.c       | 无                 |
 | F15  | 串口输出宏开关 `JLOS_SERIAL_ECHO`                        | kernel/console.c + hal/serial.h   | 无                 |
@@ -416,7 +497,7 @@ read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch
 
 | #   | 问题                       | 说明                                                                               |
 | --- | -------------------------- | ---------------------------------------------------------------------------------- |
-| A1  | 用户态代码与内核混编       | 经典做法用户态独立 ELF + 加载器；当前靠 PTE\_USER 共享 .text/.rodata；安全隔离性弱 |
+| ~~A1~~ | ~~用户态代码与内核混编~~ | **已解决**：jlcy/ 独立子项目 + ELF 加载器 + execve，用户态 ELF 独立链接 0x08048000 |
 | A2  | 0\~1MB 恒等映射残留        | GRUB 退出后不再需要，经典做法移除                                                  |
 | A3  | boot\_page\_dir 内存未释放 | 切到内核页表后 4KB 无法回收                                                        |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
@@ -451,6 +532,30 @@ read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch
 | —    | 页帧分配器无 OOM 防护             | v2.2     | init\_main 逐级回退 heap\_size，极端情况 halt              |
 
 ### 开发日志
+
+#### 2026-09-21（v3.0）
+
+- **Phase 8: 文件系统 + ELF 加载器 + execve + 用户态程序 + SSE2 优化 全部完成**
+
+- **F4 FAT32 文件系统**：VFS 抽象层（inode/dentry/super\_block/file/fs\_type/mount + ops 向量 + hash 缓存 + 路径解析）+ FAT32 驱动（完整 BPB + 短目录项 + FAT 链遍历 + cluster 读写）+ MBR 分区层（4 主分区解析 + LBA 偏移封装）+ 块设备抽象（hal/block.h/c ops 表 + 不透明 priv[64]）+ dsa 补充（hash\_chain/bitmap/ringbuf）+ rootfs init（JLOS\_INITCALL\_LATE 级自动挂载）。
+
+- **ELF 加载器**：ELF32 header + program header + i386 校验 + PT\_LOAD 按页映射 + VMA 计入 + 文件内容拷贝。用户地址布局：0x08048000 ELF 加载区 + brk 堆 + 0xBFFFF000 用户栈顶 + 0xC0000000 内核空间。
+
+- **execve 系统调用（方案 A）**：经典做法——复用内核栈，修改 trapframe（eip/cs/user\_esp/user\_ss/eflags），正常 return 由 iret 到新程序。全局 `g\_hal\_syscall\_trapframe` 在 syscall entry 设置/清除。`jlos\_cpu\_state\_set\_user\_entry` 修改 trapframe。
+
+- **argv/envp 栈布局**：System V ABI x86 32-bit 经典栈布局（环境字符串 → 参数字符串 → NULL → envp\[\] → NULL → argv\[\] → argc）。`syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈。
+
+- **用户态子项目 jlcy/**：独立子项目与内核隔离。crt0.S 汇编入口（\_start 从 esp 取 argc/argv → call main → exit syscall）+ user\_syscall.c（int $0x80 stub）+ syscall\_abi.h（syscall 号 #define，C 和汇编通用，\_\_ASSEMBLY\_\_ 保护）+ hello.c（int main(int argc, char \*\*argv) 纯 C，get\_pid + printf + return 7）+ user\_linker.ld（0x08048000 经典基址）。构建集成：根 Makefile → jlcy/user/hello.elf → FAT32 镜像 → VMDK → 内核 rootfs 挂载后 execve。
+
+- **MM-5 SSE2 优化**：weak/strong 链接模式（common/types.c 标 weak，arch/x86/lib/memset.s + memcpy.s strong 覆盖）+ SSE2 32B 宽写（movdqa/movdqu + pshufd 广播 + 32B 循环）+ CR4.OSFXSR 安全检查（启动早期未置位时回退字节循环）+ CR0.TS 安全模式（保存 CR0 → clts → 保存 xmm0 → 操作 → 恢复）+ movdqu 栈保存（32 位栈不保证 16B 对齐）+ 小尺寸阈值（< 64B 字节循环）。
+
+- **调试过程**：SSE2 初始版本两次崩溃——① `/* */` 注释 + 无 `l` 后缀导致 `$` 立即数解析错误（改 `#` 注释 + `l` 后缀）；② vCPU triple fault——CR4.OSFXSR 未检查（启动早期 #UD）+ movdqa 栈保存未对齐（#GP）。修复后 ALL PASSED。
+
+- **A1 遗留解决**：用户态代码与内核混编问题通过 jlcy/ 独立子项目 + ELF 加载器 + execve 彻底解决，用户态 ELF 独立链接 0x08048000。
+
+- **验证**：memory/pfa/paging/multitask ALL PASSED（ring3: exited=1, exit\_code=7, argc=1, argv[0]=/hello.elf）。
+
+- 更新计划至 v3.0
 
 #### 2026-09-18（v2.12）
 

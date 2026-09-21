@@ -4,11 +4,11 @@
 #include <kernel/paging.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 #include <kernel/device.h>
 #include <kernel/multitask.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
+#include <kernel/printk.h>
 
 extern uint32_t             _boot_end_phys;
 extern jlos_task_t          *g_current_task_ptr;
@@ -28,8 +28,7 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
         return;
     }
     uint32_t flags = jlos_spin_lock_irqsave(&self->lock);
-    uint32_t pt_freed = 0;
-    for (uint32_t i = 0; i < JLOS_PAGE_DIR_ENTRIES && pt_freed < self->num_page_tables; i++) {
+    for (uint32_t i = 0; i < JLOS_PAGE_DIR_ENTRIES; i++) {
         jlos_page_dir_entry_t *pde = &self->page_dir->entries[i];
         if (!(*pde & JLOS_PDE_PRESENT)) {
             continue;
@@ -44,19 +43,18 @@ void jlos_paging_context_destroy(jlos_paging_context_t *self)
             }
             continue;
         }
-        
+        if (is_kernel_space) {
+            continue;
+        }
         jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
-        if (!is_kernel_space) {
-            for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
-                jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
-                if (*pte & JLOS_PTE_PRESENT) {
-                    jlos_page_frame_refcount_dec(*pte & JLOS_PAGE_ADDR_MASK);
-                }
+        for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
+            jlos_page_table_entry_t *pte = &pt->entries[pt_idx];
+            if (*pte & JLOS_PTE_PRESENT) {
+                jlos_page_frame_refcount_dec(*pte & JLOS_PAGE_ADDR_MASK);
             }
         }
         jlos_page_frame_clear_owner_type(VIRT_TO_PHYS(pt));
         jlos_page_frame_free(pt);
-        pt_freed++;
     }
     jlos_spin_unlock_irqrestore(&self->lock, flags);
     jlos_page_frame_free(self->page_dir);
@@ -82,24 +80,7 @@ void jlos_paging_context_clone(jlos_paging_context_t *dst, jlos_paging_context_t
         if (!(src_pde & JLOS_PDE_PRESENT)) {
             continue;
         }
-        if (src_pde & JLOS_PDE_4MB) {
-            dst->page_dir->entries[i] = src_pde;
-        } else {
-            jlos_page_table_t *src_pt = (jlos_page_table_t *)PHYS_TO_VIRT(src_pde & JLOS_PAGE_ADDR_MASK);
-            jlos_page_table_t *dst_pt = (jlos_page_table_t *)jlos_page_frame_malloc();
-            if (!dst_pt) {
-                /* OOM: 只能放弃当前 PDE, 前面已分配的 PT 会随 page_dir 释放回收 */
-                continue;
-            }
-            jlos_memcpy(dst_pt, src_pt, sizeof(jlos_page_table_t));
-            uint32_t dst_pt_phys = VIRT_TO_PHYS(dst_pt);
-            /* 新 PDE = 原 PDE 低位标志 + 新 PT 物理地址 */
-            dst->page_dir->entries[i] = (src_pde & ~JLOS_PAGE_ADDR_MASK) | dst_pt_phys;
-            dst->num_page_tables++;
-            uint32_t src_pt_phys = src_pde & JLOS_PAGE_ADDR_MASK;
-            jlos_page_frame_set_owner_type(dst_pt_phys, NULL, JLOS_PAGE_FRAME_TYPE_PAGE_TABLE);
-            jlos_page_frame_pt_present_count_set(dst_pt_phys, jlos_page_frame_pt_present_count_get(src_pt_phys));
-        }
+        dst->page_dir->entries[i] = src_pde;
     }
     jlos_spin_unlock_irqrestore(&src->lock, flags);
 }
@@ -176,7 +157,7 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
             page_table = s_page_table_alloc ? s_page_table_alloc() : jlos_page_frame_malloc();
             if (!page_table) {
                 printk_err("alloc page_table failed\n");
-                goto rool_back;
+                goto rollback;
             }
             jlos_memset(page_table, 0, sizeof(jlos_page_table_t));
             pt_phys = VIRT_TO_PHYS(page_table);
@@ -188,7 +169,7 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
         if (*pte & JLOS_PTE_PRESENT) {
             printk_err("remap present pte. va = 0x%x, old = 0x%x\n", virtual_addr, *pte);
-            goto rool_back;
+            goto rollback;
         }
         *pte = (physical_addr & JLOS_PAGE_ADDR_MASK) | flags;
         jlos_page_frame_pt_present_count_inc(pt_phys);
@@ -200,7 +181,7 @@ static bool jlos_paging_map_range_nolock(jlos_paging_context_t *self, uint32_t v
         pages_done++;
     }
     return true;
-rool_back:
+rollback:
     for (uint32_t i = 0; i < pages_done; i++) {
         virtual_addr -= JLOS_PAGE_SIZE;
         jlos_paging_unmap_nolock(self, virtual_addr);
@@ -251,7 +232,7 @@ static uint32_t jlos_paging_get_physical_addr_nolock(jlos_paging_context_t *self
         return 0;
     }
     if (*pde & JLOS_PDE_4MB) {
-        uint32_t offset = virtual_addr & 0x3FFFFF;
+        uint32_t offset = virtual_addr & (JLOS_PDE_4MB_SIZE - 1);
         return (*pde & JLOS_PDE_4MB_ADDR_MASK) | offset;
     }
     jlos_page_table_t *page_table = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
@@ -293,6 +274,30 @@ static void jlos_paging_change_flags_nolock(jlos_paging_context_t *self, uint32_
     if (flags & JLOS_PTE_USER) {
         *pde |= JLOS_PDE_USER;
     }
+}
+
+static bool jlos_paging_need_flush_tlb(jlos_paging_context_t *self, uint32_t virtual_addr)
+{
+    jlos_paging_context_t *act = jlos_hal_paging_get_active_context();
+    if (self == act) {
+        return true;
+    }
+    if (!act || !act->page_dir || !self->page_dir) {
+        return false;
+    }
+    uint32_t pd_idx = jlos_paging_get_page_dir_index(virtual_addr);
+    jlos_page_dir_entry_t self_pde = self->page_dir->entries[pd_idx];
+    if (!(self_pde & JLOS_PDE_PRESENT) || (self_pde & JLOS_PDE_4MB)) {
+        return false;
+    }
+    jlos_page_dir_entry_t act_pde = act->page_dir->entries[pd_idx];
+    if (!(act_pde & JLOS_PDE_PRESENT)) {
+        return false;
+    }
+    if (self_pde & JLOS_PDE_4MB) {
+        return (act_pde & JLOS_PDE_GLOBAL) != 0;
+    }
+    return (self_pde & JLOS_PAGE_ADDR_MASK) == (act_pde & JLOS_PAGE_ADDR_MASK);
 }
 
 bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t flags)
@@ -379,7 +384,7 @@ void jlos_paging_change_flags(jlos_paging_context_t *self, uint32_t virtual_addr
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     jlos_paging_change_flags_nolock(self, virtual_addr, flags);
     jlos_spin_unlock_irqrestore(&self->lock, fl);
-    if (self == jlos_hal_paging_get_active_context()) {
+    if (jlos_paging_need_flush_tlb(self, virtual_addr)) {
         jlos_hal_paging_flush_tlb(virtual_addr);
     }
 }
@@ -392,8 +397,8 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
     }
     uint32_t start = JLOS_PAGE_ALIGN_DOWN(virtual_addr_start);
     uint32_t page_num = (virtual_addr_end - start) / JLOS_PAGE_SIZE;
-    bool active = (self == jlos_hal_paging_get_active_context());
-    bool flush_one = active && page_num < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD;
+    bool flush_one = page_num < JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD;
+    bool need_flush_all = false;
 
     uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
     for (uint32_t addr = start; addr < virtual_addr_end; addr += JLOS_PAGE_SIZE) {
@@ -404,11 +409,15 @@ void jlos_paging_change_flags_range(jlos_paging_context_t *self, uint32_t virtua
             continue;
         }
         jlos_paging_change_flags_nolock(self, addr, flags);
-        if (flush_one) {
-            jlos_hal_paging_flush_tlb(addr);
+        if (jlos_paging_need_flush_tlb(self, addr)) {
+            if (flush_one) {
+                jlos_hal_paging_flush_tlb(addr);
+            } else {
+                need_flush_all = true;
+            }
         }
     }
-    if (active && page_num >= JLOS_PAGE_FRAME_FLUSH_ALL_TLB_THRESHOLD) {
+    if (need_flush_all) {
         jlos_hal_paging_flush_all_tlb();
     }
     jlos_spin_unlock_irqrestore(&self->lock, fl);
@@ -464,12 +473,12 @@ void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn)
         map_size = KERNEL_DIRECT_MAP_SIZE;
     }
     uint32_t low_end = (uint32_t)&_boot_end_phys;
-    uint32_t huge_start = JLOS_EXCEPT_CEIL(low_end, 4 * 1024 * 1024);
+    uint32_t huge_start = JLOS_EXCEPT_CEIL(low_end, JLOS_PDE_4MB_SIZE);
     if (huge_start > map_size) {
         huge_start = map_size;
     }
     if (huge_start) {
-        jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE, 0, huge_start, JLOS_PTE_KERNEL_RW);
+        jlos_paging_map_range(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE, 0, huge_start, JLOS_PTE_KERNEL_RW | JLOS_PTE_GLOBAL);
     }
     /* .text 只读 */
     const jlos_hal_kernel_segments_t *segments = jlos_hal_get_kernel_segments();
@@ -481,10 +490,11 @@ void jlos_paging_initialize_kernel_paging(page_table_alloc_fn alloc_fn)
         jlos_paging_change_flags_range(&s_kernel_paging_context, segments->bss_start, segments->bss_end,
             JLOS_PTE_KERNEL_RW);
     }
-    for (uint32_t pa = huge_start; pa < map_size; pa += 4 * 1024 * 1024) {
-        jlos_paging_map(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE + pa, pa, JLOS_PTE_KERNEL_RW | JLOS_PDE_4MB);
+    for (uint32_t pa = huge_start; pa < map_size; pa += JLOS_PDE_4MB_SIZE) {
+        jlos_paging_map(&s_kernel_paging_context, KERNEL_VIRTUAL_BASE + pa, pa, JLOS_PTE_KERNEL_RW | JLOS_PDE_4MB | JLOS_PDE_GLOBAL);
     }
     jlos_paging_enable(&s_kernel_paging_context);
+    jlos_hal_paging_enable_global_pages();
     s_page_table_alloc = NULL;
 }
 
@@ -603,4 +613,33 @@ void jlos_paging_print_states(jlos_paging_context_t *self)
     printk_info("- mapped pages: %u (%u KB)\n", mapped_pages, mapped_pages * 4);
     printk_info("- total physical memory: %u KB\n", jlos_page_frame_get_total() * 4);
     printk_info("- free physical memory: %u KB\n", jlos_page_frame_get_free() * 4);
+}
+
+void jlos_paging_context_free_user_pages(jlos_paging_context_t *self)
+{
+    if (!self || !self->page_dir) {
+        return;
+    }
+    uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
+    for (uint32_t pd = 0; pd < JLOS_PAGE_DIR_ENTRIES; pd++) {
+        jlos_page_dir_entry_t pde = self->page_dir->entries[pd];
+        if (!(pde & JLOS_PDE_PRESENT)) {
+            continue;
+        }
+        if (pde & JLOS_PDE_4MB) {
+            continue;
+        }
+        jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT(pde & JLOS_PAGE_ADDR_MASK);
+        for (uint32_t pt_idx = 0; pt_idx < JLOS_PAGE_TABLE_ENTRIES; pt_idx++) {
+            jlos_page_table_entry_t pte = pt->entries[pt_idx];
+            if (!((pte & JLOS_PTE_PRESENT))) {
+                continue;
+            }
+            if (!(pte & JLOS_PTE_USER)) {
+                continue;
+            }
+            jlos_page_frame_refcount_dec(pte & JLOS_PAGE_ADDR_MASK);
+        }
+    }
+    jlos_spin_unlock_irqrestore(&self->lock, fl);
 }

@@ -103,6 +103,8 @@ bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual
 
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context);
 
+void jlos_paging_context_free_user_pages(jlos_paging_context_t *self);
+
 static inline uint32_t jlos_paging_get_page_dir_index(uint32_t virtual_addr)
 {
     return (virtual_addr >> 22) & 0x3FF;

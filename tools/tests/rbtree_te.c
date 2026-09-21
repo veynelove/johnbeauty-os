@@ -1,9 +1,9 @@
 #include <tools/tests/rbtree_te.h>
 #include <dsa/rbtree.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 #define RBTREE_TEST_COUNT 128
 

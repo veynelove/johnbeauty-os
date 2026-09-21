@@ -1,7 +1,7 @@
 #include <drivers/mouse.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "mouse"
+#include <kernel/printk.h>
 
 void jlos_mouse_event_handler_init(jlos_mouse_event_handler_t* self)
 {

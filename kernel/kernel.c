@@ -7,7 +7,6 @@
 #include <hal/hal_arch.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/device.h>
@@ -24,6 +23,7 @@
 #endif
 
 #define JLOS_KERNEL_LOG_SUBSYS "boot"
+#include <kernel/printk.h>
 
 void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kernel_end)
 {

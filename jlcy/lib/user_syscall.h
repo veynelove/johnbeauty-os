@@ -1,8 +1,8 @@
-#ifndef _JLOS_LIB_USER_SYSCALL_H
-#define _JLOS_LIB_USER_SYSCALL_H
+#ifndef _JLCY_LIB_USER_SYSCALL_H
+#define _JLCY_LIB_USER_SYSCALL_H
 
-#include <common/types.h>
-#include <hal/syscall_abi.h>
+#include <include/types.h>
+#include <include/syscall_abi.h>
 
 int32_t jlos_user_syscall(uint32_t num, uint32_t arg1, uint32_t arg2, uint32_t arg3);
 
@@ -77,6 +77,6 @@ static inline int32_t jlos_user_task_brk(uint32_t addr)
 {
     return jlos_user_syscall(JLOS_SYSCALL_TASK_BRK, addr, 0, 0);
 }
-void jlos_user_printf(const char *fmt, ...);
+void printf(const char *fmt, ...);
 
 #endif

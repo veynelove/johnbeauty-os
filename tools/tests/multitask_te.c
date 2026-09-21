@@ -1,15 +1,14 @@
 #include <tools/tests/multitask_te.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <hal/hal.h>
 #include <hal/context.h>
 #include <hal/timer.h>
-#include <lib/user_syscall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 static jlos_task_manager_t *s_mgr;
 
@@ -27,8 +26,8 @@ static volatile uint32_t g_pressure_child_pids[PRESSURE_CHILDREN];
 static volatile int g_pressure_done = 0;
 static volatile int g_pressure_fork_done = 0;
 
-
 static volatile int g_ring3_exited = 0;
+static volatile uint32_t g_ring3_pid = 0;
 
 static void alt_task_exit(void)
 {
@@ -153,39 +152,14 @@ static void pressure_parent_entry(void)
     jlos_process_exit(me, 0);
 }
 
-static void ring3_entry(void)
+static void ring3_loader_entry(void)
 {
-    uint32_t pid = jlos_user_get_pid();
-    jlos_user_printf("ring3: PID=%u\n", pid);
-    jlos_user_get_tasks_info();
-    jlos_user_sleep(50);
-    jlos_user_puts("ring3: wakeup -> exit\n");
-    g_ring3_exited++;
-    jlos_user_exit(7);
-}
-
-static jlos_task_t *spawn_user_task(jlos_mmu_t *mmu, void (*fn)(void), const char *name, int *fail_cnt)
-{
-    jlos_task_t *t = (jlos_task_t *)jlos_kalloc(sizeof(*t));
-    if (!t) {
-        if (fail_cnt)
-            (*fail_cnt)++;
-        return NULL;
+    char *argv[] = {"/hello.elf", NULL};
+    char *envp[] = {NULL};
+    int ret = jlos_process_exec_elf(g_current_task_ptr, "/hello.elf", 1, argv, envp);
+    if (ret < 0) {
+        jlos_process_exit(g_current_task_ptr, 0);
     }
-    if (jlos_task_init_user(t, mmu, fn, name) < 0) {
-        jlos_kfree(t);
-        if (fail_cnt)
-            (*fail_cnt)++;
-        return NULL;
-    }
-    if (!jlos_task_manager_add_task(s_mgr, t)) {
-        jlos_task_free(s_mgr, t);
-        jlos_kfree(t);
-        if (fail_cnt)
-            (*fail_cnt)++;
-        return NULL;
-    }
-    return t;
 }
 
 static jlos_task_t *spawn_kernel_task(jlos_mmu_t *mmu, void (*fn)(void), const char *name, int *fail_cnt)
@@ -243,7 +217,12 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
            PRESSURE_CHILDREN, 100u + PRESSURE_CHILDREN - 1);
     spawn_kernel_task(mmu, pressure_parent_entry, "t3_parent", &spawn_fails);
     printk_info("[test 4] ring3 user task smoke\n");
-    spawn_user_task(mmu, ring3_entry, "t4_ring3", &spawn_fails);
+    {
+        jlos_task_t *t = spawn_kernel_task(mmu, ring3_loader_entry, "t4_ring3", &spawn_fails);
+        if (t) {
+            g_ring3_pid = t->pid;
+        }
+    }
 
     if (spawn_fails) {
         printk_err("FAIL: spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
@@ -256,6 +235,12 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     uint32_t now = t0;
     for (;;) {
         now = jlos_hal_timer_get_ticks();
+        if (g_ring3_pid && !g_ring3_exited) {
+            jlos_task_t *rt = jlos_task_manager_find_pid(s_mgr, g_ring3_pid);
+            if (rt && rt->status == JLOS_TASK_ZOMBIE && rt->exit_code == 7) {
+                g_ring3_exited = 1;
+            }
+        }
         int all = (g_alt_a >= 500 && g_alt_b >= 500)
                && (g_fork_parent_done == 1)
                && (g_pressure_done == 1)

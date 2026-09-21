@@ -1,8 +1,8 @@
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "eth"
+#include <kernel/printk.h>
 
 void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend)
 {

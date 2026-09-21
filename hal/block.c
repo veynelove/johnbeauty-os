@@ -94,8 +94,10 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self, uint16_t port_b
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;
     jlos_ata_init(block_ata(self), port_base, master);
+    jlos_ata_identify(block_ata(self));
     self->bytes_per_sector = block_ata(self)->bytes_per_sector;
-    self->inited = 1;
+    self->total_sectors = block_ata(self)->total_sectors;
+    self->inited = (self->total_sectors > 0) ? 1 : 0;
 }
 
 void jlos_hal_block_init(jlos_hal_block_dev_t *self)

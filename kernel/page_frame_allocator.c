@@ -2,12 +2,12 @@
 #include <kernel/memory_manager.h>
 #include <kernel/device.h>
 #include <kernel/paging.h>
-#include <kernel/printk.h>
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "pfa"
+#include <kernel/printk.h>
 
 extern uint32_t             _boot_end_phys;
 extern uint32_t             _kernel_end_phys;

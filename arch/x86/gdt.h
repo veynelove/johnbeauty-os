@@ -3,6 +3,12 @@
 
 #include <common/types.h>
 
+#define JLOS_X86_USER_CS        0x23
+#define JLOS_X86_USER_DS        0x2B
+
+#define JLOS_X86_ASM_STR(x)     #x
+#define JLOS_X86_ASM_XSTR(x)    JLOS_X86_ASM_STR(x)
+
 typedef struct jlos_gdt_segment_descriptor {
     uint16_t    limit_lo;
     uint16_t    base_lo;

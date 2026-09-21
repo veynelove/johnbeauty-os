@@ -1,9 +1,9 @@
 #include <net/etherframe.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
+#include <kernel/printk.h>
 
 void jlos_ether_frame_handler_init(jlos_ether_frame_handler_t* self, jlos_ether_frame_provider_t *backend, uint16_t etherType_BE)
 {

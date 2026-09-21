@@ -1,8 +1,8 @@
 #include <net/arp.h>
-#include <kernel/printk.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "arp"
+#include <kernel/printk.h>
 
 static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
 {

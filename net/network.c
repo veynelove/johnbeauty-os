@@ -1,10 +1,10 @@
 #include <net/network.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <kernel/initcall.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
+#include <kernel/printk.h>
 
 extern void jlos_amd_am79c973_activate(jlos_amd_am79c973_t*);
 

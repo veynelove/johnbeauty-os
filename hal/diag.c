@@ -1,8 +1,8 @@
 #include <hal/diag.h>
 #include <hal/timer.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "diag"
+#include <kernel/printk.h>
 
 #if HAL_CONFIG_TRACE_IO
 

@@ -116,3 +116,13 @@ uint32_t jlos_hash_ptr(const void *key)
 {
     return (uint32_t)key;
 }
+
+uint32_t jlos_hash_str(const void *key)
+{
+    const char *s = (const char *)key;
+    uint32_t h = 0;
+    while (*s) {
+        h = h * JLOS_HASH_STR_PREME + (uint8_t)*s++;
+    }
+    return h;
+}

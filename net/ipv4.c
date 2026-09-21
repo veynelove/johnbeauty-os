@@ -1,9 +1,9 @@
 #include <net/ipv4.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "ipv4"
+#include <kernel/printk.h>
 
 void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self, jlos_internet_protocol_provider_t *backend, uint8_t protocol)
 {

@@ -12,6 +12,7 @@ typedef enum {
     JLOS_HAL_BLOCK_DEV_ATA_DMA   = 2,
     JLOS_HAL_BLOCK_DEV_AHCI      = 3,
     JLOS_HAL_BLOCK_DEV_NVME      = 4,
+    JLOS_HAL_BLOCK_DEV_PARTITION = 5,
 } jlos_hal_block_dev_type_t;
 
 typedef struct jlos_hal_block_dev jlos_hal_block_dev_t;

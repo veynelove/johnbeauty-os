@@ -15,4 +15,8 @@ struct jlos_paging_context;
 struct jlos_paging_context *jlos_hal_paging_get_active_context(void);
 void jlos_hal_paging_set_active_context(struct jlos_paging_context *ctx);
 
+void jlos_hal_paging_enable_global_pages(void);
+uint32_t jlos_hal_paging_asid_alloc(void);
+void jlos_hal_paging_asid_free(uint32_t asid);
+
 #endif

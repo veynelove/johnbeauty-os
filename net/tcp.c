@@ -1,8 +1,8 @@
 #include <net/tcp.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "tcp"
+#include <kernel/printk.h>
 
 void jlos_tcp_handler_init(jlos_tcp_handler_t* self)
 {

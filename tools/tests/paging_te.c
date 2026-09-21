@@ -1,9 +1,9 @@
 #include <tools/tests/paging_te.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
+#include <kernel/printk.h>
 
 #define TEST_VBASE 0x10000000
 

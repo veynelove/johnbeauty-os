@@ -41,15 +41,15 @@
                                      (JLOS_KERN_U32OF(p) + (sz) >  JLOS_KERN_U32OF(p)) && \
                                      (JLOS_KERN_U32OF(p) + (sz) <= 0xFFFFFFFFu) )
 
-#define jLOS_TASK_PID_HASH_SIZE     256
+#define JLOS_TASK_PID_HASH_SIZE     256
 
 #define jlos_task_curr()  (g_current_task_ptr)
 
 extern uint32_t _kernel_end;
 
 typedef enum {
-    TASK_EXIT_DEAUFT        = 0,
-    TASK_EXIT_PAGE_FAULT
+    TASK_EXIT_DEFAULT       = 0,
+    TASK_EXIT_PAGE_FAULT    = 1,
 } jlos_task_exit_code;
 
 enum jlos_task_errno {
@@ -107,9 +107,10 @@ typedef struct jlos_task {
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
-    jlos_task_t         *tasks[JLOS_TASK_MAX_NUM];
+    jlos_task_t         **tasks;
+    uint32_t            max_tasks;
     jlos_hash_chain_t   pid_hash;
-    int                 num_tasks;
+    uint32_t            num_tasks;
     int                 current_task;
     jlos_list_head_t    zombie_head;
     jlos_list_head_t    sleep_queue;
@@ -165,4 +166,11 @@ void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);
 void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
+
+#define JLOS_EXECVE_MAX_ARGS    256
+#define JLOS_EXECVE_MAX_STRLEN  256
+
+int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *const argv[], char *const envp[]);
+void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top);
+
 #endif

@@ -1,8 +1,8 @@
 #include <hal/hal.h>
 #include <hal/device.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "hal"
+#include <kernel/printk.h>
 
 static jlos_hal_io_range_t s_io_ranges[JLOS_HAL_IO_RANGES_MAX];
 static jlos_hal_irq_info_t s_irq_table[JLOS_HAL_IRQ_MAX];

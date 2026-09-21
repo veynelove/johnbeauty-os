@@ -11,9 +11,9 @@
 #include <hal/hal_arch.h>
 #include <kernel/initcall.h>
 #include <kernel/paging.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
+#include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);
 extern jlos_task_t *g_current_task_ptr;

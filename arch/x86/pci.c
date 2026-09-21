@@ -3,9 +3,9 @@
 #include <drivers/driver.h>
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "pci"
+#include <kernel/printk.h>
 
 static jlos_hal_pci_controller_t s_pci_controller;
 

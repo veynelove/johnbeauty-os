@@ -41,11 +41,16 @@ void jlos_hal_paging_flush_tlb(uint32_t virtual_addr)
 
 void jlos_hal_paging_flush_all_tlb(void)
 {
-    uint32_t cr3;
+     uint32_t cr4;
     __asm__ __volatile__(
-        "movl %%cr3, %0\n\t"
-        "movl %0, %%cr3\n\t"
-        : "=r"(cr3) : : "memory"
+        "movl %%cr4, %0\n\t"
+        "andl %1, %0\n\t"
+        "movl %0, %%cr4\n\t"
+        "orl %2, %0\n\t"
+        "movl %0, %%cr4\n\t"
+        : "=r"(cr4)
+        : "r"(~0x80u), "r"(0x80u)
+        : "memory"
     );
 }
 
@@ -69,7 +74,7 @@ bool jlos_hal_paging_supports_4mb_pages(void)
         : "a"(1)
     );
     
-    return (edx & (1 << 6)) && (edx & (1 << 3));
+    return (edx & (1 << 3)) != 0;
 }
 
 struct jlos_paging_context *jlos_hal_paging_get_active_context(void)
@@ -81,3 +86,25 @@ void jlos_hal_paging_set_active_context(struct jlos_paging_context *ctx)
 {
     s_active_paging_context = ctx;
 }
+
+void jlos_hal_paging_enable_global_pages(void)
+{
+    uint32_t cr4;
+    __asm__ __volatile__(
+        "movl %%cr4, %0\n\t"
+        "orl $0x80, %0\n\t"
+        "movl %0, %%cr4\n\t"
+        : "=r"(cr4) : : "memory"
+    );
+}
+
+uint32_t jlos_hal_paging_asid_alloc(void)
+{
+    return 0;
+}
+
+void jlos_hal_paging_asid_free(uint32_t asid)
+{
+    (void)asid;
+}
+

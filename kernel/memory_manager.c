@@ -1,7 +1,6 @@
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 #include <kernel/device.h>
 #include <kernel/initcall.h>
 #include <hal/spinlock.h>
@@ -10,6 +9,7 @@
 #include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "mm"
+#include <kernel/printk.h>
 
 static jlos_memory_manager_t    s_low_memory_manager;
 static jlos_memory_manager_t    s_main_memory_manager;

@@ -1,6 +1,6 @@
 #include <lib/user_syscall.h>
 
-void jlos_user_printf(const char *fmt, ...)
+void printf(const char *fmt, ...)
 {
     char buf[256];
     int pos = 0;

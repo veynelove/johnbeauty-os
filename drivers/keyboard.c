@@ -1,7 +1,7 @@
 #include <drivers/keyboard.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "kbd"
+#include <kernel/printk.h>
 
 void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self)
 {

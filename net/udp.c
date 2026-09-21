@@ -1,9 +1,9 @@
 #include <net/udp.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "udp"
+#include <kernel/printk.h>
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self)
 {

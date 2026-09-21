@@ -1,9 +1,9 @@
 #include <kernel/vma.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "vma"
+#include <kernel/printk.h>
 
 static int jlos_vma_compare(const jlos_rbtree_node_t *a, const jlos_rbtree_node_t *b)
 {
