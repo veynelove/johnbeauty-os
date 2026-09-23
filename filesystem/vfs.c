@@ -20,6 +20,7 @@ static jlos_list_head_t     s_mounts;
 static jlos_vfs_dentry_t    *s_root_dentry;
 static jlos_hash_chain_t    s_inode_hash;
 static jlos_hash_chain_t    s_dentry_hash;
+static jlos_spinlock_t      s_vfs_lock;
 
 static uint32_t inode_hash_fn(const void *key)
 {
@@ -58,6 +59,7 @@ static void jlos_vfs_init(void)
     jlos_list_init(&s_fs_types);
     jlos_list_init(&s_mounts);
     s_root_dentry = NULL;
+    jlos_spinlock_init(&s_vfs_lock);
     jlos_hash_chain_init(&s_inode_hash, JLOS_VFS_HASH_BUCKETS, inode_hash_fn, inode_cmp_fn);
     jlos_hash_chain_init(&s_dentry_hash, JLOS_VFS_HASH_BUCKETS, dentry_hash_fn, dentry_cmp_fn);
 }
@@ -110,6 +112,31 @@ static int path_next_component(const char *path, char *buf, size_t bufsize)
     }
     buf[i] = 0;
     return (int)i;
+}
+
+static int path_parent_leaf(const char *path, char *parent, size_t parent_size, char *leaf, size_t leaf_size)
+{
+    const char *slash = NULL;
+    for (const char *p = path; *p; p++) {
+        if (*p == '/') {
+            slash = p;
+        }
+    }
+    if (!slash) {
+        return -1;
+    }
+    jlos_strlcpy(leaf, slash + 1, leaf_size);
+    if (leaf[0] == 0) {
+        return -1;
+    }
+    if (slash == path) {
+        jlos_strlcpy(parent, "/", parent_size);
+    } else {
+        uint32_t len = (uint32_t)(slash - path);
+        jlos_memcpy(parent, path, len);
+        parent[len] = 0;
+    }
+    return 0;
 }
 
 jlos_vfs_mount_t *jlos_vfs_mount(const char *fs_type_name, jlos_hal_block_dev_t *dev, const char *mount_path)
@@ -208,7 +235,11 @@ jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path)
             return NULL;
         }
         child->parent = cur;
+
+        uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
         jlos_list_add(&child->sibling, &cur->child_list);
+        jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+        
         vfs_dentry_key_t key = {.parent = cur, .name = child->name};
         jlos_hash_chain_insert(&s_dentry_hash, &key, &child->hash_node);
         jlos_vfs_dentry_get(child);
@@ -218,9 +249,26 @@ jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path)
     return cur;
 }
 
-jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags)
+jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags, uint32_t mode)
 {
     jlos_vfs_dentry_t *d = jlos_vfs_lookup(path);
+    if (!d && (flags & JLOS_VFS_O_CREAT)) {
+        char parent_path[JLOS_VFS_PATH_MAX];
+        char leaf[JLOS_VFS_NAME_MAX + 1];
+        if (path_parent_leaf(path, parent_path, sizeof(parent_path), leaf, sizeof(leaf)) == 0) {
+            jlos_vfs_dentry_t *parent = jlos_vfs_lookup(parent_path);
+            if (parent && parent->inode && JLOS_VFS_IS_DIR(parent->inode->mode)
+            && parent->inode->i_ops && parent->inode->i_ops->create) {
+                if (parent->inode->i_ops->create(parent->inode, leaf, mode) == 0) {
+                    d = jlos_vfs_lookup(path);
+                }
+            }
+            if (parent) {
+                jlos_vfs_dentry_put(parent);
+            }
+        }
+    }
+
     if (!d || !d->inode) {
         if (d) {
             jlos_vfs_dentry_put(d);
@@ -261,6 +309,40 @@ int jlos_vfs_close(jlos_vfs_file_t *file)
     jlos_vfs_dentry_put(file->dentry);
     jlos_kfree(file);
     return ret;
+}
+
+int jlos_vfs_unlink(const char *path)
+{
+    jlos_vfs_dentry_t *d = jlos_vfs_lookup(path);
+    if (!d || !d->inode) {
+        if (d) {
+            jlos_vfs_dentry_put(d);
+        }
+        return -1;
+    }
+    if (JLOS_VFS_IS_DIR(d->inode->mode)) {
+        jlos_vfs_dentry_put(d);
+        return -1;
+    }
+    if (!d->parent || !d->parent->inode || !d->parent->inode->i_ops || !d->parent->inode->i_ops->unlink) {
+        jlos_vfs_dentry_put(d);
+        return -1;
+    }
+    int ret = d->parent->inode->i_ops->unlink(d->parent->inode, d->name);
+    if (ret != 0) {
+        jlos_vfs_dentry_put(d);
+        return ret;
+    }
+    jlos_hash_chain_remove(&s_dentry_hash, &d->hash_node);
+    d->unhashed = true;
+    if (d->parent) {
+        uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
+        jlos_list_del(&d->sibling);
+        jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+        d->parent = NULL;
+    }
+    jlos_vfs_dentry_put(d);
+    return 0;
 }
 
 int jlos_vfs_read(jlos_vfs_file_t *file, uint8_t *buf, uint32_t count)
@@ -344,10 +426,15 @@ void jlos_vfs_dentry_put(jlos_vfs_dentry_t *dentry)
         return;
     }
     if (jlos_atomic_dec_return(&dentry->ref_count) == 0) {
-        if (dentry->parent) {
-            jlos_list_del(&dentry->sibling);
+        if (!dentry->unhashed) {
+            if (dentry->parent) {
+                uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
+                jlos_list_del(&dentry->sibling);
+                jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+            }
+            jlos_hash_chain_remove(&s_dentry_hash, &dentry->hash_node);
+            
         }
-        jlos_hash_chain_remove(&s_dentry_hash, &dentry->hash_node);
         jlos_vfs_inode_put(dentry->inode);
         jlos_kfree(dentry);
     }

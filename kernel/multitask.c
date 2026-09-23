@@ -833,7 +833,7 @@ static uint32_t jlos_exec_setup_user_stack(jlos_task_t *task, int argc, char *co
 
 int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *const argv[], char *const envp[])
 {
-    jlos_vfs_file_t *file = jlos_vfs_open(path, JLOS_VFS_O_RDONLY);
+    jlos_vfs_file_t *file = jlos_vfs_open(path, JLOS_VFS_O_RDONLY, 0);
     if (!file) {
         printk_err("exec_elf: failed to open %s\n", path);
         return -1;

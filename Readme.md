@@ -68,15 +68,6 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 
 [0.000000] [I] [boot] [john_beauty_main] princess yihan is safe and happy!
 [0.000000] [I] [dev] [jlos_device_init] mmap: 11 entries, max ram end = 0x10000000, total available = 261630 KB
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 1, frames: 2, blocks: 1
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 2, frames: 4, blocks: 1
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 4, frames: 16, blocks: 1
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 5, frames: 32, blocks: 1
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 6, frames: 64, blocks: 2
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 7, frames: 128, blocks: 2
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 8, frames: 256, blocks: 2
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 9, frames: 512, blocks: 1
-[0.000000] [D] [pfa] [jlos_page_frame_print_buddy] order: 10, frames: 1024, blocks: 61
 [0.000000] [I] [boot] [john_beauty_main] paging initialized
 [0.000000] [I] [mm] [jlos_memory_manager_init_main] init_main: first=0xf8000000 size=4194272 heap=[0xf8000000,0xf8400000) current=0xf8400000
 [0.000000] [D] [pci] [pci_network_controller_handle] amd am79c973 pci command: 0x7
@@ -89,7 +80,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.000000] [I] [net] [network_init] initializing network stack
 [0.000000] [I] [net] [network_init] setting IP to 192.168.159.144
 [0.000000] [I] [net] [network_init] initializing etherframe provider
-[0.000000] [I] [net] [network_init] [OK] etherframe initialized (handlers=0xc074ee1c)
+[0.000000] [I] [net] [network_init] [OK] etherframe initialized (handlers=0xc0778e1c)
 [0.000000] [I] [arp] [jlos_arp_init] initializing ARP protocol
 [0.000000] [I] [net] [network_init] [OK] ARP initialized (type=0x0806, cache_size=128)
 [0.000000] [I] [net] [network_init] initializing IPv4 protocol (gateway: 192.168.159.1, subnet: 255.255.255.0)
@@ -97,9 +88,9 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.000000] [I] [net] [network_init] initializing ICMP protocol
 [0.000000] [I] [net] [network_init] [OK] ICMP initialized (proto=0x01)
 [0.000000] [I] [udp] [jlos_udp_provider_init] initialized
-[0.000000] [I] [net] [network_init] [OK] UDP initialized (proto=0x11, sockets=0xc074ed1c)
+[0.000000] [I] [net] [network_init] [OK] UDP initialized (proto=0x11, sockets=0xc0778d1c)
 [0.000000] [I] [net] [network_init] initializing TCP protocol
-[0.000000] [I] [net] [network_init] [OK] TCP initialized (proto=0x06, sockets=0xc074ec1c)
+[0.000000] [I] [net] [network_init] [OK] TCP initialized (proto=0x06, sockets=0xc0778c1c)
 [0.000000] [I] [net] [network_init] sending ARP broadcast to resolve gateway
 [0.000000] [D] [arp] [jlos_arp_resolve] sending request for 19fa8c0
 [0.000000] [D] [eth] [jlos_amd_am79c973_send] send: 42 bytes
@@ -112,8 +103,8 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.000000] [I] [net] [network_init] network stack initialization complete
 [0.000000] [I] [timer] [timer_select_and_start] selected = 8253 PIT, rating = 100
 [0.000000] [D] [ptfs] [jlos_partition_parse_mbr] partition 0, type = c, start_lba = 2048, sector = 30720
-[0.000000] [D] [fat32] [fat32_mount] fat32 mounted: cluster = 4294966790, root = 2
-[0.000000] [D] [rootfs] [jlos_rootfs_init] rootfs mounted on partition 0, type 0x%02X
+[0.000000] [D] [fat32] [fat32_mount] cluster = 30214, root = 2
+[0.000000] [D] [rootfs] [jlos_rootfs_init] rootfs mounted on partition 0, type 0xc
 [0.000000] [D] [eth] [jlos_amd_am79c973_activate] BCR written with 0x102
 [0.000000] [D] [eth] [jlos_amd_am79c973_activate] CSR0 written with 0x04 (STOP)
 [0.000000] [I] [eth] [jlos_amd_am79c973_activate] STOP acknowledged
@@ -127,7 +118,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.010000] [I] [test] [test_boundary] [test 1] boundary
 [0.010000] [I] [test] [test_boundary] OK: kalloc(0) == NULL
 [0.010000] [I] [test] [test_boundary] OK: boundary (12 cases)
-[0.010000] [I] [test] [test_small_slab] [test 2] small slab
+[0.020000] [I] [test] [test_small_slab] [test 2] small slab
 [0.020000] [I] [test] [test_small_slab] OK: small slab (9 sizes)
 [0.020000] [I] [test] [test_large_contig] [test 3] large contig
 [0.020000] [I] [test] [test_large_contig] OK: 1 pages
@@ -149,7 +140,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.140000] [I] [mm] [jlos_kvalloc_stats] free bitmap: 0x40000
 [0.140000] [I] [mm] [jlos_kvalloc_stats] class 18 (4194304B): 1 free
 [0.150000] [I] [test] [pfa_test] === pfa test start ===
-[0.160000] [I] [test] [pfa_test] total=65280 frames free=64459
+[0.160000] [I] [test] [pfa_test] total=65280 frames free=64457
 [0.170000] [I] [test] [test_single_frame_roundtrip] [test 1] single frame roundtrip x 64
 [0.180000] [I] [test] [test_single_frame_roundtrip] OK: 64 frames alloc/write/verify/free
 [0.190000] [I] [test] [test_order_alloc] [test 2] order alloc/free
@@ -166,7 +157,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.300000] [I] [test] [test_owner_type] [test 5] owner type mark
 [0.310000] [I] [test] [test_owner_type] OK: set/get/clear owner
 [0.320000] [I] [test] [test_pressure_and_accounting] [test 6] pressure x 512 + free accounting
-[0.330000] [I] [test] [test_pressure_and_accounting] free: base=64459 mid=63947 end=64459
+[0.330000] [I] [test] [test_pressure_and_accounting] free: base=64457 mid=63945 end=64457
 [0.340000] [I] [test] [test_pressure_and_accounting] OK: free accounting restored
 [0.350000] [I] [test] [pfa_test] pfa: ALL PASSED
 [0.360000] [I] [test] [paging_test] === paging test start ===
@@ -187,7 +178,7 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.510000] [I] [test] [multitask_test] [test 2] fork -> wait -> exit_code (1 child, magic=42)
 [0.520000] [I] [test] [multitask_test] [test 3] fork 10 children (exit_code = 100..109)
 [0.530000] [I] [test] [multitask_test] [test 4] ring3 user task smoke
-[0.540000] [I] [test] [multitask_test] OK: 5 seed tasks spawned, run schedule budget...
+[0.540000] [I] [test] [multitask_test] [test 5] ring3 file syscall test
 hello from user ELF. PID = 17, argc = 1, argv[0] = /hello.elf
 [0.550000] [I] [syscall] [syscall_get_tasks_info] --- task list ---
 [0.550000] [I] [syscall] [syscall_get_tasks_info] [0] name = idle, pid = 0, status = running, task_type = kernel
@@ -197,14 +188,22 @@ hello from user ELF. PID = 17, argc = 1, argv[0] = /hello.elf
 [0.550000] [I] [syscall] [syscall_get_tasks_info] [4] name = t3_parent, pid = 6, status = zombie, task_type = kernel
 [0.550000] [I] [syscall] [syscall_get_tasks_info] [5] name = t4_ring3, pid = 17, status = running, task_type = user
 [0.550000] [I] [syscall] [syscall_get_tasks_info] ---
+[0.560000] [I] [test] [multitask_test] OK: 6 seed tasks spawned, run schedule budget...
+file_test: pid=18 argc=1
+OK: elf magic 127 69 76 70
+OK: write/read match
+OK: lseek+read
+OK: unlink+reopen-fail
+file_test: ALL PASSED
 user ELF: wakeup -> exit
-[1.060000] [I] [test] [multitask_test] budget: elapsed=50 ticks (start=56 now=106)
+[1.060000] [I] [test] [multitask_test] budget: elapsed=48 ticks (start=58 now=106)
 [1.070000] [I] [test] [multitask_test] subcase results:
-[1.080000] [I] [test] [multitask_test] [1] alternation: A=500 B=500 -> [1.090000] [I] [test] [multitask_test] PASS
-[1.100000] [I] [test] [multitask_test] [2] fork-wait: status=1 pid=5 exit=42 -> [1.100000] [I] [test] [multitask_test] PASS
-[1.110000] [I] [test] [multitask_test] [3] 10-child pressure: status=1
-[1.120000] [I] [test] [multitask_test] all 10 exit_codes matched, PASS
-[1.130000] [I] [test] [multitask_test] [4] ring3 smoke: exited=1 -> [1.130000] [I] [test] [multitask_test] PASS
+[1.080000] [I] [test] [multitask_test] [1] alternation: A=500 B=500 -> [1.080000] [I] [test] [multitask_test] PASS
+[1.090000] [I] [test] [multitask_test] [2] fork-wait: status=1 pid=5 exit=42 -> [1.090000] [I] [test] [multitask_test] PASS
+[1.100000] [I] [test] [multitask_test] [3] 10-child pressure: status=1
+[1.110000] [I] [test] [multitask_test] all 10 exit_codes matched, PASS
+[1.120000] [I] [test] [multitask_test] [4] ring3 smoke: exited=1 -> [1.120000] [I] [test] [multitask_test] PASS
+[1.130000] [I] [test] [multitask_test] [5] file syscall: exited=1 -> [1.130000] [I] [test] [multitask_test] PASS
 [1.140000] [I] [test] [multitask_test] multitask: ALL PASSED
 [1.150000] [I] [test] [hard_driver_test] ata test skipped (use simplified mode)
 [1.160000] [I] [test] [http_server_test] tcp server listening on port 1234

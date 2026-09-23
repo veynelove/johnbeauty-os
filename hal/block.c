@@ -48,8 +48,10 @@ static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba, uint
     uint32_t total_bytes = count * self->bytes_per_sector;
     (void)total_bytes;
     for (uint32_t i = 0; i < count; i++) {
-        jlos_ata_read28(block_ata(self), (uint32_t)lba + i, buf + i * self->bytes_per_sector,
-            (int)self->bytes_per_sector);
+        if (jlos_ata_read28(block_ata(self), (uint32_t)lba + i, buf + i * self->bytes_per_sector,
+            (int)self->bytes_per_sector) != 0) {
+            return -1;
+        }
     }
     return 0;
 }

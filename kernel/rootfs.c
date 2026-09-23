@@ -32,7 +32,7 @@ static void jlos_rootfs_init(void)
             printk_err("failed to mount rootfs on partition %d\n", i);
             return;
         }
-        printk_debug("rootfs mounted on partition %d, type 0x%02X\n", i, entries[i].partition_id);
+        printk_debug("rootfs mounted on partition %d, type 0x%x\n", i, entries[i].partition_id);
         return;
     }
     printk_err("no FAT32 partition found\n");

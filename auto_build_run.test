@@ -4,6 +4,14 @@ echo ========================================
 echo  自动化构建与启动流程
 echo ========================================
 
+set VMX_PATH=E:\johnbeauty\johnbeauty.vmx
+set VMRUN=F:\vmware\vmrun.exe
+
+echo.
+echo [0/5] 正在关闭 johnbeauty 虚拟机...
+"%VMRUN%" -T player stop "%VMX_PATH%" hard >nul 2>nul
+timeout /t 3 /nobreak >nul
+
 echo.
 echo [1/5] 正在远程编译 Ubuntu 项目...
 ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"
@@ -47,7 +55,13 @@ if errorlevel 1 (
 
 echo.
 echo [5/5] 正在启动 johnbeauty 虚拟机...
-start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"
+"%VMRUN%" -T player start "%VMX_PATH%"
+
+if errorlevel 1 (
+    echo.
+    echo [警告] vmrun 启动失败，尝试用 vmplayer 直接启动...
+    start "" "F:\vmware\vmplayer.exe" "%VMX_PATH%"
+)
 
 echo.
 echo ========================================

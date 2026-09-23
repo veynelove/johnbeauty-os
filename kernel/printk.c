@@ -101,6 +101,7 @@ static void printk_utoa(unsigned int value, int base, bool uppercase)
     }
 }
 
+#if JLOS_KERNEL_LOG_PRINT_TIME
 static void printk_put_us_padded(unsigned int value, int width)
 {
     char buf[16];
@@ -110,6 +111,7 @@ static void printk_put_us_padded(unsigned int value, int width)
     while (i < width) buf[i++] = '0';
     while (i > 0) jlos_console_putc(buf[--i]);
 }
+#endif
 
 #if JLOS_KERNEL_LOG_PRINT_LEVEL
 static char printk_level_char(int level)

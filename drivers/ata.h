@@ -27,7 +27,7 @@ void jlos_ata_init(jlos_ata_t* self, uint16_t port_base, bool master);
 void jlos_ata_destroy(jlos_ata_t* self);
 
 void jlos_ata_identify(jlos_ata_t* self);
-void jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size);
+int jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size);
 void jlos_ata_write28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size);
 void jlos_ata_flush(jlos_ata_t* self);
 jlos_hal_block_dev_t *jlos_ata_get_primary_dev(void);

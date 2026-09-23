@@ -223,11 +223,62 @@ static void fat32_name_to_str(const jlos_fat32_dirent_t *de, char *buf, size_t b
     buf[pos] = 0;
 }
 
-static void fat32_dirent_locate(jlos_fat32_sb_info_t *sbi, uint32_t cluster, uint32_t entry_index, uint32_t *out_sector, uint32_t *out_index)
+static uint16_t fat32_lfn_get_char(const jlos_fat32_lfn_entry_t *lfn, int i)
 {
-    uint32_t offset = entry_index * JLOS_FAT32_DIRENT_SIZE;
-    *out_sector = fat32_cluster_to_sector(sbi, cluster) + (offset / JLOS_FAT32_BYTES_PER_SECTOR);
-    *out_index = (offset % JLOS_FAT32_BYTES_PER_SECTOR) / JLOS_FAT32_DIRENT_SIZE;
+    if (i < JLOS_FAT32_LFN_NAME0_CHARS) {
+        return ((const uint16_t *)lfn->name0)[i];
+    }
+    if (i < JLOS_FAT32_LFN_NAME01_CHARS) {
+        return lfn->name1[i - JLOS_FAT32_LFN_NAME0_CHARS];
+    }
+    return lfn->name2[i - JLOS_FAT32_LFN_NAME01_CHARS];
+}
+
+static void fat32_lfn_set_char(jlos_fat32_lfn_entry_t *lfn, int i, uint16_t val)
+{
+    if (i < JLOS_FAT32_LFN_NAME0_CHARS) {
+        ((uint16_t *)lfn->name0)[i] = val;
+        return;
+    }
+    if (i < JLOS_FAT32_LFN_NAME01_CHARS) {
+        lfn->name1[i - JLOS_FAT32_LFN_NAME0_CHARS] = val;
+        return;
+    }
+    lfn->name2[i - JLOS_FAT32_LFN_NAME01_CHARS] = val;
+}
+
+static void fat32_lfn_extract(const jlos_fat32_dirent_t *de, char *lfn_buf)
+{
+    const jlos_fat32_lfn_entry_t *lfn = (const jlos_fat32_lfn_entry_t *)de;
+    uint8_t seq = lfn->seq & 0x1F;
+    if (seq == 0 || seq > 20) {
+        return;
+    }
+    uint32_t base = (seq - 1) * JLOS_FAT32_LFN_CHARS_PER_ENTRY;
+    bool is_last = (lfn->seq & JLOS_FAT32_LFN_SEQ_LAST) != 0;
+    for (int i = 0; i < JLOS_FAT32_LFN_CHARS_PER_ENTRY; i++) {
+        uint16_t ch = fat32_lfn_get_char(lfn, i);
+        if (ch == 0 || ch == 0xFFFF) {
+            lfn_buf[base + i] = 0;
+            return;
+        }
+        if (base + i < JLOS_VFS_NAME_MAX) {
+            lfn_buf[base + i] = (char)(uint8_t)ch;
+        }
+    }
+    if (is_last && base + JLOS_FAT32_LFN_CHARS_PER_ENTRY < JLOS_VFS_NAME_MAX) {
+        lfn_buf[base + JLOS_FAT32_LFN_CHARS_PER_ENTRY] = 0;
+    }
+}
+
+static uint8_t fat32_lfn_checksum(const jlos_fat32_dirent_t *de)
+{
+    const uint8_t *name = (const uint8_t *)de;
+    uint8_t sum = 0;
+    for (int i = 0; i < 11; i++) {
+        sum = ((sum & 1) << 7) + (sum >> 1) + name[i];
+    }
+    return sum;
 }
 
 static bool fat32_name_char_legal(char c)
@@ -237,6 +288,136 @@ static bool fat32_name_char_legal(char c)
     }
     return c == '_' || c == '-';
 }
+
+static bool fat32_name_need_lfn(const char *name)
+{
+    const char *dot = NULL;
+    uint32_t name_len = 0;
+    for (uint32_t i = 0; name[i]; i++) {
+        if (name[i] == '.') {
+            if (dot || i == 0) {
+                return true;
+            }
+            dot = name + i;
+        } else if (!fat32_name_char_legal(name[i])) {
+            return true;
+        }
+        name_len++;
+    }
+    if (name_len == 0) {
+        return true;
+    }
+    uint32_t base_len = dot ? (uint32_t)(dot - name) : name_len;
+    uint32_t ext_len = dot ? name_len - base_len - 1 : 0;
+    if (base_len > JLOS_FAT32_SHORT_NAME_LEN || ext_len > JLOS_FAT32_SHORT_EXT_LEN) {
+        return true;
+    }
+    bool base_upper = false, base_lower = false;
+    for (uint32_t i = 0; i < base_len; i++) {
+        if (jlos_isupper(name[i])) {
+            base_upper = true;
+        }
+        if (jlos_islower(name[i])) {
+            base_lower = true;
+        }
+    }
+    if (base_upper && base_lower) {
+        return true;
+    }
+    bool ext_upper = false, ext_lower = false;
+    for (uint32_t i = 0; i < ext_len; i++) {
+        char c = name[base_len + 1 + i];
+        if (jlos_isupper(c)) {
+            ext_upper = true;
+        }
+        if (jlos_islower(c)) {
+            ext_lower = true;
+        }
+    }
+    if (ext_upper && ext_lower) {
+        return true;
+    }
+    return false;
+}
+
+static void fat32_generate_short_name(const char *name, jlos_fat32_dirent_t *de)
+{
+    const char *dot = NULL;
+    for (const char *p = name; *p; p++) {
+        if (*p == '.') {
+            dot = p;
+        }
+    }
+    uint32_t base_len = dot ? (uint32_t)(dot - name) : jlos_strlen(name);
+    uint32_t ext_len = dot ? jlos_strlen(dot + 1) : 0;
+    uint32_t copy_base = base_len < 6 ? base_len : 6;
+    for (uint32_t i = 0; i < JLOS_FAT32_SHORT_NAME_LEN; i++) {
+        if (i < copy_base) {
+            de->name[i] = (uint8_t)jlos_toupper(name[i]);
+        } else if (i == copy_base) {
+            de->name[i] = '~';
+        } else if (i == copy_base + 1) {
+            de->name[i] = '1';
+        } else {
+            de->name[i] = JLOS_FAT32_NAME_FILL;
+        }
+    }
+    for (uint32_t i = 0; i < JLOS_FAT32_SHORT_EXT_LEN; i++) {
+        if (dot && i < ext_len) {
+            de->ext[i] = (uint8_t)jlos_toupper(dot[1 + i]);
+        } else {
+            de->ext[i] = JLOS_FAT32_NAME_FILL;
+        }
+    }
+}
+
+static uint32_t fat32_lfn_build(const char *name, uint8_t checksum, jlos_fat32_dirent_t *entries)
+{
+    uint32_t name_len = jlos_strlen(name);
+    uint32_t num = (name_len + JLOS_FAT32_LFN_CHARS_PER_ENTRY - 1) / JLOS_FAT32_LFN_CHARS_PER_ENTRY;
+    if (num == 0) {
+        num = 1;
+    }
+    for (uint32_t n = 0; n < num; n++) {
+        jlos_fat32_lfn_entry_t *lfn = (jlos_fat32_lfn_entry_t *)&entries[n];
+        jlos_memset(lfn, 0, JLOS_FAT32_DIRENT_SIZE);
+        uint8_t seq = (uint8_t)(n + 1);
+        if (n == num - 1) {
+            seq |= JLOS_FAT32_LFN_SEQ_LAST;
+        }
+        lfn->seq = seq;
+        lfn->attr = JLOS_FAT32_ATTR_LFN;
+        lfn->checksum = checksum;
+        uint32_t base = n * JLOS_FAT32_LFN_CHARS_PER_ENTRY;
+        for (int i = 0; i < JLOS_FAT32_LFN_CHARS_PER_ENTRY; i++) {
+            uint32_t idx = base + i;
+            if (idx < name_len) {
+                fat32_lfn_set_char(lfn, i, (uint16_t)(uint8_t)name[idx]);
+            } else if (idx == name_len) {
+                fat32_lfn_set_char(lfn, i, 0);
+            } else {
+                fat32_lfn_set_char(lfn, i, 0xFFFF);
+            }
+        }
+    }
+    return num;
+}
+
+static void fat32_dirent_locate(jlos_fat32_sb_info_t *sbi, uint32_t cluster, uint32_t entry_index, uint32_t *out_sector, uint32_t *out_index)
+{
+    uint32_t offset = entry_index * JLOS_FAT32_DIRENT_SIZE;
+    *out_sector = fat32_cluster_to_sector(sbi, cluster) + (offset / JLOS_FAT32_BYTES_PER_SECTOR);
+    *out_index = (offset % JLOS_FAT32_BYTES_PER_SECTOR) / JLOS_FAT32_DIRENT_SIZE;
+}
+
+static void fat32_dirent_advance(uint32_t sector, uint32_t index, uint32_t n, uint32_t *out_sector, uint32_t *out_index)
+{
+    uint32_t entries_per_sector = JLOS_FAT32_BYTES_PER_SECTOR / JLOS_FAT32_DIRENT_SIZE;
+    uint32_t offset = index + n;
+    *out_sector = sector + offset / entries_per_sector;
+    *out_index = offset % entries_per_sector;
+}
+
 
 static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
 {
@@ -257,7 +438,7 @@ static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
         return -1;
     }
     uint32_t base_len = dot ? (uint32_t)(dot - name) : name_len;
-    if (base_len > JLOS_FAT32_SHORT_EXT_LEN) {
+    if (base_len > JLOS_FAT32_SHORT_NAME_LEN) {
         return -1;
     }
     uint32_t ext_len = dot ? name_len - base_len - 1 : 0;
@@ -272,6 +453,27 @@ static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
         uint32_t idx = base_len + 1 + i;
         char c = (dot && i < ext_len) ? name[idx] : JLOS_FAT32_NAME_FILL;
         de->ext[i] = (uint8_t)jlos_toupper(c);
+    }
+    de->reserved = 0;
+    bool base_lower = true;
+    for (uint32_t i = 0; i < base_len; i++) {
+        if (!jlos_islower(name[i])) {
+            base_lower = false;
+            break;
+        }
+    }
+    if (base_lower) {
+        de->reserved |= 0x08;
+    }
+    bool ext_lower = true;
+    for (uint32_t i = 0; i < ext_len; i++) {
+        if (!jlos_islower(name[base_len + 1 + i])) {
+            ext_lower = false;
+            break;
+        }
+    }
+    if (ext_lower) {
+        de->reserved |= 0x10;
     }
     return 0;
 }
@@ -296,41 +498,42 @@ static int fat32_dirent_write(jlos_vfs_super_block_t *sb, uint32_t dir_sector, u
     return jlos_hal_block_write(sb->block_dev, dir_sector, sbi->sec_buf, 1);
 }
 
-static fat32_scan_verdict_t fat32_match_name(const jlos_fat32_dirent_t *de, uint32_t entry_pos, void *ctx)
+static fat32_scan_verdict_t fat32_match_name(const jlos_fat32_dirent_t *de, uint32_t entry_pos, const char *long_name, void *ctx)
 {
     (void)entry_pos;
     const char *name = (const char *)ctx;
     if (de->name[0] == JLOS_FAT32_DIRENT_END) {
         return FAT32_SCAN_STOP;
     }
-    if (de->name[0] == JLOS_FAT32_DIRENT_DELETED || (de->attributes & JLOS_FAT32_ATTR_LFN) == JLOS_FAT32_ATTR_LFN) {
+    if (de->name[0] == JLOS_FAT32_DIRENT_DELETED) {
         return FAT32_SCAN_MISS;
     }
     char dirent_name[JLOS_VFS_NAME_MAX + 1];
-    fat32_name_to_str(de, dirent_name, sizeof(dirent_name));
+    if (long_name) {
+        jlos_strlcpy(dirent_name, long_name, sizeof(dirent_name));
+    } else {
+        fat32_name_to_str(de, dirent_name, sizeof(dirent_name));
+    }
     return (jlos_strcmp(dirent_name, name) == 0) ? FAT32_SCAN_HIT : FAT32_SCAN_MISS;
 }
 
-static fat32_scan_verdict_t fat32_match_free_slot(const jlos_fat32_dirent_t *de, uint32_t entry_pos, void *ctx)
+
+static fat32_scan_verdict_t fat32_match_entry_at(const jlos_fat32_dirent_t *de, uint32_t entry_pos, const char *long_name, void *ctx)
 {
     (void)entry_pos;
-    (void)ctx;
-    if (de->name[0] == JLOS_FAT32_DIRENT_END || de->name[0] == JLOS_FAT32_DIRENT_DELETED) {
-        return FAT32_SCAN_HIT;
-    }
-    return FAT32_SCAN_MISS;
-}
-
-static fat32_scan_verdict_t fat32_match_entry_at(const jlos_fat32_dirent_t *de, uint32_t entry_pos, void *ctx)
-{
-    uint32_t target = *(const uint32_t *)ctx;
+    (void)long_name;
+    fat32_readdir_ctx_t *c = (fat32_readdir_ctx_t *)ctx;
     if (de->name[0] == JLOS_FAT32_DIRENT_END) {
         return FAT32_SCAN_STOP;
     }
-    if (de->name[0] == JLOS_FAT32_DIRENT_DELETED || (de->attributes & JLOS_FAT32_ATTR_LFN) == JLOS_FAT32_ATTR_LFN) {
+    if (de->name[0] == JLOS_FAT32_DIRENT_DELETED) {
         return FAT32_SCAN_MISS;
     }
-    return (entry_pos == target) ? FAT32_SCAN_HIT : FAT32_SCAN_MISS;
+    if (c->current == c->target) {
+        return FAT32_SCAN_HIT;
+    }
+    c->current++;
+    return FAT32_SCAN_MISS;
 }
 
 static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_match_fn match, void *ctx, fat32_dirent_hit_t *hit)
@@ -340,25 +543,46 @@ static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_matc
     uint32_t cluster = fat32_ii(dir)->first_cluster;
     uint32_t entry_pos = 0;
     hit->cluster = cluster;
+    hit->has_lfn = false;
     uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
     if (!cluster_buf) {
         return FAT32_SCAN_MISS;
     }
+    char lfn_buf[JLOS_VFS_NAME_MAX + 1];
+    bool lfn_valid = false;
     while (cluster < JLOS_FAT32_CLUSTER_EOC) {
         if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
             jlos_kfree(cluster_buf);
             return FAT32_SCAN_MISS;
         }
-        uint32_t entries_per_sector = sbi->bytes_per_cluster / JLOS_FAT32_DIRENT_SIZE;
+        uint32_t entries_per_cluster = sbi->bytes_per_cluster / JLOS_FAT32_DIRENT_SIZE;
         jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)cluster_buf;
-        for (uint32_t i = 0; i < entries_per_sector; i++, entry_pos++) {
-            fat32_scan_verdict_t v = match(&entries[i], entry_pos, ctx);
+        for (uint32_t i = 0; i < entries_per_cluster; i++, entry_pos++) {
+            jlos_fat32_dirent_t *de = &entries[i];
+            if ((de->attributes & JLOS_FAT32_ATTR_LFN) == JLOS_FAT32_ATTR_LFN
+            && de->name[0] != JLOS_FAT32_DIRENT_DELETED) {
+                if (!lfn_valid) {
+                    jlos_memset(lfn_buf, 0, sizeof(lfn_buf));
+                }
+                fat32_lfn_extract(de, lfn_buf);
+                lfn_valid = true;
+                continue;
+            }
+            const char *long_name = lfn_valid ? lfn_buf : NULL;
+            lfn_valid = false;
+            fat32_scan_verdict_t v = match(de, entry_pos, long_name, ctx);
             if (v == FAT32_SCAN_MISS) {
                 continue;
             }
             hit->cluster = cluster;
             hit->entry_index = i;
-            jlos_memcpy(&hit->de, &entries[i], sizeof(jlos_fat32_dirent_t));
+            jlos_memcpy(&hit->de, de, sizeof(jlos_fat32_dirent_t));
+            if (long_name) {
+                jlos_strlcpy(hit->long_name, long_name, sizeof(hit->long_name));
+                hit->has_lfn = true;
+            } else {
+                hit->has_lfn = false;
+            }
             jlos_kfree(cluster_buf);
             return v;
         }
@@ -385,21 +609,49 @@ static int fat32_sync_inode(jlos_vfs_inode_t *inode)
     return fat32_dirent_write(inode->sb, fi->dir_sector, fi->dir_index, &de);
 }
 
-static int fat32_find_free_slot(jlos_vfs_inode_t *dir, uint32_t *out_sector, uint32_t *out_index)
+static int fat32_find_free_slots(jlos_vfs_inode_t *dir, uint32_t need,
+                                 uint32_t *out_sector, uint32_t *out_index)
 {
     jlos_vfs_super_block_t *sb = dir->sb;
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    fat32_dirent_hit_t hit;
-    if (fat32_dir_scan(dir, fat32_match_free_slot, NULL, &hit) == FAT32_SCAN_HIT) {
-        fat32_dirent_locate(sbi, hit.cluster, hit.entry_index, out_sector, out_index);
-        return 0;
-    }
-    uint32_t tail = hit.cluster;
-    if (fat32_cluster_advance(sb, &tail) != 0) {
-        return -1;
-    }
+    uint32_t cluster = fat32_ii(dir)->first_cluster;
+    uint32_t last_cluster = cluster;
     uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
     if (!cluster_buf) {
+        return -1;
+    }
+    while (cluster < JLOS_FAT32_CLUSTER_EOC) {
+        last_cluster = cluster;
+        if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
+            jlos_kfree(cluster_buf);
+            return -1;
+        }
+        uint32_t entries_per_cluster = sbi->bytes_per_cluster / JLOS_FAT32_DIRENT_SIZE;
+        jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)cluster_buf;
+        uint32_t run_start = 0;
+        uint32_t run_len = 0;
+        for (uint32_t i = 0; i < entries_per_cluster; i++) {
+            uint8_t first = entries[i].name[0];
+            bool is_free = (first == JLOS_FAT32_DIRENT_END || first == JLOS_FAT32_DIRENT_DELETED);
+            if (is_free) {
+                if (run_len == 0) {
+                    run_start = i;
+                }
+                run_len++;
+                if (run_len >= need) {
+                    fat32_dirent_locate(sbi, cluster, run_start, out_sector, out_index);
+                    jlos_kfree(cluster_buf);
+                    return 0;
+                }
+            } else {
+                run_len = 0;
+            }
+        }
+        cluster = fat32_get_next_cluster(sb, cluster);
+    }
+    uint32_t tail = last_cluster;
+    if (fat32_cluster_advance(sb, &tail) != 0) {
+        jlos_kfree(cluster_buf);
         return -1;
     }
     jlos_memset(cluster_buf, 0, sbi->bytes_per_cluster);
@@ -541,12 +793,16 @@ static int fat32_read(jlos_vfs_file_t *file, uint8_t *buf, uint32_t count)
 static int fat32_readdir_inner(jlos_vfs_file_t *file, jlos_vfs_dentry_t *dirent)
 {
     jlos_vfs_inode_t *inode = file->inode;
-    uint32_t target = file->pos;
+    fat32_readdir_ctx_t ctx = { .target = file->pos, .current = 0 };
     fat32_dirent_hit_t hit;
-    if (fat32_dir_scan(inode, fat32_match_entry_at, &target, &hit) != FAT32_SCAN_HIT) {
+    if (fat32_dir_scan(inode, fat32_match_entry_at, &ctx, &hit) != FAT32_SCAN_HIT) {
         return -1;
     }
-    fat32_name_to_str(&hit.de, dirent->name, JLOS_VFS_NAME_MAX + 1);
+    if (hit.has_lfn) {
+        jlos_strlcpy(dirent->name, hit.long_name, JLOS_VFS_NAME_MAX + 1);
+    } else {
+        fat32_name_to_str(&hit.de, dirent->name, JLOS_VFS_NAME_MAX + 1);
+    }
     dirent->name_len = (uint32_t)jlos_strlen(dirent->name);
     jlos_vfs_inode_t *child = fat32_dirent_to_inode(inode->sb, &hit.de);
     if (!child) {
@@ -674,25 +930,49 @@ static int fat32_create_inner(jlos_vfs_inode_t *dir, const char *name, uint32_t 
     if (!JLOS_VFS_IS_DIR(dir->mode)) {
         return -1;
     }
-    jlos_fat32_dirent_t de;
-    jlos_memset(&de, 0, sizeof(de));
-    if (fat32_name_to_83(name, &de) != 0) {
-        return -1;
-    }
     fat32_dirent_hit_t hit;
     if (fat32_dir_scan(dir, fat32_match_name, (void *)name, &hit) == FAT32_SCAN_HIT) {
         return -1;
     }
-    uint32_t dir_sector, dir_index;
-    if (fat32_find_free_slot(dir, &dir_sector, &dir_index) != 0) {
-        return -1;
-    }
+    jlos_fat32_dirent_t de;
+    jlos_memset(&de, 0, sizeof(de));
     de.attributes = JLOS_FAT32_ATTR_ARCHIVE;
     de.c_time = JLOS_FAT32_TIME_DEFAULT;
     de.c_date = JLOS_FAT32_DATE_DEFAULT;
     de.w_time = JLOS_FAT32_TIME_DEFAULT;
     de.w_date = JLOS_FAT32_DATE_DEFAULT;
-    return fat32_dirent_write(dir->sb, dir_sector, dir_index, &de);
+
+    if (!fat32_name_need_lfn(name)) {
+        if (fat32_name_to_83(name, &de) != 0) {
+            return -1;
+        }
+        uint32_t dir_sector, dir_index;
+        if (fat32_find_free_slots(dir, 1, &dir_sector, &dir_index) != 0) {
+            return -1;
+        }
+        return fat32_dirent_write(dir->sb, dir_sector, dir_index, &de);
+    }
+
+    fat32_generate_short_name(name, &de);
+    uint8_t checksum = fat32_lfn_checksum(&de);
+    jlos_fat32_dirent_t lfn_entries[20];
+    uint32_t lfn_count = fat32_lfn_build(name, checksum, lfn_entries);
+    uint32_t total = lfn_count + 1;
+
+    uint32_t base_sector, base_index;
+    if (fat32_find_free_slots(dir, total, &base_sector, &base_index) != 0) {
+        return -1;
+    }
+    for (uint32_t n = 0; n < lfn_count; n++) {
+        uint32_t sec, idx;
+        fat32_dirent_advance(base_sector, base_index, n, &sec, &idx);
+        if (fat32_dirent_write(dir->sb, sec, idx, &lfn_entries[lfn_count - 1 - n]) != 0) {
+            return -1;
+        }
+    }
+    uint32_t sfn_sec, sfn_idx;
+    fat32_dirent_advance(base_sector, base_index, lfn_count, &sfn_sec, &sfn_idx);
+    return fat32_dirent_write(dir->sb, sfn_sec, sfn_idx, &de);
 }
 
 static int fat32_create(jlos_vfs_inode_t *dir, const char *name, uint32_t mode)
@@ -706,7 +986,7 @@ static int fat32_create(jlos_vfs_inode_t *dir, const char *name, uint32_t mode)
 static int fat32_unlink_inner(jlos_vfs_inode_t *dir, const char *name)
 {
     fat32_dirent_hit_t hit;
-    if (fat32_dir_scan(dir, fat32_match_name, (void *)name ,&hit) != FAT32_SCAN_HIT) {
+    if (fat32_dir_scan(dir, fat32_match_name, (void *)name, &hit) != FAT32_SCAN_HIT) {
         return -1;
     }
     if (hit.de.attributes & JLOS_FAT32_ATTR_DIRECTORY) {
@@ -719,7 +999,32 @@ static int fat32_unlink_inner(jlos_vfs_inode_t *dir, const char *name)
     hit.de.name[0] = JLOS_FAT32_DIRENT_DELETED;
     uint32_t dir_sector, dir_index;
     fat32_dirent_locate(fat32_sbi(dir->sb), hit.cluster, hit.entry_index, &dir_sector, &dir_index);
-    return fat32_dirent_write(dir->sb, dir_sector, dir_index, &hit.de);
+    if (fat32_dirent_write(dir->sb, dir_sector, dir_index, &hit.de) != 0) {
+        return -1;
+    }
+    jlos_fat32_sb_info_t *sbi = fat32_sbi(dir->sb);
+    uint32_t cluster = hit.cluster;
+    uint32_t index = hit.entry_index;
+    while (index > 0) {
+        index--;
+        jlos_fat32_dirent_t de;
+        uint32_t sec, idx;
+        fat32_dirent_locate(sbi, cluster, index, &sec, &idx);
+        if (fat32_dirent_read(dir->sb, sec, idx, &de) != 0) {
+            break;
+        }
+        if ((de.attributes & JLOS_FAT32_ATTR_LFN) != JLOS_FAT32_ATTR_LFN) {
+            break;
+        }
+        if (de.name[0] == JLOS_FAT32_DIRENT_DELETED) {
+            break;
+        }
+        de.name[0] = JLOS_FAT32_DIRENT_DELETED;
+        if (fat32_dirent_write(dir->sb, sec, idx, &de) != 0) {
+            break;
+        }
+    }
+    return 0;
 }
 
 static int fat32_unlink(jlos_vfs_inode_t *dir, const char *name)

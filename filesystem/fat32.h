@@ -24,6 +24,11 @@
 
 #define JLOS_FAT32_DIRENT_END           0x00
 #define JLOS_FAT32_DIRENT_DELETED       0xE5
+#define JLOS_FAT32_LFN_SEQ_LAST         0x40
+#define JLOS_FAT32_LFN_CHARS_PER_ENTRY  13
+#define JLOS_FAT32_LFN_NAME0_CHARS      5
+#define JLOS_FAT32_LFN_NAME1_CHARS      6
+#define JLOS_FAT32_LFN_NAME01_CHARS     (JLOS_FAT32_LFN_NAME0_CHARS + JLOS_FAT32_LFN_NAME1_CHARS)
 
 #define JLOS_FAT32_JUMP_LEN             3
 #define JLOS_FAT32_OEM_NAME_LEN         8
@@ -93,6 +98,17 @@ typedef struct {
 } __attribute__((packed)) jlos_fat32_dirent_t;
 
 typedef struct {
+    uint8_t     seq;
+    uint8_t     name0[10];
+    uint8_t     attr;
+    uint8_t     type;
+    uint8_t     checksum;
+    uint16_t    name1[6];
+    uint16_t    first_cluster;
+    uint16_t    name2[2];
+} __attribute__((packed)) jlos_fat32_lfn_entry_t;
+
+typedef struct {
     jlos_fat32_bpb_t    bpb;
     uint32_t            fat_start;
     uint32_t            data_start;
@@ -121,10 +137,17 @@ typedef enum {
 
 typedef struct {
     jlos_fat32_dirent_t de;
-    uint32_t cluster;
-    uint32_t entry_index;
+    uint32_t            cluster;
+    uint32_t            entry_index;
+    char                long_name[JLOS_VFS_NAME_MAX + 1];
+    bool                has_lfn;
 } fat32_dirent_hit_t;
 
-typedef fat32_scan_verdict_t (*fat32_dir_match_fn)(const jlos_fat32_dirent_t *de, uint32_t entry_pos, void *ctx);
+typedef fat32_scan_verdict_t (*fat32_dir_match_fn)(const jlos_fat32_dirent_t *de, uint32_t entry_pos, const char *long_name, void *ctx);
+
+typedef struct {
+    uint32_t target;
+    uint32_t current;
+} fat32_readdir_ctx_t;
 
 #endif

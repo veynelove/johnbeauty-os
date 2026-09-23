@@ -12,17 +12,20 @@ CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
 
 LDPARAMS = -melf_i386
 
-SRC_DIRS := lib user
+LIB_C_SRCS := $(shell find lib -type f -name "*.c")
+LIB_ASM_SRCS := $(shell find lib -type f -name "*.S")
+LIB_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIB_C_SRCS)) \
+            $(patsubst %.S,$(OBJ_DIR)/%.o,$(LIB_ASM_SRCS))
 
-C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")
-C_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS))
-ASM_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.S")
-ASM_OBJS := $(patsubst %.S,$(OBJ_DIR)/%.o,$(ASM_SRCS))
-OBJS := $(C_OBJS) $(ASM_OBJS)
+USER_C_SRCS := $(shell find user -type f -name "*.c")
+USER_ELFS := $(patsubst user/%.c,user/%.elf,$(USER_C_SRCS))
 
-USER_ELF := user/hello.elf
+C_SRCS := $(LIB_C_SRCS) $(USER_C_SRCS)
+ALL_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS)) $(patsubst %.S,$(OBJ_DIR)/%.o,$(LIB_ASM_SRCS))
 
-all: $(USER_ELF)
+all: $(USER_ELFS)
+
+.SECONDARY: $(ALL_OBJS)
 
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
@@ -32,8 +35,8 @@ $(OBJ_DIR)/%.o: %.S
 	@mkdir -p $(@D)
 	@gcc $(CPARAMS) -o $@ -c $<
 
-$(USER_ELF): $(OBJS) user/$(ARCH)/user_linker.ld
-	@ld $(LDPARAMS) -T user/$(ARCH)/user_linker.ld -o $@ $(OBJS)
+user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/user_linker.ld
+	@ld $(LDPARAMS) -T user/$(ARCH)/user_linker.ld -o $@ $< $(LIB_OBJS)
 
 # ==================磁盘镜像生成==================
 DISK_VMDK := ../disk.vmdk
@@ -43,11 +46,11 @@ FAT32_IMG := $(OBJ_DIR)/fat32.img
 .PHONY: disk
 disk: $(DISK_VMDK)
 
-$(FAT32_IMG): $(USER_ELF)
+$(FAT32_IMG): $(USER_ELFS)
 	@mkdir -p $(@D)
 	@dd if=/dev/zero of=$@ bs=512 count=30720 2>/dev/null
 	@mkfs.fat -F32 $@ 2>/dev/null
-	@mcopy -i $@ $(USER_ELF) ::/hello.elf
+	@for elf in $(USER_ELFS); do mcopy -i $@ $$elf ::/$${elf##*/} 2>/dev/null; done
 
 $(DISK_FLAT): $(FAT32_IMG)
 	@dd if=/dev/zero of=$@ bs=512 count=32768 2>/dev/null
@@ -74,7 +77,7 @@ $(DISK_VMDK): $(DISK_FLAT)
 	@echo 'ddb.adapterType = "ide"' >> $@
 
 clean:
-	@rm -rf $(OBJ_DIR) $(USER_ELF) $(DISK_VMDK) $(DISK_FLAT)
+	@rm -rf $(OBJ_DIR) user/*.elf $(DISK_VMDK) $(DISK_FLAT)
 	@echo 'clean success.'
 
 # ==================clangd 支持==================

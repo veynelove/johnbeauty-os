@@ -77,6 +77,27 @@ static inline int32_t jlos_user_task_brk(uint32_t addr)
 {
     return jlos_user_syscall(JLOS_SYSCALL_TASK_BRK, addr, 0, 0);
 }
+
+static inline int32_t jlos_user_open(const char *path, uint32_t flags, uint32_t mode)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_OPEN, (uint32_t)path, flags, mode);
+}
+
+static inline int32_t jlos_user_close(int32_t fd)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_TASK_FD_CLOSE, (uint32_t)fd, 0, 0);
+}
+
+static inline int32_t jlos_user_lseek(int32_t fd, int32_t offset, uint32_t whence)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_LSEEK, (uint32_t)fd, (uint32_t)offset, whence);
+}
+
+static inline int32_t jlos_user_unlink(const char *path)
+{
+    return jlos_user_syscall(JLOS_SYSCALL_UNLINK, (uint32_t)path, 0, 0);
+}
+
 void printf(const char *fmt, ...);
 
 #endif

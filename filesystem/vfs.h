@@ -23,6 +23,7 @@
 #define JLOS_VFS_O_RDONLY   0x00
 #define JLOS_VFS_O_WRONLY   0x01
 #define JLOS_VFS_O_RDWR     0x02
+#define JLOS_VFS_O_ACCMODE  0x03
 #define JLOS_VFS_O_CREAT    0x04
 #define JLOS_VFS_O_TRUNC    0x08
 #define JLOS_VFS_O_APPEND   0x10
@@ -46,6 +47,7 @@ typedef struct jlos_vfs_dentry {
     jlos_list_head_t    sibling;
     jlos_atomic_t       ref_count;
     jlos_hash_node_t    hash_node;
+    bool                unhashed;
 } jlos_vfs_dentry_t;
 
 typedef struct jlos_vfs_inode_ops {
@@ -122,8 +124,9 @@ jlos_vfs_mount_t *jlos_vfs_mount(const char *fs_type_name, jlos_hal_block_dev_t 
 int jlos_vfs_unmount(jlos_vfs_mount_t *mnt);
 
 jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path);
+int jlos_vfs_unlink(const char *path);
 
-jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags);
+jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags, uint32_t mode);
 int jlos_vfs_close(jlos_vfs_file_t *file);
 int jlos_vfs_read(jlos_vfs_file_t *file, uint8_t *buf, uint32_t count);
 int jlos_vfs_write(jlos_vfs_file_t *file, const uint8_t *buf, uint32_t count);

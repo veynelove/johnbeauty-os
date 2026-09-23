@@ -29,6 +29,9 @@ static volatile int g_pressure_fork_done = 0;
 static volatile int g_ring3_exited = 0;
 static volatile uint32_t g_ring3_pid = 0;
 
+static volatile int g_file_test_exited = 0;
+static volatile uint32_t g_file_test_pid = 0;
+
 static void alt_task_exit(void)
 {
     jlos_task_t *me = jlos_task_manager_curr_task_on_tick(s_mgr);
@@ -162,6 +165,16 @@ static void ring3_loader_entry(void)
     }
 }
 
+static void ring3_file_test_entry(void)
+{
+    char *argv[] = {"/file_test.elf", NULL};
+    char *envp[] = {NULL};
+    int ret = jlos_process_exec_elf(g_current_task_ptr, "/file_test.elf", 1, argv, envp);
+    if (ret < 0) {
+        jlos_process_exit(g_current_task_ptr, 0);
+    }
+}
+
 static jlos_task_t *spawn_kernel_task(jlos_mmu_t *mmu, void (*fn)(void), const char *name, int *fail_cnt)
 {
     jlos_task_t *t = (jlos_task_t *)jlos_kalloc(sizeof(*t));
@@ -223,12 +236,19 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
             g_ring3_pid = t->pid;
         }
     }
+    printk_info("[test 5] ring3 file syscall test\n");
+    {
+        jlos_task_t *t = spawn_kernel_task(mmu, ring3_file_test_entry, "t5_file", &spawn_fails);
+        if (t) {
+            g_file_test_pid = t->pid;
+        }
+    }
 
     if (spawn_fails) {
         printk_err("FAIL: spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
         goto teardown;
     }
-    printk_info("OK: 5 seed tasks spawned, run schedule budget...\n");
+    printk_info("OK: 6 seed tasks spawned, run schedule budget...\n");
 
     uint32_t t0 = jlos_hal_timer_get_ticks();
     const uint32_t TIMEOUT_TICKS = 5000;
@@ -241,10 +261,17 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
                 g_ring3_exited = 1;
             }
         }
+        if (g_file_test_pid && !g_file_test_exited) {
+            jlos_task_t *ft = jlos_task_manager_find_pid(s_mgr, g_file_test_pid);
+            if (ft && ft->status == JLOS_TASK_ZOMBIE && ft->exit_code == 42) {
+                g_file_test_exited = 1;
+            }
+        }
         int all = (g_alt_a >= 500 && g_alt_b >= 500)
                && (g_fork_parent_done == 1)
                && (g_pressure_done == 1)
-               && (g_ring3_exited >= 1);
+               && (g_ring3_exited >= 1)
+               && (g_file_test_exited >= 1);
         if (all)
             break;
         if (now - t0 >= TIMEOUT_TICKS)
@@ -297,6 +324,14 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
 
     printk_info("[4] ring3 smoke: exited=%d -> ", g_ring3_exited);
     if (g_ring3_exited >= 1)
+        printk_info("PASS\n");
+    else {
+        printk_err("FAIL\n");
+        fails++;
+    }
+
+    printk_info("[5] file syscall: exited=%d -> ", g_file_test_exited);
+    if (g_file_test_exited >= 1)
         printk_info("PASS\n");
     else {
         printk_err("FAIL\n");
