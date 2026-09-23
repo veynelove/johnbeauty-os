@@ -4,14 +4,18 @@
 
 ### 环境依赖
 
-```text
-宿主机：windows11
-虚拟机: vmplayer + ubuntu24.04
-依赖：sudo apt install xorriso clangd bear
+| 项 | 说明 |
+|----|------|
+| 宿主机 | Windows 11 |
+| 虚拟机 | VMware Player 17 + Ubuntu 24.04 |
+| 编译工具链 | gcc（编译）+ clangd（代码分析） |
+| 依赖包 | `xorriso` `clangd` `bear` |
 
-note: clangd代码分析 + gcc编译
-(vscode下载clangd插件，禁用microsoft的c/c++插件，运行 `make compdb` 生成编译文件供clangd分析)
+```bash
+sudo apt install xorriso clangd bear
 ```
+
+> VSCode 安装 clangd 插件，禁用 Microsoft C/C++ 插件，运行 `make compdb` 生成编译数据库供 clangd 分析。
 
 ### 子项目JLCY
 

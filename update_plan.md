@@ -55,19 +55,33 @@
 
 ## 架构升级总览（v2.5 核心）
 
-```
-依赖关系：
+```mermaid
+graph TD
+    P0["Phase 0: Buddy PFA ✅"]
+    P1["Phase 1: Paging 修复 ✅"]
+    P2["Phase 2: Memory Manager ✅"]
+    P3["Phase 3: Multitask ✅"]
+    P4["Phase 4: SMP 预留"]
+    P6["Phase 6: Console/Display + Initcall ✅"]
+    P7["Phase 7: HAL 架构重构 ✅"]
+    P8["Phase 8: 文件系统 + ELF + execve ✅"]
 
-Phase 0: Buddy PFA ✅  ←──────────────────────────────────┐
-Phase 1: Paging 修复 ✅  ←── 依赖 PFA                         │
-Phase 2: Memory Manager 升级 ✅ ←── 依赖 PFA + Paging          │
-Phase 3: Multitask 升级 ✅ ←── 依赖 PFA + Paging + MM          │
-Phase 4: SMP 预留  ←── 依赖全部                              │
-Phase 6: Console/Display + Initcall ✅ ←── 独立，依赖 PFA+Paging │
-                                                              │
-                     ─── 先修 BUG，再做优化 ───               │
-                     ─── 底层改好，上层才好改 ───              │
+    P0 --> P1
+    P1 --> P2
+    P2 --> P3
+    P0 --> P6
+    P1 --> P6
+    P3 --> P4
+    P2 --> P4
+    P6 --> P4
+    P0 --> P7
+    P1 --> P7
+    P7 --> P8
+    P6 --> P8
+    P8 --> P4
 ```
+
+> **原则**：先修 BUG，再做优化；底层改好，上层才好改。
 
 ***
 
