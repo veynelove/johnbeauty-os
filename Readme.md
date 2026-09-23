@@ -2,8 +2,6 @@
 
 > 公主平安开心 🌸
 
-## 🔧 编译与运行
-
 ### 环境依赖
 
 ```text
@@ -34,6 +32,7 @@ make clean      # 清理 obj / johnkernel.bin / johnkernel.iso
 1. 根目录auto_build_run.test文件存放有.bat文件内容，可用于自动编译加载iso，不过在运行之前需要修改文件内容:
 
 ```text
+
 ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"
 修改虚拟机ssh地址，以及虚拟机中项目地址
 
@@ -42,18 +41,18 @@ scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Des
 
 scp veyne@192.168.159.128:~/johnbeauty-os/disk.vmdk C:\Users\johnbeauty\Desktop\disk.vmdk
 scp veyne@192.168.159.128:~/johnbeauty-os/disk-flat.vmdk C:\Users\johnbeauty\Desktop\disk-flat.vmdk
-这里我们需要先编辑vmplayer虚拟机设置，删除原有硬盘，点击添加设备，选择硬盘，选择IDE类型，选择使用现有虚拟磁盘，绝对路径例如：C:\Users\johnbeauty\Desktop\disk-flat.vmdk。
+这里我们需要先编辑vmplayer虚拟机设置，删除原有硬盘，点击添加设备，选择硬盘，选择IDE类型，选择使用现有虚拟磁盘，绝对路径例如：C:\Users\johnbeauty\Desktop\disk.vmdk。
 注意不要选到disk-flat.vmdk了。因为vmplayer不支持加载img格式磁盘，所以在执行make后，编译系统把生成的磁盘img转化成了vmplayer能识别的vmdk虚拟磁盘格式。这样就能加载装有用户程序的磁盘了。
 这一步只是为了测试ring3用户程序。
 可通过编译参数 BUILD_DISK 控制条件编译。
 
 start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"
 这里是命令行启动虚拟机，因虚拟机不同而不同，我用的是vmplayer 17
+
 ```
 
-1. 另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如
-
-2. "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
+2. 另外，kernel默认开启了com1串口打印，所有的日志都会输出到串口中，可以在虚拟机"编辑虚拟机设置"中，找到"串行端口"选项，在连接中选择“使用输出文件"选中一个在windows本地任意位置创建的文件，比如\
+    "C:\Users\johnbeauty\Desktop\log.txt"文件。这样，运行虚拟机后，日志就会输出两份，一份在虚拟机终端显示，一份存在log.txt文件中。方便复制查看日志。
 
 3. 开启 HAL I/O 诊断追踪（查"写 CF8 后网卡中断丢失"类竞态）：
 
