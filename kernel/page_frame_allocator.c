@@ -275,9 +275,6 @@ void jlos_page_frame_allocator_init(void)
             jlos_atomic_fetch_add(&s_free_frames, order_to_frames(order));
         }
     }
-#if KERNEL_CONFIG_DEBUG_MEMORY
-    jlos_page_frame_print_buddy();
-#endif
 }
 
 void *jlos_page_frame_malloc(void)

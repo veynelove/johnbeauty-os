@@ -31,6 +31,20 @@
 #define JLOS_FAT32_TYPE_LABEL_LEN       8
 #define JLOS_FAT32_BPB_RESERVED_LEN     12
 
+#define JLOS_FAT32_FAT_ENTRY_SIZE       4
+#define JLOS_FAT32_DIRENT_SIZE          32
+#define JLOS_FAT32_CLUSTER_LOW_MASK     0xFFFF
+#define JLOS_FAT32_NAME_FILL            ' '
+#define JLOS_FAT32_TIME_DEFAULT         0
+#define JLOS_FAT32_DATE_DEFAULT         0
+
+#define JLOS_FAT32_FSINFO_LEAD_SIG      0x41615252
+#define JLOS_FAT32_FSINFO_STRUCT_SIG    0x61417272
+#define JLOS_FAT32_FSINFO_LEAD_OFF      0
+#define JLOS_FAT32_FSINFO_FREE_OFF      0x0E8
+#define JLOS_FAT32_FSINFO_COUNT_OFF     0x1F4
+#define JLOS_FAT32_FSINFO_STRUCT_OFF    0x1FC
+
 typedef struct {
     uint8_t     jump[JLOS_FAT32_JUMP_LEN];
     uint8_t     soft_name[JLOS_FAT32_OEM_NAME_LEN];
@@ -87,12 +101,30 @@ typedef struct {
     uint32_t            sectors_per_cluster;
     uint32_t            fat_copies;
     uint32_t            total_clusters;
+    uint32_t            fsinfo_sector;
+    uint8_t             *sec_buf;
 } jlos_fat32_sb_info_t;
 
 typedef struct {
     uint32_t first_cluster;
+    uint32_t dir_sector;
+    uint32_t dir_index;
 } jlos_fat32_inode_info_t;
 
 extern jlos_vfs_fs_type_t g_fat32_fs_type;
+
+typedef enum {
+    FAT32_SCAN_MISS = 0,
+    FAT32_SCAN_HIT  = 1,
+    FAT32_SCAN_STOP = 2,
+} fat32_scan_verdict_t;
+
+typedef struct {
+    jlos_fat32_dirent_t de;
+    uint32_t cluster;
+    uint32_t entry_index;
+} fat32_dirent_hit_t;
+
+typedef fat32_scan_verdict_t (*fat32_dir_match_fn)(const jlos_fat32_dirent_t *de, uint32_t entry_pos, void *ctx);
 
 #endif
