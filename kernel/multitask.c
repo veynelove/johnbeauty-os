@@ -560,7 +560,8 @@ jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
     return curr;
 }
 
-jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, uint32_t fork_esp_ref, uint32_t fork_resume_pc)
+static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task_t *parent,
+    const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack)
 {
     if (self->num_tasks >= JLOS_TASK_MAX_NUM) {
         return NULL;
@@ -588,9 +589,6 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, u
             child->stack = NULL;
         }
     }
-    if (child->stack && parent->stack) {
-        jlos_memcpy(child->stack, parent->stack, JLOS_TASK_STACK_SIZE);
-    }
 
     child->pid = s_next_pid++;
     JLOS_TASK_SET_READY(child);
@@ -607,7 +605,7 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, u
     jlos_list_init(&child->wait_node);
     jlos_list_init(&child->rq_node);
     jlos_list_init(&child->zombie_node);
-    
+
     if (parent->fds) {
         child->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
         if (child->fds) {
@@ -623,19 +621,20 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, u
         goto ROLLBACK_OOM;
     }
 
-    if (child->is_user_process && jlos_task_create_user_mm(child) < 0) {
-ROLLBACK_OOM:
-        jlos_kfree(child->stack);
-        jlos_kfree(child->fds);
-        jlos_kfree(child);
-        child = NULL;
-        return NULL;
+    if (clone_flags & JLOS_CLONE_VM) {
+        child->mm = parent->mm;
+        jlos_mm_ref_inc(child->mm);
+    } else {
+        if (child->is_user_process && jlos_task_create_user_mm(child) < 0) {
+            goto ROLLBACK_OOM;
+        }
+        if (parent->mm && child->mm) {
+            jlos_mm_clone_user(child->mm, parent->mm);
+        }
     }
-    if (parent->mm && child->mm) {
-        jlos_mm_clone_user(child->mm, parent->mm);
-    }
-    
-    jlos_arch_task_fork_prepare_child(parent->stack, child->stack, fork_esp_ref, fork_resume_pc, child);
+
+    jlos_arch_task_copy_thread(child, parent_trapframe, child->stack, child->stack_size, child_stack);
+
     if (!jlos_task_manager_add_task(self, child)) {
         jlos_kfree(child->stack);
         jlos_kfree(child->fds);
@@ -654,6 +653,25 @@ ROLLBACK_OOM:
         }
     }
     return child;
+
+ROLLBACK_OOM:
+    jlos_kfree(child->stack);
+    jlos_kfree(child->fds);
+    jlos_kfree(child);
+    return NULL;
+}
+
+jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe)
+{
+    
+    return jlos_process_fork_inner(self, parent, parent_trapframe, 0, 0);
+    
+}
+
+jlos_task_t *jlos_process_clone(jlos_task_manager_t *self, jlos_task_t *parent,
+    const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack)
+{
+    return jlos_process_fork_inner(self, parent, parent_trapframe, clone_flags, child_stack);
 }
 
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
@@ -687,16 +705,17 @@ int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void))
     return 0;
 }
 
-void jlos_process_exit(jlos_task_t *task, uint32_t exit_code)
-{   
+__attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exit_code)
+{
     if (!task || !g_task_manager_ptr) {
         goto halt;
     }
+    g_hal_syscall_trapframe = NULL;
     JLOS_TASK_SET_ZOMBIE(task, exit_code);
     jlos_sched_wake_waiter(g_task_manager_ptr, task->pid);
-
     g_task_manager_ptr->need_resched = true;
     jlos_task_manager_schedule(g_task_manager_ptr);
+    printk_err("exit: BUG pid=%u returned from schedule!\n", task->pid);
 halt:
     for (;;) {
         jlos_hal_halt();

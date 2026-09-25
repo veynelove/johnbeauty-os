@@ -292,6 +292,43 @@ static int32_t syscall_lseek(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return result;
 }
 
+static int32_t syscall_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    if (!g_current_task_ptr || !g_task_manager_ptr) {
+        return -SYSCALL_ENOMEM;
+    }
+    if (!g_hal_syscall_trapframe) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_t *child = jlos_process_fork(g_task_manager_ptr, g_current_task_ptr, g_hal_syscall_trapframe);
+    if (!child) {
+        return -SYSCALL_ENOMEM;
+    }
+    return (int32_t)child->pid;
+}
+
+static int32_t syscall_clone(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    uint32_t clone_flags = arg1;
+    uint32_t child_stack = arg2;
+    (void)arg3;
+    if (!g_current_task_ptr || !g_task_manager_ptr) {
+        return -SYSCALL_ENOMEM;
+    }
+    if (!g_hal_syscall_trapframe) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_t *child =
+        jlos_process_clone(g_task_manager_ptr, g_current_task_ptr, g_hal_syscall_trapframe, clone_flags, child_stack);
+    if (!child) {
+        return -SYSCALL_ENOMEM;
+    }
+    return (int32_t)child->pid;
+}
+
 static int32_t syscall_unlink(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     if (!g_current_task_ptr) {
@@ -540,8 +577,11 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
             return -SYSCALL_EFAULT;
     }
     (void)arg3;
+    uint32_t reaped_pid = target->pid;
+
     jlos_task_free(g_task_manager_ptr, target);
-    return (int32_t)target->pid;
+
+    return (int32_t)reaped_pid;
 }
 
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
@@ -600,6 +640,8 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_OPEN, syscall_open);
     jlos_syscall_register(JLOS_SYSCALL_LSEEK, syscall_lseek);
     jlos_syscall_register(JLOS_SYSCALL_UNLINK, syscall_unlink);
+    jlos_syscall_register(JLOS_SYSCALL_FORK, syscall_fork);
+    jlos_syscall_register(JLOS_SYSCALL_CLONE, syscall_clone);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

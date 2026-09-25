@@ -1,6 +1,7 @@
 #include <hal/paging.h>
+#include <hal/smp.h>
 
-static struct jlos_paging_context *s_active_paging_context = NULL;
+static struct jlos_paging_context *s_active_paging_context[JLOS_MAX_CPUS];
 
 void jlos_hal_paging_enable(uint32_t page_dir_physical_addr)
 {
@@ -48,7 +49,7 @@ void jlos_hal_paging_flush_all_tlb(void)
         "movl %0, %%cr4\n\t"
         "orl %2, %0\n\t"
         "movl %0, %%cr4\n\t"
-        : "=r"(cr4)
+        : "=&r"(cr4)
         : "r"(~0x80u), "r"(0x80u)
         : "memory"
     );
@@ -79,12 +80,12 @@ bool jlos_hal_paging_supports_4mb_pages(void)
 
 struct jlos_paging_context *jlos_hal_paging_get_active_context(void)
 {
-    return s_active_paging_context;
+    return s_active_paging_context[jlos_hal_get_cpu_id()];
 }
 
 void jlos_hal_paging_set_active_context(struct jlos_paging_context *ctx)
 {
-    s_active_paging_context = ctx;
+    s_active_paging_context[jlos_hal_get_cpu_id()] = ctx;
 }
 
 void jlos_hal_paging_enable_global_pages(void)

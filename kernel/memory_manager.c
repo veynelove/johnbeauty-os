@@ -171,14 +171,14 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     size_t pages_needed = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
     uint8_t *new_heap_start = self->heap_current;
 
-    void *vframe = jlos_page_frame_reserve_bulk(pages_needed);
+    void *vframe = jlos_page_frame_alloc_n((uint32_t)pages_needed);
     if (!vframe) {
         return NULL;
     }
     uint32_t phys = (uint32_t)VIRT_TO_PHYS(vframe);
     size_t map_size = pages_needed * JLOS_PAGE_SIZE;
     if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uint32_t)new_heap_start, phys, map_size, JLOS_PTE_KERNEL_RW)) {
-        jlos_page_frame_free_bulk(phys, (uint32_t)pages_needed);
+        jlos_page_frame_free_n(vframe, (uint32_t)pages_needed);
         return NULL;
     }
     for (size_t i = 0; i < pages_needed; i++) {
@@ -310,7 +310,7 @@ void *jlos_kvalloc(size_t size)
         size_t raw = size + sizeof(jlos_kv_contig_hdr_t);
         size_t npages = JLOS_EXCEPT_CEIL(raw, JLOS_PAGE_FRAME_SIZE);
         if (npages <= JLOS_KV_CONTIG_MAX_PAGES) {
-            void *vframe = jlos_page_frame_reserve_bulk((uint32_t)npages);
+            void *vframe = jlos_page_frame_alloc_n((uint32_t)npages);
             if (vframe) {
                 jlos_kv_contig_hdr_t *hdr = (jlos_kv_contig_hdr_t *)vframe;
                 hdr->magic = JLOS_KV_CONTIG_MAGIC;
@@ -355,7 +355,7 @@ void jlos_kvfree(void *ptr)
                 for (uint32_t i = 0; i < np; i++) {
                     jlos_page_frame_clear_owner_type(phys_hdr + i * JLOS_PAGE_FRAME_SIZE);
                 }
-                jlos_page_frame_free_bulk(phys_hdr, np);
+                jlos_page_frame_free_n(hdr, np);
             }
             return;
         }
@@ -587,7 +587,7 @@ void jlos_memory_slab_cache_free(jlos_memory_slab_cache_t *cache, const void *ob
     uint32_t fl = jlos_spin_lock_irqsave(&s_slab_lock);
     uint32_t page_base = JLOS_ALIGN_DOWN(obj, JLOS_PAGE_FRAME_SIZE);
     jlos_memory_slab_page_t *sp = (jlos_memory_slab_page_t *)page_base;
-    
+
     bool was_full = (sp->inuse == sp->obj_count);
     *(void **)obj = sp->freelist;
     sp->freelist = (void *)obj;

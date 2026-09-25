@@ -77,9 +77,9 @@ static int test_map_range(void)
     }
     jlos_paging_map(&ctx, TEST_VBASE, VIRT_TO_PHYS(seed), JLOS_PTE_USER_RW);
 
-    void *bulk = jlos_page_frame_reserve_bulk(N);
+    void *bulk = jlos_page_frame_alloc_n(N);
     if (!bulk) {
-        printk_err("FAIL: reserve_bulk NULL\n");
+        printk_err("FAIL: alloc_n NULL\n");
         jlos_paging_unmap(&ctx, TEST_VBASE);
         jlos_paging_context_destroy(&ctx);
         return 1;

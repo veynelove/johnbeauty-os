@@ -1,4 +1,4 @@
-#include <lib/user_syscall.h>
+#include <lib/syscall.h>
 
 void printf(const char *fmt, ...)
 {
@@ -67,5 +67,5 @@ void printf(const char *fmt, ...)
             buf[pos++] = fmt[i];
         }
     }
-    jlos_user_write(JLOS_TASK_FD_STD_OUT, buf, pos);
+    write(TASK_FD_STD_OUT, buf, pos);
 }

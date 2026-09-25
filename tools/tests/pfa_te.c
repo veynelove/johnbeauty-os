@@ -77,17 +77,17 @@ static int test_order_alloc(void)
     return fail;
 }
 
-static int test_reserve_bulk(void)
+static int test_alloc_n(void)
 {
     const uint32_t sizes[] = {2, 8, 32};
     int fail = 0;
 
-    printk_info("[test 3] reserve/free bulk\n");
+    printk_info("[test 3] alloc/free n\n");
     for (uint32_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
         uint32_t n = sizes[i];
-        void *va = jlos_page_frame_reserve_bulk(n);
+        void *va = jlos_page_frame_alloc_n(n);
         if (!va) {
-            printk_err("FAIL: reserve_bulk(%u) NULL\n", n);
+            printk_err("FAIL: alloc_n (%u) NULL\n", n);
             fail++;
             continue;
         }
@@ -98,12 +98,12 @@ static int test_reserve_bulk(void)
         for (uint32_t j = 0; j < n; j++) {
             if (check_frames((void *)PHYS_TO_VIRT(phys + j * JLOS_PAGE_FRAME_SIZE),
                              JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x80 + i))) {
-                printk_err("FAIL: bulk page %u corrupted\n", j);
+                printk_err("FAIL: n page %u corrupted\n", j);
                 fail++;
             }
         }
-        jlos_page_frame_free_bulk(phys, n);
-        printk_info("OK: bulk %u frames\n", n);
+        jlos_page_frame_free_n(va, n);
+        printk_info("OK: n %u frames\n", n);
     }
     return fail;
 }
@@ -212,7 +212,7 @@ void pfa_test(void)
     int fails = 0;
     fails += test_single_frame_roundtrip();
     fails += test_order_alloc();
-    fails += test_reserve_bulk();
+    fails += test_alloc_n();
     fails += test_refcount();
     fails += test_owner_type();
     fails += test_pressure_and_accounting();

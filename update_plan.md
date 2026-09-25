@@ -131,6 +131,7 @@ graph TD
 | PAG-8  | COW fault handler 一次锁内完成                                  | ✅    | paging.c               |
 | PAG-9  | context\_clone malloc 失败处理                                  | ✅    | paging.c               |
 | PAG-11 | fork COW 只遍历 present PDE                                     | ✅    | paging.c + multitask.c |
+| PAG-D7 | **flush\_all\_tlb asm 缺 early-clobber（严重 Bug）**：输出约束 `"=r"(cr4)` 允许 GCC 将输入与 `%0` 分配同一寄存器，而 asm 先写 `%0` 再读输入 → 输入被 CR4 值摧毁 → `andl` 退化为 `and %0,%0` 空操作 → PGE 从未翻转，**整个 flush 变空操作**。后果：COW 置 RO 后父进程 TLB 内陈旧 RW 表项存活，写直落共享帧，fork 子进程栈隔离失效（10 子压测间歇 `pressure N FAIL r=0 code=0`，printk 拖慢时序即掩盖）。修复：`"=r"` → `"=&r"` | ✅    | arch/x86/paging.c     |
 
 ### 已知遗留（低优先级）
 
@@ -173,6 +174,7 @@ graph TD
 | MT-SlotIdx  | **slot\_idx 维护 UAF 修复**：free 紧凑删除（末尾搬到被删位置）未更新被搬任务的 slot\_idx → 该任务 slot\_idx 失效 → schedule fallback 失败 → 越界写入错误位置 → tasks\[] stale 指针 → UAF。加 `tasks[idx]==task` 校验 + 搬移后更新被搬任务 slot\_idx                                                             | ✅      | multitask.c               |
 | MT-RqUB     | **rq\_dequeue** **`__builtin_ctz(0)`** **UB 修复**：先 ctz 后判空, GCC 在 UB 假设下可能优化掉判空 → runqueue 真空时 ctz 返回垃圾值 → `rq[l]` 越界 → `first=&head`（自指）→ `list_del(head)` 删 head 自己 → runqueue 彻底损坏 → schedule `return cpustate` 死循环卡死。调换为先判空再 ctz                        | ✅      | multitask.c               |
 | MT-ForkList | **fork 浅拷贝链表节点修复**：`*child=*parent` 复制了 `rq_node`/`zombie_node`（指向 parent 节点地址, 非 child 自己）只重置了 `pid_hash_node` → `task_on_rq(child)` enqueue 前误判 true + `jlos_task_free` 误判 child 在 zombie 链表。补 `jlos_list_init` 重置两个链表节点                                        | ✅      | multitask.c               |
+| MT-TF | **exit 泄漏全局 syscall trapframe（严重 Bug）**：`jlos_process_exit` 经 syscall 路径永不返回 → `s_x86_syscall_entry` 尾部清空 `g_hal_syscall_trapframe` 永不执行 → 全局残留指向已释放栈的死 trapframe → 下一个内核任务 exec 误走 via-trapframe 分支（写死帧 + 返回 0）→ 调用方从 naked stub 掉落 → triple fault（vmplayer 禁用 CPU）。修复：exit 开头补 `g_hal_syscall_trapframe = NULL` | ✅      | multitask.c + arch/x86/kernel_syscall.c |
 | MT-Cleanup  | **冗余字段/死代码清理**：删 `jlos_task_t.fds_size`（边界检查全用 `JLOS_TASK_FDS_NUM` 常量, 该字段仅写不读）+ 删 `set_blocked`/`set_waiting` 中 `yield=true` 死赋值（两函数同时改 status, 进不了 schedule 的 RUNNING 分支读 yield）。`yield` 字段本身保留（`syscall_yield`/`need_resched`/降优先级判断真实使用） | ✅      | multitask.h + multitask.c |
 
 ### 设计决策

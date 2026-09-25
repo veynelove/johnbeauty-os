@@ -48,12 +48,16 @@ jlos_mm_t *jlos_mm_create(void)
     mm->brk_start = 0;
     mm->brk_end = 0;
     mm->brk_limit = 0;
+    jlos_atomic_set(&mm->refcount, 1);
     return mm;
 }
 
 void jlos_mm_destroy(jlos_mm_t *mm)
 {
     if (!mm) {
+        return;
+    }
+    if (jlos_atomic_dec_return(&mm->refcount) != 0) {
         return;
     }
     jlos_rbtree_node_t *node = jlos_rbtree_first(&mm->vma_tree);
@@ -68,6 +72,13 @@ void jlos_mm_destroy(jlos_mm_t *mm)
         jlos_kfree(mm->pc);
     }
     jlos_kfree(mm);
+}
+
+void jlos_mm_ref_inc(jlos_mm_t *mm)
+{
+    if (mm) {
+        jlos_atomic_inc(&mm->refcount);
+    }
 }
 
 bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)

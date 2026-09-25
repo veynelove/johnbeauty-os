@@ -10,7 +10,7 @@ _start:
     pushl   %eax
     call    main
     movl    %eax, %ebx
-    movl    $JLOS_SYSCALL_EXIT, %eax
+    movl    $SYSCALL_EXIT, %eax
     int     $0x80
 1:  hlt
     jmp     1b

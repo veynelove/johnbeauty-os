@@ -1,6 +1,6 @@
-#include <lib/user_syscall.h>
+#include <lib/syscall.h>
 
-int32_t jlos_user_syscall(uint32_t num, uint32_t arg1, uint32_t arg2, uint32_t arg3)
+int32_t syscall(uint32_t num, uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     uint32_t result;
     __asm__ __volatile__(

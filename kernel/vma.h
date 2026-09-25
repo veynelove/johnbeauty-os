@@ -4,6 +4,7 @@
 #include <common/types.h>
 #include <dsa/rbtree.h>
 #include <hal/spinlock.h>
+#include <hal/atomic.h>
 
 typedef struct jlos_paging_context jlos_paging_context_t;
 
@@ -37,10 +38,12 @@ typedef struct jlos_mm {
     uint32_t                brk_end;
     uint32_t                brk_limit;
     jlos_spinlock_t         lock;
+    jlos_atomic_t           refcount;
 } jlos_mm_t;
 
 jlos_mm_t *jlos_mm_create(void);
 void jlos_mm_destroy(jlos_mm_t *mm);
+void jlos_mm_ref_inc(jlos_mm_t *mm);
 bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src);
 
 jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr);

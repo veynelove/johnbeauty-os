@@ -14,7 +14,7 @@
 
 #define JLOS_PFA_FLAG_OCCUPIED              0x01
 
-#define JLOS_PFA_FREE_BULK_MAX              1024
+#define JLOS_PFA_FREE_N_MAX                 1024
 
 typedef struct jlos_page_t {
 union {
@@ -38,8 +38,8 @@ void jlos_page_frame_allocator_init(void);
 void *jlos_page_frame_malloc(void);
 void jlos_page_frame_free(void *addr);
 
-void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames);
-void *jlos_page_frame_reserve_bulk(uint32_t num_frames);
+void *jlos_page_frame_alloc_n(uint32_t num_frames);
+void jlos_page_frame_free_n(void *addr, uint32_t num_frames);
 
 void *jlos_page_frame_alloc_order(uint32_t order);
 void  jlos_page_frame_free_order(void *addr, uint32_t order);

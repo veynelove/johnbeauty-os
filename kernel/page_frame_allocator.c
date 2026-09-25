@@ -279,25 +279,7 @@ void jlos_page_frame_allocator_init(void)
 
 void *jlos_page_frame_malloc(void)
 {
-    uint32_t flags = jlos_spin_lock_irqsave(&s_buddy_lock);
-    uint32_t target_order = 0;
-    uint32_t order = target_order;
-    uint32_t masked = s_free_order_bitmap & (~0U << target_order);
-    if (!masked) {
-        jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
-        return NULL;
-    }
-    order = __builtin_ctz(masked);
-
-    uint32_t frame = (uint32_t)(container_of(s_free_area[order].next, jlos_page_t, u.free_list) - s_pages);
-    buddy_remove(frame, order);
-    if (order > target_order) {
-        jlos_page_frame_order_split(frame, order, target_order);
-    }
-    jlos_page_frame_mark_reserve(frame);
-    jlos_atomic_dec(&s_free_frames);
-    jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
-    return (void *)PHYS_TO_VIRT(s_start_addr + frame * JLOS_PAGE_FRAME_SIZE);
+    return jlos_page_frame_alloc_n(1);
 }
 
 static void buddy_free_nolock(uint32_t frame, uint32_t order)
@@ -345,10 +327,11 @@ void jlos_page_frame_free(void *addr)
     jlos_page_frame_refcount_dec(phys);
 }
 
-void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
+void jlos_page_frame_free_n(void *addr, uint32_t num_frames)
 {
+    uint32_t phys_start = (uint32_t)VIRT_TO_PHYS(addr);
     uint32_t head_frame = pfa_phys_to_frame(phys_start);
-    uint32_t frames[JLOS_PFA_FREE_BULK_MAX];
+    uint32_t frames[JLOS_PFA_FREE_N_MAX];
     uint32_t n = 0;
     for (uint32_t i = 0; i < num_frames; i++) {
         uint32_t phys = phys_start + i * JLOS_PAGE_FRAME_SIZE;
@@ -365,8 +348,8 @@ void jlos_page_frame_free_bulk(uint32_t phys_start, uint32_t num_frames)
         while (old > 0) {
             if (jlos_atomic_cmpxchg(rc, &old, old - 1)) {
                 if (old == 1) {
-                    if (n == JLOS_PFA_FREE_BULK_MAX) {
-                        printk_emerg("free_bulk overflow: %u frames > %u\n", num_frames, JLOS_PFA_FREE_BULK_MAX);
+                    if (n == JLOS_PFA_FREE_N_MAX) {
+                        printk_emerg("free_bulk overflow: %u frames > %u\n", num_frames, JLOS_PFA_FREE_N_MAX);
                         goto halt;
                     }
                     frames[n++] = frame;
@@ -516,7 +499,7 @@ void jlos_page_frame_clear_owner_type(uint32_t phys)
     jlos_page_frame_set_owner_type(phys, NULL, JLOS_PAGE_FRAME_TYPE_FREE);
 }
 
-void *jlos_page_frame_reserve_bulk(uint32_t num_frames)
+void *jlos_page_frame_alloc_n(uint32_t num_frames)
 {
     if (!num_frames || num_frames > s_total_frames) return NULL;
     uint32_t flags = jlos_spin_lock_irqsave(&s_buddy_lock);
@@ -554,7 +537,7 @@ void *jlos_page_frame_alloc_order(uint32_t order)
     if (order > JLOS_PFA_MAX_ORDER) {
         return NULL;
     }
-    return jlos_page_frame_reserve_bulk(order_to_frames(order));
+    return jlos_page_frame_alloc_n(order_to_frames(order));
 }
 
 void jlos_page_frame_free_order(void *addr, uint32_t order)
@@ -562,7 +545,7 @@ void jlos_page_frame_free_order(void *addr, uint32_t order)
     if (order > JLOS_PFA_MAX_ORDER) {
         return;
     }
-    jlos_page_frame_free_bulk((uint32_t)VIRT_TO_PHYS(addr), order_to_frames(order));
+    jlos_page_frame_free_n(addr, order_to_frames(order));
 }
 
 void jlos_page_frame_mark_occupied(uint32_t phys_start, uint32_t phys_end)

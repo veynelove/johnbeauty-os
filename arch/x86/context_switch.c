@@ -64,13 +64,23 @@ __attribute__((naked)) void jlos_task_user_entry_stub(void)
         ::: "memory");
 }
 
-__attribute__((naked)) void jlos_task_fork_entry_stub(void)
+__attribute__((naked)) void jlos_task_ret_from_fork_stub(void)
 {
-     __asm__ __volatile__(
-        "movl $0, %%eax\n\t"
-        "movl %%edi, %%esp\n\t"   /* esp = child_label1_esp（6 实参位置） */
-        "sti\n\t"
-        "jmp *%%ebx\n\t"          /* jmp fork_resume_pc（label1），走真正的 C 尾声 */
+    __asm__ __volatile__(
+        "movw $" JLOS_X86_ASM_XSTR(JLOS_X86_USER_DS) ", %%ax\n\t"
+        "movw %%ax, %%ds\n\t"
+        "movw %%ax, %%es\n\t"
+        "movw %%ax, %%fs\n\t"
+        "movw %%ax, %%gs\n\t"
+        "popl %%ebp\n\t"
+        "popl %%edi\n\t"
+        "popl %%esi\n\t"
+        "popl %%edx\n\t"
+        "popl %%ecx\n\t"
+        "popl %%ebx\n\t"
+        "popl %%eax\n\t"
+        "addl $8, %%esp\n\t"
+        "iret\n\t"
         ::: "memory");
 }
 
@@ -143,24 +153,39 @@ void jlos_arch_tss_init_for_asm(void)
     jlos_arch_tss_base_addr = (uint32_t)&s_tss;
 }
 
-void jlos_arch_task_fork_prepare_child(
-    uint8_t *parent_stack, uint8_t *child_stack,
-    uint32_t fork_esp_ref, uint32_t fork_resume_pc,
-    void *child_task)
+void jlos_arch_task_copy_thread(jlos_task_t *child, const jlos_cpu_state_t *parent_trapframe,
+    uint8_t *child_kern_stack, uint32_t child_kern_stack_size, uint32_t child_user_stack)
 {
-    jlos_task_t *child = (jlos_task_t *)child_task;
+    const jlos_x86_regs_t *pregs = (const jlos_x86_regs_t *)parent_trapframe;
+    uint32_t *top = (uint32_t *)(child_kern_stack + child_kern_stack_size);
 
-    uint32_t delta = (uint32_t)child_stack - (uint32_t)parent_stack;
-    /* fork_stub asm 里 fork_esp_ref = 4 次 push 前的真 esp; label1 处 esp = fork_esp_ref - 16 */
-    uint32_t child_label1_esp = fork_esp_ref - 16 + delta;
+    /* 完整 trapframe (jlos_x86_regs_t 布局): ret_from_fork_stub pop 全部 GPR + iret */
+    top -= 14;
+    top[0]  = pregs->ebp;
+    top[1]  = pregs->edi;
+    top[2]  = pregs->esi;
+    top[3]  = pregs->edx;
+    top[4]  = pregs->ecx;
+    top[5]  = pregs->ebx;
+    top[6]  = 0;
+    top[7]  = 0;
+    top[8]  = 0;
+    top[9]  = pregs->eip;
+    top[10] = pregs->cs;
+    top[11] = pregs->eflags;
+    top[12] = (child_user_stack != 0) ? child_user_stack : pregs->user_esp;
+    top[13] = pregs->user_ss;
 
-    uint32_t *f = (uint32_t *)(child_label1_esp - 20);
-    f[0] = child_label1_esp;        /* edi → fork_entry_stub 切 esp */
-    f[1] = 0;                       /* esi */
-    f[2] = fork_resume_pc;          /* ebx → fork_entry_stub 跳转 */
-    f[3] = 0;                       /* ebp */
-    f[4] = (uint32_t)jlos_task_fork_entry_stub;
-    child->sp.value = (uint32_t)f;
+
+    /* swtch 帧: swtch ret 到 ret_from_fork_stub */
+    top -= 5;
+    top[0] = 0;
+    top[1] = 0;
+    top[2] = 0;
+    top[3] = 0;
+    top[4] = (uint32_t)jlos_task_ret_from_fork_stub;
+
+    child->sp.value = (uint32_t)top;
 }
 
 void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top)

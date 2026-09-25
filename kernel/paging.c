@@ -100,7 +100,7 @@ static bool jlos_paging_unmap_nolock(jlos_paging_context_t *self, uint32_t vir_a
         uint32_t region_base = pd_idx << 22;
         if (region_base < KERNEL_VIRTUAL_BASE) {
             uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
-            jlos_page_frame_free_bulk(phys_base, 1024);
+            jlos_page_frame_free_n((void *)PHYS_TO_VIRT(phys_base), 1024);
         }
         *pde = 0;
         return true;
@@ -450,8 +450,8 @@ bool jlos_paging_cow_range(jlos_paging_context_t *src, jlos_paging_context_t *ds
             continue;
         }
         uint32_t phys = src_pte & JLOS_PAGE_ADDR_MASK;
-        jlos_page_frame_refcount_inc(phys);
-        jlos_paging_map_nolock(dst, va, phys, JLOS_PTE_USER_COW);
+            jlos_page_frame_refcount_inc(phys);
+            jlos_paging_map_nolock(dst, va, phys, JLOS_PTE_USER_COW);
         src_pt->entries[pt_idx] = src_pte & ~JLOS_PTE_WRITABLE;
     }
     if (src == jlos_hal_paging_get_active_context()) {
@@ -545,8 +545,8 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         uint32_t old_phys = jlos_paging_get_physical_addr_nolock(ctx, page_addr);
         if (old_phys) {
             uint8_t refcount = jlos_page_frame_refcount_get(old_phys);
-            if (refcount <= 1) {
-                jlos_paging_change_flags_nolock(ctx, page_addr, JLOS_PTE_USER_RW);
+        if (refcount <= 1) {
+            jlos_paging_change_flags_nolock(ctx, page_addr, JLOS_PTE_USER_RW);
                 jlos_spin_unlock_irqrestore(&ctx->lock, fl);
                 jlos_hal_paging_flush_tlb(page_addr);
                 return;
@@ -557,6 +557,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
                 goto page_fault_oom;
             }
             jlos_memcpy(new_frame, (void *)PHYS_TO_VIRT(old_phys), JLOS_PAGE_FRAME_SIZE);
+
             uint32_t cow_pd = jlos_paging_get_page_dir_index(page_addr);
             uint32_t cow_pt = jlos_paging_get_page_table_index(page_addr);
             jlos_page_dir_entry_t *cow_pde = &ctx->page_dir->entries[cow_pd];

@@ -15,6 +15,8 @@
 #define JLOS_TASK_WAITING           4
 #define JLOS_TASK_ZOMBIE            5
 
+#define JLOS_CLONE_VM               0x1
+
 #define JLOS_TASK_STACK_SIZE        16384
 #define JLOS_TASK_NAME_SIZE         32
 
@@ -158,10 +160,12 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self);
 jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid);
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
 
-jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
-    uint32_t fork_esp_ref, uint32_t fork_resume_pc);
+jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe);
+jlos_task_t *jlos_process_clone(jlos_task_manager_t *self,
+    jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack);
+
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
-void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
+__attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);

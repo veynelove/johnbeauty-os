@@ -4,18 +4,16 @@
 
 ### 环境依赖
 
-| 项 | 说明 |
-|----|------|
-| 宿主机 | Windows 11 |
-| 虚拟机 | VMware Player 17 + Ubuntu 24.04 |
-| 编译工具链 | gcc（编译）+ clangd（代码分析） |
-| 依赖包 | `xorriso` `clangd` `bear` |
+```text
 
-```bash
-sudo apt install xorriso clangd bear
+宿主机：windows11
+虚拟机: vmplayer + ubuntu24.04
+依赖：sudo apt install xorriso clangd bear
+
+note: clangd代码分析 + gcc编译
+vscode下载clangd插件，禁用microsoft的c/c++插件，运行 `make compdb` 生成编译文件供clangd分析
+
 ```
-
-> VSCode 安装 clangd 插件，禁用 Microsoft C/C++ 插件，运行 `make compdb` 生成编译数据库供 clangd 分析。
 
 ### 子项目JLCY
 
@@ -130,88 +128,88 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 [0.050000] [I] [test] [test_large_contig] OK: 64 pages
 [0.060000] [I] [test] [test_kvheap_fallback] [test 4] kvalloc small -> heap fallback
 [0.070000] [I] [test] [test_kvheap_fallback] OK: kvheap fallback
-[0.080000] [I] [test] [test_roundtrip] [test 5] slab roundtrip: kalloc(128) x 1000
-[0.090000] [I] [test] [test_roundtrip] OK: 1000 iters
-[0.100000] [I] [test] [test_roundtrip] [test 5b] contig roundtrip: 16 pages x 100
-[0.110000] [I] [test] [test_roundtrip] OK: 100 iters
-[0.120000] [I] [test] [memory_manager_test] memory: ALL PASSED
-[0.130000] [I] [test] [memory_manager_test] post-test heap stats:
-[0.140000] [I] [mm] [jlos_kvalloc_stats] memory manager stats:
-[0.140000] [I] [mm] [jlos_kvalloc_stats] total chunks: 10
-[0.140000] [I] [mm] [jlos_kvalloc_stats] allocated: 9 chunks, 3500 bytes
-[0.140000] [I] [mm] [jlos_kvalloc_stats] free: 1 chunks, 4190484 bytes
-[0.140000] [I] [mm] [jlos_kvalloc_stats] free bitmap: 0x40000
-[0.140000] [I] [mm] [jlos_kvalloc_stats] class 18 (4194304B): 1 free
-[0.150000] [I] [test] [pfa_test] === pfa test start ===
-[0.160000] [I] [test] [pfa_test] total=65280 frames free=64457
-[0.170000] [I] [test] [test_single_frame_roundtrip] [test 1] single frame roundtrip x 64
-[0.180000] [I] [test] [test_single_frame_roundtrip] OK: 64 frames alloc/write/verify/free
-[0.190000] [I] [test] [test_order_alloc] [test 2] order alloc/free
-[0.200000] [I] [test] [test_order_alloc] OK: order 0 (1 frames)
-[0.210000] [I] [test] [test_order_alloc] OK: order 1 (2 frames)
-[0.220000] [I] [test] [test_order_alloc] OK: order 2 (4 frames)
-[0.230000] [I] [test] [test_order_alloc] OK: order 3 (8 frames)
-[0.240000] [I] [test] [test_reserve_bulk] [test 3] reserve/free bulk
-[0.250000] [I] [test] [test_reserve_bulk] OK: bulk 2 frames
-[0.260000] [I] [test] [test_reserve_bulk] OK: bulk 8 frames
-[0.270000] [I] [test] [test_reserve_bulk] OK: bulk 32 frames
-[0.280000] [I] [test] [test_refcount] [test 4] refcount semantics
-[0.290000] [I] [test] [test_refcount] OK: inc/dec/get consistent
-[0.300000] [I] [test] [test_owner_type] [test 5] owner type mark
-[0.310000] [I] [test] [test_owner_type] OK: set/get/clear owner
-[0.320000] [I] [test] [test_pressure_and_accounting] [test 6] pressure x 512 + free accounting
-[0.330000] [I] [test] [test_pressure_and_accounting] free: base=64457 mid=63945 end=64457
-[0.340000] [I] [test] [test_pressure_and_accounting] OK: free accounting restored
-[0.350000] [I] [test] [pfa_test] pfa: ALL PASSED
-[0.360000] [I] [test] [paging_test] === paging test start ===
-[0.370000] [I] [test] [test_map_unmap] [test 1] map/unmap roundtrip
-[0.380000] [I] [test] [test_map_unmap] OK: map -> get -> unmap -> get(0)
-[0.390000] [I] [test] [test_map_range] [test 2] map_range 3 pages
-[0.400000] [I] [test] [test_map_range] OK: 3 pages mapped/unmapped
-[0.410000] [I] [test] [test_change_flags] [test 3] change_flags
-[0.420000] [I] [test] [test_change_flags] OK: RW -> RO flag transition
-[0.430000] [I] [test] [test_clone] [test 4] context clone
-[0.440000] [I] [test] [test_clone] OK: user mapping not cloned
-[0.450000] [I] [test] [test_user_accessible] [test 5] access_ok boundary
-[0.460000] [I] [test] [test_user_accessible] OK: user<->kernel boundary enforced
-[0.470000] [I] [test] [paging_test] paging: ALL PASSED
-[0.480000] [I] [test] [multitask_test] === multitask test start ===
-[0.490000] [I] [test] [multitask_test] MAX_TASKS=256 KSTACK=16384B USTACK=64KB MLFQ=4 lv
-[0.500000] [I] [test] [multitask_test] [test 1] schedule alternation (2 kernel tasks)
-[0.510000] [I] [test] [multitask_test] [test 2] fork -> wait -> exit_code (1 child, magic=42)
-[0.520000] [I] [test] [multitask_test] [test 3] fork 10 children (exit_code = 100..109)
-[0.530000] [I] [test] [multitask_test] [test 4] ring3 user task smoke
-[0.540000] [I] [test] [multitask_test] [test 5] ring3 file syscall test
-hello from user ELF. PID = 17, argc = 1, argv[0] = /hello.elf
-[0.550000] [I] [syscall] [syscall_get_tasks_info] --- task list ---
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [0] name = idle, pid = 0, status = running, task_type = kernel
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [1] name = t1_a, pid = 2, status = zombie, task_type = kernel
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [2] name = t1_b, pid = 3, status = zombie, task_type = kernel
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [3] name = t2_parent, pid = 4, status = zombie, task_type = kernel
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [4] name = t3_parent, pid = 6, status = zombie, task_type = kernel
-[0.550000] [I] [syscall] [syscall_get_tasks_info] [5] name = t4_ring3, pid = 17, status = running, task_type = user
-[0.550000] [I] [syscall] [syscall_get_tasks_info] ---
-[0.560000] [I] [test] [multitask_test] OK: 6 seed tasks spawned, run schedule budget...
-file_test: pid=18 argc=1
+[0.090000] [I] [test] [test_roundtrip] [test 5] slab roundtrip: kalloc(128) x 1000
+[0.100000] [I] [test] [test_roundtrip] OK: 1000 iters
+[0.110000] [I] [test] [test_roundtrip] [test 5b] contig roundtrip: 16 pages x 100
+[0.130000] [I] [test] [test_roundtrip] OK: 100 iters
+[0.140000] [I] [test] [memory_manager_test] memory: ALL PASSED
+[0.150000] [I] [test] [memory_manager_test] post-test heap stats:
+[0.160000] [I] [mm] [jlos_kvalloc_stats] memory manager stats:
+[0.160000] [I] [mm] [jlos_kvalloc_stats] total chunks: 10
+[0.160000] [I] [mm] [jlos_kvalloc_stats] allocated: 9 chunks, 3500 bytes
+[0.160000] [I] [mm] [jlos_kvalloc_stats] free: 1 chunks, 4190484 bytes
+[0.160000] [I] [mm] [jlos_kvalloc_stats] free bitmap: 0x40000
+[0.160000] [I] [mm] [jlos_kvalloc_stats] class 18 (4194304B): 1 free
+[0.170000] [I] [test] [pfa_test] === pfa test start ===
+[0.180000] [I] [test] [pfa_test] total=65280 frames free=64457
+[0.190000] [I] [test] [test_single_frame_roundtrip] [test 1] single frame roundtrip x 64
+[0.200000] [I] [test] [test_single_frame_roundtrip] OK: 64 frames alloc/write/verify/free
+[0.210000] [I] [test] [test_order_alloc] [test 2] order alloc/free
+[0.220000] [I] [test] [test_order_alloc] OK: order 0 (1 frames)
+[0.230000] [I] [test] [test_order_alloc] OK: order 1 (2 frames)
+[0.240000] [I] [test] [test_order_alloc] OK: order 2 (4 frames)
+[0.250000] [I] [test] [test_order_alloc] OK: order 3 (8 frames)
+[0.260000] [I] [test] [test_alloc_n] [test 3] alloc/free n
+[0.270000] [I] [test] [test_alloc_n] OK: n 2 frames
+[0.280000] [I] [test] [test_alloc_n] OK: n 8 frames
+[0.290000] [I] [test] [test_alloc_n] OK: n 32 frames
+[0.300000] [I] [test] [test_refcount] [test 4] refcount semantics
+[0.310000] [I] [test] [test_refcount] OK: inc/dec/get consistent
+[0.320000] [I] [test] [test_owner_type] [test 5] owner type mark
+[0.330000] [I] [test] [test_owner_type] OK: set/get/clear owner
+[0.340000] [I] [test] [test_pressure_and_accounting] [test 6] pressure x 512 + free accounting
+[0.350000] [I] [test] [test_pressure_and_accounting] free: base=64457 mid=63945 end=64457
+[0.360000] [I] [test] [test_pressure_and_accounting] OK: free accounting restored
+[0.370000] [I] [test] [pfa_test] pfa: ALL PASSED
+[0.380000] [I] [test] [paging_test] === paging test start ===
+[0.390000] [I] [test] [test_map_unmap] [test 1] map/unmap roundtrip
+[0.410000] [I] [test] [test_map_unmap] OK: map -> get -> unmap -> get(0)
+[0.420000] [I] [test] [test_map_range] [test 2] map_range 3 pages
+[0.430000] [I] [test] [test_map_range] OK: 3 pages mapped/unmapped
+[0.440000] [I] [test] [test_change_flags] [test 3] change_flags
+[0.450000] [I] [test] [test_change_flags] OK: RW -> RO flag transition
+[0.460000] [I] [test] [test_clone] [test 4] context clone
+[0.470000] [I] [test] [test_clone] OK: user mapping not cloned
+[0.480000] [I] [test] [test_user_accessible] [test 5] access_ok boundary
+[0.490000] [I] [test] [test_user_accessible] OK: user<->kernel boundary enforced
+[0.500000] [I] [test] [paging_test] paging: ALL PASSED
+[0.510000] [I] [test] [multitask_test] === multitask test start ===
+[0.520000] [I] [test] [multitask_test] MAX_TASKS=256 KSTACK=16384B USTACK=64KB MLFQ=4 lv
+[0.530000] [I] [test] [multitask_test] [test 1] schedule alternation (2 kernel tasks)
+[0.540000] [I] [test] [multitask_test] [test 2] fork+wait + 10-child pressure (user ELF)
+[0.550000] [I] [test] [multitask_test] [test 4] ring3 user task smoke
+fork_test: pid=4
+fork_test: fork+wait OK
+fork_test: 10-child pressure OK
+fork_test: ALL PASSED
+[0.570000] [I] [test] [multitask_test] [test 5] ring3 file syscall test
+hello from user ELF. PID = 16, argc = 1, argv[0] = /hello.elf
+[0.580000] [I] [syscall] [syscall_get_tasks_info] --- task list ---
+[0.580000] [I] [syscall] [syscall_get_tasks_info] [0] name = idle, pid = 0, status = running, task_type = kernel
+[0.580000] [I] [syscall] [syscall_get_tasks_info] [1] name = t1_a, pid = 2, status = zombie, task_type = kernel
+[0.580000] [I] [syscall] [syscall_get_tasks_info] [2] name = t1_b, pid = 3, status = zombie, task_type = kernel
+[0.580000] [I] [syscall] [syscall_get_tasks_info] [3] name = t2_fork, pid = 4, status = zombie, task_type = user
+[0.580000] [I] [syscall] [syscall_get_tasks_info] [4] name = t4_ring3, pid = 16, status = running, task_type = user
+[0.580000] [I] [syscall] [syscall_get_tasks_info] ---
+[0.590000] [I] [test] [multitask_test] OK: 6 seed tasks spawned, run schedule budget...
+file_test: pid=17 argc=1
 OK: elf magic 127 69 76 70
 OK: write/read match
 OK: lseek+read
 OK: unlink+reopen-fail
 file_test: ALL PASSED
 user ELF: wakeup -> exit
-[1.060000] [I] [test] [multitask_test] budget: elapsed=48 ticks (start=58 now=106)
-[1.070000] [I] [test] [multitask_test] subcase results:
-[1.080000] [I] [test] [multitask_test] [1] alternation: A=500 B=500 -> [1.080000] [I] [test] [multitask_test] PASS
-[1.090000] [I] [test] [multitask_test] [2] fork-wait: status=1 pid=5 exit=42 -> [1.090000] [I] [test] [multitask_test] PASS
-[1.100000] [I] [test] [multitask_test] [3] 10-child pressure: status=1
-[1.110000] [I] [test] [multitask_test] all 10 exit_codes matched, PASS
-[1.120000] [I] [test] [multitask_test] [4] ring3 smoke: exited=1 -> [1.120000] [I] [test] [multitask_test] PASS
-[1.130000] [I] [test] [multitask_test] [5] file syscall: exited=1 -> [1.130000] [I] [test] [multitask_test] PASS
-[1.140000] [I] [test] [multitask_test] multitask: ALL PASSED
-[1.150000] [I] [test] [hard_driver_test] ata test skipped (use simplified mode)
-[1.160000] [I] [test] [http_server_test] tcp server listening on port 1234
-[1.170000] [D] [udp] [jlos_udp_handler_init] handler initialized
-[1.180000] [D] [udp] [jlos_udp_socket_init] socket initialized
-[1.190000] [I] [test] [udp_server_test] udp server listening on port 5678
+[1.090000] [I] [test] [multitask_test] budget: elapsed=48 ticks (start=61 now=109)
+[1.100000] [I] [test] [multitask_test] subcase results:
+[1.110000] [I] [test] [multitask_test] [1] alternation: A=500 B=500 -> [1.110000] [I] [test] [multitask_test] PASS
+[1.120000] [I] [test] [multitask_test] [2] fork+pressure: exited=1 -> [1.120000] [I] [test] [multitask_test] PASS
+[1.130000] [I] [test] [multitask_test] [4] ring3 smoke: exited=1 -> [1.130000] [I] [test] [multitask_test] PASS
+[1.140000] [I] [test] [multitask_test] [5] file syscall: exited=1 -> [1.140000] [I] [test] [multitask_test] PASS
+[1.150000] [I] [test] [multitask_test] multitask: ALL PASSED
+[1.160000] [I] [test] [hard_driver_test] ata test skipped (use simplified mode)
+[1.170000] [I] [test] [http_server_test] tcp server listening on port 1234
+[1.180000] [D] [udp] [jlos_udp_handler_init] handler initialized
+[1.190000] [D] [udp] [jlos_udp_socket_init] socket initialized
+[1.200000] [I] [test] [udp_server_test] udp server listening on port 5678
 
 ```

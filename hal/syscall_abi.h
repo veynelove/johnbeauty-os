@@ -25,6 +25,8 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_OPEN               = 17,
     JLOS_SYSCALL_LSEEK              = 18,
     JLOS_SYSCALL_UNLINK             = 19,
+    JLOS_SYSCALL_FORK               = 20,
+    JLOS_SYSCALL_CLONE              = 21,
 };
 
 enum jlos_syscall_misscode {
