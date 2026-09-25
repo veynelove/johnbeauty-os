@@ -78,6 +78,23 @@ static inline int32_t task_brk(uint32_t addr)
     return syscall(SYSCALL_TASK_BRK, addr, 0, 0);
 }
 
+static inline void *mmap(void *addr, uint32_t len, uint32_t prot, uint32_t flags, int32_t fd, uint32_t offset)
+{
+    mmap_arg_struct_t a;
+    a.addr = (uint32_t)addr;
+    a.len = len;
+    a.prot = prot;
+    a.flags = flags;
+    a.fd = (uint32_t)fd;
+    a.offset = offset;
+    return (void *)(uint32_t)syscall(SYSCALL_MMAP, (uint32_t)&a, len, 0);
+}
+
+static inline int32_t munmap(void *addr, uint32_t len)
+{
+    return syscall(SYSCALL_MUNMAP, (uint32_t)addr, len, 0);
+}
+
 static inline int32_t open(const char *path, uint32_t flags, uint32_t mode)
 {
     return syscall(SYSCALL_OPEN, (uint32_t)path, flags, mode);

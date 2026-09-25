@@ -37,6 +37,9 @@
 #define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
+#define JLOS_TASK_USER_MMAP_BASE    0x40000000
+#define JLOS_TASK_USER_MMAP_LIMIT   0xBFF00000
+
 #define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
 #define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
 #define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_U32OF(p) >= JLOS_KERN_WRITABLE_MIN) && \

@@ -383,18 +383,71 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 
 static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
-    (void)arg1;
     (void)arg2;
     (void)arg3;
-    return -SYSCALL_ENOSYS;
+    struct {
+        uint32_t addr;
+        uint32_t len;
+        uint32_t prot;
+        uint32_t flags;
+        uint32_t fd;
+        uint32_t offset;
+    } args;
+    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+        return -SYSCALL_ENOMEM;
+    }
+    if (!jlos_copy_from_user(&args, (const void *)arg1, sizeof(args))) {
+        return -SYSCALL_EFAULT;
+    }
+    if (args.len == 0 || args.prot == 0) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (!(args.flags & JLOS_MMAP_ANON)) {
+        return -SYSCALL_ENOSYS;
+    }
+    uint32_t len = JLOS_PAGE_ALIGN_UP(args.len);
+    jlos_mm_t *mm = g_current_task_ptr->mm;
+
+    uint32_t addr;
+    if (args.flags & JLOS_MMAP_FIXED) {
+        if (args.addr & (JLOS_PAGE_FRAME_SIZE - 1)) {
+            return -SYSCALL_ENINVAL;
+        }
+        if (args.addr + len < args.addr || !jlos_access_ok((const void *)args.addr, len)) {
+            return -SYSCALL_ENINVAL;
+        }
+        addr = args.addr;
+        jlos_vma_remove_range(mm, addr, addr + len);
+    } else {
+        uint32_t hint = args.addr ? args.addr : 0;
+        addr = jlos_vma_find_free_area(mm, JLOS_TASK_USER_MMAP_BASE, JLOS_TASK_USER_MMAP_LIMIT, hint, len);
+        if (!addr) {
+            return -SYSCALL_ENOMEM;
+        }
+    }
+    uint32_t vma_flags = JLOS_VMA_USER;
+    if (args.prot & JLOS_PROT_READ)     vma_flags |= JLOS_VMA_READ;
+    if (args.prot & JLOS_PROT_WRITE)    vma_flags |= JLOS_VMA_WRITE;
+    if (args.prot & JLOS_PROT_EXEC)     vma_flags |= JLOS_VMA_EXEC;
+    if (!jlos_vma_add(mm, addr, addr + len, vma_flags, JLOS_VMA_TYPE_ANON)) {
+        return -SYSCALL_ENOMEM;
+    }
+    return (int32_t)addr;
 }
 
 static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
-    (void)arg1;
-    (void)arg2;
     (void)arg3;
-    return -SYSCALL_ENOSYS;
+    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+        return -SYSCALL_ENOMEM;
+    }
+    uint32_t addr = arg1;
+    uint32_t len = arg2;
+    if (len == 0 || (addr & (JLOS_PAGE_FRAME_SIZE - 1))) {
+        return -SYSCALL_ENINVAL;
+    }
+    jlos_vma_remove_range(g_current_task_ptr->mm, addr, addr + len);
+    return 0;
 }
 
 static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char *strbuf, size_t *strbuf_off, int *count)

@@ -47,4 +47,13 @@ enum jlos_task_fd_std {
     JLOS_TASK_FD_STD_ERR            = 2
 };
 
+#define JLOS_PROT_READ      0x1
+#define JLOS_PROT_WRITE     0x2
+#define JLOS_PROT_EXEC      0x4
+
+#define JLOS_MMAP_SHARED    0x01
+#define JLOS_MMAP_PRIVATE   0x02
+#define JLOS_MMAP_FIXED     0x10
+#define JLOS_MMAP_ANON      0x20
+
 #endif

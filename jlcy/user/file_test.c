@@ -112,6 +112,35 @@ static int check_unlink(void)
     return 1;
 }
 
+static int test_mmap_anon(void)
+{
+    uint32_t *p = mmap(0, 8192, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((int32_t)p <= 0) {
+        printf("file_test: mmap failed\n");
+        return 0;
+    }
+    /* 跨 2 页写读: 触发 demand paging */
+    for (int i = 0; i < 2048; i++) {
+        p[i] = 0x5A5A0000u + i;
+    }
+    if (p[0] != 0x5A5A0000u || p[2047] != 0x5A5A07FFu) {
+        printf("file_test: mmap rw FAIL\n");
+        return 0;
+    }
+    if (munmap(p, 8192) != 0) {
+        printf("file_test: munmap failed\n");
+        return 0;
+    }
+    /* 解除后重映射: first-fit 复用原空洞, 应得到全新零页 */
+    uint32_t *q = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((int32_t)q <= 0 || q[0] != 0 || q[1023] != 0) {
+        printf("file_test: mmap remap-zero FAIL\n");
+        return 0;
+    }
+    printf("OK: mmap/munmap anon\n");
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     printf("file_test: pid=%u argc=%d\n", get_pid(), argc);
@@ -121,6 +150,7 @@ int main(int argc, char **argv)
     if (!check_write_read())   { return 1; }
     if (!check_lseek())        { return 1; }
     if (!check_unlink())       { return 1; }
+    if (!test_mmap_anon())     { return 3; }
 
     printf("file_test: ALL PASSED\n");
     return FILE_TEST_EXIT_OK;

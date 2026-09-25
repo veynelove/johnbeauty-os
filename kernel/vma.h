@@ -49,6 +49,9 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src);
 jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr);
 jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t flags, jlos_vma_type_t type);
 bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end);
+
+uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, uint32_t hint, uint32_t len);
+
 jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uint32_t start, uint32_t new_end, uint32_t flags, jlos_vma_type_t type);
 bool jlos_vma_shrink_tail(jlos_mm_t *mm, uint32_t new_end, jlos_vma_type_t type);
 

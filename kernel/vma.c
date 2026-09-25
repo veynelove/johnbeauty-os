@@ -151,12 +151,33 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
     while (node) {
         jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
         jlos_rbtree_node_t *next = jlos_rbtree_next(&mm->vma_tree, node);
-        if (vma->start >= start && vma->end <= end) {
-            for (uint32_t i = vma->start; i < vma->end; i += JLOS_PAGE_FRAME_SIZE) {
+        if (vma->start >= end) {
+            break;
+        }
+        if (vma->end > start) {
+            uint32_t ov_s = (vma->start > start) ? vma->start : start;
+            uint32_t ov_e = (vma->end < end) ? vma->end : end;
+            for (uint32_t i = ov_s; i < ov_e; i += JLOS_PAGE_FRAME_SIZE) {
                 jlos_paging_unmap(mm->pc, i);
             }
-            jlos_rbtree_remove(&mm->vma_tree, node);
-            jlos_kfree(vma);
+            if (ov_s <= vma->start && ov_e >= vma->end) {
+                jlos_rbtree_remove(&mm->vma_tree, node);
+                jlos_kfree(vma);
+            } else if (ov_s <= vma->start) {
+                vma->start = ov_e;
+            } else if (ov_e >= vma->end) {
+                vma->end = ov_s;
+            } else {
+                jlos_vma_t *tail = (jlos_vma_t *)jlos_kalloc(sizeof(jlos_vma_t));
+                if (!tail) {
+                    node = next;
+                    continue;
+                }
+                *tail = *vma;
+                tail->start = ov_e;
+                tail->end = ov_s;
+                jlos_rbtree_insert(&mm->vma_tree, &tail->rb_node, jlos_vma_compare);
+            }
         }
         node = next;
     }
@@ -234,4 +255,52 @@ bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr)
         return false;
     }
     return true;
+}
+
+uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, uint32_t hint, uint32_t len)
+{
+    if (!mm || !len) {
+        return 0;
+    }
+    if (hint >= base && hint < limit) {
+        uint32_t h = JLOS_PAGE_ALIGN_UP(hint);
+        if (h < limit && len <= limit - h) {
+            jlos_rbtree_node_t *node = jlos_rbtree_find_key_le(&mm->vma_tree, &h, jlos_vma_cmp_addr);
+            if (!node) {
+                node = jlos_rbtree_first(&mm->vma_tree);
+            } else {
+                jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
+                if (vma->end <= h) {
+                    node = jlos_rbtree_next(&mm->vma_tree, node);
+                }
+            }
+            jlos_vma_t *vma = node ? jlos_rbtree_entry(node, jlos_vma_t, rb_node) : NULL;
+            if (!vma || vma->start >= h + len) {
+                return h;
+            }
+        }
+    }
+    uint32_t candidate = base;
+    jlos_rbtree_node_t *node = jlos_rbtree_find_key_le(&mm->vma_tree, &candidate, jlos_vma_cmp_addr);
+    if (!node) {
+        node = jlos_rbtree_first(&mm->vma_tree);
+    } else {
+        jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
+        if (vma->end > candidate) {
+            candidate = JLOS_PAGE_ALIGN_UP(vma->end);
+        }
+        node = jlos_rbtree_next(&mm->vma_tree, node);
+    }
+    while (node) {
+        jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
+        if (vma->start >= candidate && vma->start - candidate >= len) {
+            break;
+        }
+        candidate = JLOS_PAGE_ALIGN_UP(vma->end);
+        node = jlos_rbtree_next(&mm->vma_tree, node);
+    }
+    if (candidate < base || candidate >= limit || len > limit - candidate) {
+        return 0;
+    }
+    return candidate;
 }
