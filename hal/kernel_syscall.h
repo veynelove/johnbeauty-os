@@ -14,8 +14,6 @@ extern jlos_hal_syscall_dispatch_fn       jlos_hal_syscall_dispatch;
 extern jlos_hal_syscall_resched_check_fn  jlos_hal_syscall_resched_check;
 extern jlos_hal_syscall_resched_do_fn     jlos_hal_syscall_resched_do;
 
-extern jlos_cpu_state_t                   *g_hal_syscall_trapframe;
-
 void jlos_hal_arch_syscall_init(void);
 
 #endif

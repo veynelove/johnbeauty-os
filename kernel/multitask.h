@@ -106,6 +106,7 @@ typedef struct jlos_task {
     jlos_list_head_t        rq_node;
     int32_t                 slot_idx;
     jlos_arch_ext_state_t   ext_state;
+    jlos_cpu_state_t        *syscall_tf;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {

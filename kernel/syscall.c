@@ -300,10 +300,11 @@ static int32_t syscall_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    if (!g_hal_syscall_trapframe) {
+    jlos_cpu_state_t *tf = g_current_task_ptr->syscall_tf;
+    if (!tf) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_t *child = jlos_process_fork(g_task_manager_ptr, g_current_task_ptr, g_hal_syscall_trapframe);
+    jlos_task_t *child = jlos_process_fork(g_task_manager_ptr, g_current_task_ptr, tf);
     if (!child) {
         return -SYSCALL_ENOMEM;
     }
@@ -318,11 +319,12 @@ static int32_t syscall_clone(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    if (!g_hal_syscall_trapframe) {
+    jlos_cpu_state_t *tf = g_current_task_ptr->syscall_tf;
+    if (!tf) {
         return -SYSCALL_ENOMEM;
     }
     jlos_task_t *child =
-        jlos_process_clone(g_task_manager_ptr, g_current_task_ptr, g_hal_syscall_trapframe, clone_flags, child_stack);
+        jlos_process_clone(g_task_manager_ptr, g_current_task_ptr, tf, clone_flags, child_stack);
     if (!child) {
         return -SYSCALL_ENOMEM;
     }

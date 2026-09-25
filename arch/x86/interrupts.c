@@ -289,6 +289,14 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
             interrupt, cpu->error, cpu->eip, cpu->cs, cpu->eflags);
     }
 
+    /* EOI 先于 schedule: 否则切换后 IRQ0 保持 IN-SERVICE, 压制全部中断 (经典 early-EOI) */
+    if (vector >= 0x20 && vector < 0x30) {
+        jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
+        if (vector >= 0x28) {
+            jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
+        }
+    }
+
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
     if (interrupt == 0 && self && self->task_manager) {
         jlos_hal_timer_on_tick();
@@ -300,12 +308,6 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
         }
         if (resched) {
             jlos_task_manager_schedule(self->task_manager);
-        }
-    }
-    if (vector >= 0x20 && vector < 0x30) {
-        jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
-        if (vector >= 0x28) {
-            jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
         }
     }
     return esp;

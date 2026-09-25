@@ -4,7 +4,6 @@
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
 #include <hal/paging.h>
-#include <hal/kernel_syscall.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
@@ -164,6 +163,7 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->wake_tick = jlos_hal_timer_get_ticks();
     self->errno = 0;
     self->waiting_pid = self->pid;
+    self->syscall_tf = NULL;
     self->priority = 0;
     self->default_slice = (2 << self->priority);
     self->remain_slice = self->default_slice;
@@ -463,6 +463,9 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
     if (!self || !g_current_task_ptr) {
         return;
     }
+
+    uint32_t sched_eflags = jlos_hal_irq_save();
+
     jlos_task_t *prev = g_current_task_ptr;
     if (prev->status == JLOS_TASK_RUNNING) {
         if (prev->sleeping) {
@@ -509,6 +512,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
     if (next == prev) {
         JLOS_TASK_SET_RUNNING(prev);
         self->need_resched = false;
+        jlos_hal_irq_restore(sched_eflags);
         return;
     }
     
@@ -524,7 +528,8 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
         }
     }
     if (idx < 0) {
-        printk_err("[sched] next = %p not in tasks[], fallback failed\n", next);
+        printk_err("next = %p not in tasks[], fallback failed\n", next);
+        jlos_hal_irq_restore(sched_eflags);
         return;
     }
 
@@ -538,6 +543,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
     self->need_resched = false;
 
     jlos_hal_context_switch(&prev->sp.value, next->sp.value);
+    jlos_hal_irq_restore(sched_eflags);
 }
 
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
@@ -597,6 +603,7 @@ static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task
     child->sleeping = false;
     child->wake_tick = jlos_hal_timer_get_ticks();
     child->errno = 0;
+    child->syscall_tf = NULL;
     child->exit_code = TASK_EXIT_DEFAULT;
     child->remain_slice = parent->default_slice;
     child->pid_hash_node.next = NULL;
@@ -668,8 +675,8 @@ jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, c
     
 }
 
-jlos_task_t *jlos_process_clone(jlos_task_manager_t *self, jlos_task_t *parent,
-    const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack)
+jlos_task_t *jlos_process_clone(jlos_task_manager_t *self, jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe,
+    uint32_t clone_flags, uint32_t child_stack)
 {
     return jlos_process_fork_inner(self, parent, parent_trapframe, clone_flags, child_stack);
 }
@@ -710,7 +717,6 @@ __attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exi
     if (!task || !g_task_manager_ptr) {
         goto halt;
     }
-    g_hal_syscall_trapframe = NULL;
     JLOS_TASK_SET_ZOMBIE(task, exit_code);
     jlos_sched_wake_waiter(g_task_manager_ptr, task->pid);
     g_task_manager_ptr->need_resched = true;
@@ -934,9 +940,9 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
     if (g_task_manager_ptr) {
         jlos_hash_chain_insert(&g_task_manager_ptr->pid_hash, &task->pid, &task->pid_hash_node);
     }
-    if (g_hal_syscall_trapframe) {
+    if (task->syscall_tf) {
         jlos_paging_switch(task->mm->pc);
-        jlos_cpu_state_set_user_entry(g_hal_syscall_trapframe, entry, user_stack_top);
+        jlos_cpu_state_set_user_entry(task->syscall_tf, entry, user_stack_top);
         return 0;
     }
     jlos_arch_exec_return(task->mm->pc, entry, user_stack_top);

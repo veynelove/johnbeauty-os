@@ -6,7 +6,12 @@
 void jlos_hal_arch_init(void);
 void jlos_hal_kernel_segments_init(void);
 void jlos_hal_halt(void);
+
 void jlos_hal_enable_interrupts(void);
+void jlos_hal_disable_interrupts(void);
+
+uint32_t jlos_hal_irq_save(void);
+void jlos_hal_irq_restore(uint32_t flags);
 
 void jlos_hal_arch_display_register(void);
 void jlos_hal_arch_display_init_fb(void);

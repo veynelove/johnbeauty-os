@@ -474,9 +474,10 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 
 | 批次 | 内容 | 理由 | 依赖 |
 | ---- | ---- | ---- | ---- |
-| **1（P1）** | F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持 | 解除文件系统断链：FAT32 已挂载但唯一消费者是 execve，用户态无法触达文件；解锁 jlcy stdio（fopen/fread），是 F11 文件映射的前置 | Phase 8 ✅ |
-| **2（P1）** | 5.1/5.4 接口收尾：PAG-7 `jlos_active_paging_context` per-CPU 访问器 HAL 化 + PFA-5 统一多帧 API `jlos_page_frame_alloc_n/free_n` | 低复杂度高铺路价值：PAG-7 消除 SMP 下裸全局指针（arch/x86/paging.c:85 仍为单全局）；PFA-5 消除 malloc 单帧 / reserve_bulk 多帧双路径的泄漏隐患 | 无 |
-| **3（P1/P2）** | F7 signal/kill + F8 线程 clone（共享地址空间）+ F11 mmap/munmap（匿名映射） | 补全经典进程模型三件套（fork/exec 已有，signal 缺位）；COW/VMA 已就绪，mmap/munmap ENOSYS stub 已留号（syscall.c:215/223，syscall 14/15） | 批次 2 |
+| ~~**1（P1）**~~ | ~~F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持~~ | **已完成**：open/close/read/write/lseek/unlink syscall + fat32 write/create/unlink + file\_test（write/read match、lseek、unlink+reopen-fail）ALL PASSED | Phase 8 ✅ |
+| ~~**2（P1）**~~ | ~~5.1/5.4 接口收尾：PAG-7 + PFA-5~~ | **已完成**：PAG-7 `s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 化（arch/x86/paging.c）；PFA-5 `jlos_page_frame_alloc_n/free_n` 统一多帧 API，mm/paging/测试全量切换 | 无 |
+| **3（P1/P2）** | F7 signal/kill + F11 mmap/munmap（匿名映射） | ✅ F8 fork/clone（COW + ret\_from\_fork）已完成并压测通过；剩 F7 信号（经典进程模型最后缺件）与 F11（VMA/demand paging 已就绪，syscall 14/15 stub 已留号） | 批次 2 ✅ |
+| **3.5（穿插加固）** | 调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治） | 三个已知竞态/时序缺陷一次收口；均小时级 | 无 |
 | **4（P2）** | 经典化收尾：MM-3 per-type size class cache + MT-4 残留（fork 入口 JLOS_TASK_MAX_NUM 硬上限，multitask.c:565）+ FS-3 dentry cache LRU 淘汰 + PAG-4 内核 4KB PDE 共享（可选） | 消除剩余结构性短板：task 表扩容已做但 fork 路径仍限 256；MM-3 精确尺寸 cache 降低 slab 内部碎片 | 批次 3 |
 | **5（P3）** | SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理 | 多核落地前置；A2（0~1MB 恒等映射残留）/ A3（boot_page_dir 未释放）为 GRUB 退出后的历史残留 | 批次 4 |
 | 穿插 | F9 DHCP + F10 DNS（网络栈已通，经典收尾）；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~3 console 遗留 | 无依赖、量级小，可穿插任意批次间隙 | 无 |
@@ -512,13 +513,13 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | F2   | COW 写时复制 (已实现)                                    | paging.c + multitask.c            | —                  |
 | F3   | 用户态 malloc/free                                       | user                              | 依赖 brk（已完成） |
 | ~~F4~~ | ~~FAT32 完善 (mount/open/close/read/write/seek/readdir)~~ | **已实现**：VFS + FAT32 + MBR + ELF 加载器 | — |
-| F5   | open/close/read/write 系统调用                            | syscall.c                         | 依赖 F4            |
+| F5   | open/close/read/write 系统调用                            | syscall.c                         | **已实现**         |
 | ~~F6~~ | ~~ELF 用户态程序加载~~                                   | **已实现**：jlcy/ + crt0.S + execve | —            |
 | F7   | signal/kill 信号机制                                     | syscall.c + multitask.c           | 无                 |
-| F8   | 线程支持（共享地址空间）                                 | multitask.c                       | 依赖 COW (F2)      |
+| F8   | 线程支持（共享地址空间）                                 | multitask.c                       | **已实现**（fork/clone + COW） |
 | F9   | DHCP 自动获取 IP                                         | net                               | 无                 |
 | F10  | DNS 域名解析                                             | net                               | 依赖 F9            |
-| F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4            |
+| F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4（已完成，VMA/按需分页就绪） |
 | ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
 | ~~F13~~ | ~~O(1) 调度选择（per-level runqueue + bitmap）~~         | **已实现**：rq[] per-level 链表 + rq\_nonempty bitmap ctz 选层（multitask.h:117-121） | —                  |
 | F14  | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看                  | kernel/console.c + printk.c       | 无                 |

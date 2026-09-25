@@ -109,3 +109,20 @@ void jlos_hal_enable_interrupts(void)
 {
     __asm__ __volatile__("sti");
 }
+
+void jlos_hal_disable_interrupts(void)
+{
+    __asm__ __volatile__("cli" ::: "memory");
+}
+
+uint32_t jlos_hal_irq_save(void)
+{
+    uint32_t flags;
+    __asm__ __volatile__("pushfl\n\tpopl %0\n\tcli" : "=r"(flags) :: "memory");
+    return flags;
+}
+
+void jlos_hal_irq_restore(uint32_t flags)
+{
+    __asm__ __volatile__("pushl %0\n\tpopfl" :: "r"(flags) : "memory", "cc");
+}
