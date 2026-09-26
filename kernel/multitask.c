@@ -25,6 +25,9 @@ jlos_task_manager_t             *g_task_manager_ptr = &s_task_manager;
 
 static uint32_t                 s_next_pid = 1;
 
+static jlos_memory_slab_cache_t *s_task_cache;
+static jlos_memory_slab_cache_t *s_task_fds_cache;
+
 static inline bool task_on_rq(jlos_task_t *t)
 {
     return !jlos_list_empty(&t->rq_node);
@@ -235,7 +238,7 @@ int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoin
         return -TASK_ERR_NOMEM;
     }
     self->stack_size = JLOS_TASK_STACK_SIZE;
-    self->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
+    self->fds = (jlos_task_fd_t *)jlos_memory_slab_cache_alloc(s_task_fds_cache);
     if (self->fds) {
         for (uint32_t i = 0; i < 3 && i < JLOS_TASK_FDS_NUM; i++) {
             self->fds[i].type = JLOS_TASK_FD_CONSOLE;
@@ -572,11 +575,7 @@ jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
 static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task_t *parent,
     const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack)
 {
-    if (self->num_tasks >= JLOS_TASK_MAX_NUM) {
-        return NULL;
-    }
-
-    jlos_task_t *child = (jlos_task_t *)jlos_kalloc(sizeof(jlos_task_t));
+    jlos_task_t *child = (jlos_task_t *)jlos_memory_slab_cache_alloc(s_task_cache);
     if (!child) {
         return NULL;
     }
@@ -618,7 +617,7 @@ static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task
     jlos_list_init(&child->zombie_node);
 
     if (parent->fds) {
-        child->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
+        child->fds = (jlos_task_fd_t *)jlos_memory_slab_cache_alloc(s_task_fds_cache);
         if (child->fds) {
             jlos_memcpy(child->fds, parent->fds, sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
         } else {
@@ -914,7 +913,7 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
 {
     jlos_vfs_file_t *file = jlos_vfs_open(path, JLOS_VFS_O_RDONLY, 0);
     if (!file) {
-        printk_err("exec_elf: failed to open %s\n", path);
+        printk_err("failed to open %s\n", path);
         return -1;
     }
     if (g_task_manager_ptr) {
@@ -947,7 +946,7 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
 
     uint32_t entry;
     if (!jlos_elf_load(task->mm, file, &entry)) {
-        printk_err("exec_elf: elf_load failed\n");
+        printk_err("elf_load failed\n");
         jlos_vfs_close(file);
         jlos_mm_destroy(task->mm);
         task->mm = NULL;
@@ -974,7 +973,7 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
     task->signal_pending = 0;
     jlos_memset(task->signal_handlers, 0, sizeof(task->signal_handlers));
     if (!task->fds) {
-        task->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
+        task->fds = (jlos_task_fd_t *)jlos_memory_slab_cache_alloc(s_task_fds_cache);
         if (task->fds) {
             for (uint32_t i = 0; i < 3 && i < JLOS_TASK_FDS_NUM; i++) {
                 task->fds[i].type = JLOS_TASK_FD_CONSOLE;
@@ -1005,4 +1004,13 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
     return 0;
 }
 
+static void jlos_task_caches_init(void)
+{
+    s_task_cache =
+        jlos_memory_slab_cache_create("jlos_task", sizeof(jlos_task_t), JLOS_ARCH_EXT_STATE_ALIGN, 0, NULL, NULL);
+    s_task_fds_cache =
+        jlos_memory_slab_cache_create("jlos_task_fds", sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM, sizeof(void *), 0, NULL, NULL);
+}
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_task_caches_init);
 JLOS_INITCALL(JLOS_INITCALL_CORE, jlos_task_manager_init);

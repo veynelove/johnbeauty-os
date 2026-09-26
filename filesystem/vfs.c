@@ -1,6 +1,7 @@
 #include <filesystem/vfs.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
+#include <dsa/list_lru.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "vfs"
 #include <kernel/printk.h>
@@ -21,6 +22,7 @@ static jlos_vfs_dentry_t    *s_root_dentry;
 static jlos_hash_chain_t    s_inode_hash;
 static jlos_hash_chain_t    s_dentry_hash;
 static jlos_spinlock_t      s_vfs_lock;
+static jlos_list_lru_t      s_dentry_lru;
 
 static uint32_t inode_hash_fn(const void *key)
 {
@@ -62,6 +64,7 @@ static void jlos_vfs_init(void)
     jlos_spinlock_init(&s_vfs_lock);
     jlos_hash_chain_init(&s_inode_hash, JLOS_VFS_HASH_BUCKETS, inode_hash_fn, inode_cmp_fn);
     jlos_hash_chain_init(&s_dentry_hash, JLOS_VFS_HASH_BUCKETS, dentry_hash_fn, dentry_cmp_fn);
+    jlos_list_lru_init(&s_dentry_lru);
 }
 
 int jlos_vfs_register_fs_type(jlos_vfs_fs_type_t *fs_type)
@@ -235,6 +238,7 @@ jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path)
             return NULL;
         }
         child->parent = cur;
+        jlos_vfs_dentry_get(cur);
 
         uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
         jlos_list_add(&child->sibling, &cur->child_list);
@@ -339,6 +343,7 @@ int jlos_vfs_unlink(const char *path)
         uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
         jlos_list_del(&d->sibling);
         jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+        jlos_vfs_dentry_put(d->parent);
         d->parent = NULL;
     }
     jlos_vfs_dentry_put(d);
@@ -415,8 +420,44 @@ void jlos_vfs_inode_put(jlos_vfs_inode_t *inode)
 
 void jlos_vfs_dentry_get(jlos_vfs_dentry_t *dentry)
 {
-    if (dentry) {
-        jlos_atomic_inc(&dentry->ref_count);
+    if (!dentry) {
+        return;
+    }
+    uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
+    if (jlos_atomic_read(&dentry->ref_count) == 0) {
+        jlos_list_lru_del(&s_dentry_lru, &dentry->lru);
+    }
+    jlos_atomic_inc(&dentry->ref_count);
+    jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+}
+
+static void dentry_shrink(void)
+{
+    for (;;) {
+        jlos_vfs_dentry_t *victim = NULL;
+        jlos_vfs_dentry_t *parent = NULL;
+        uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
+        if (s_dentry_lru.count > JLOS_VFS_DCACHE_MAX) {
+            jlos_list_head_t *n = jlos_list_lru_evict(&s_dentry_lru);
+            if (n) {
+                victim = container_of(n, jlos_vfs_dentry_t, lru);
+                jlos_hash_chain_remove(&s_dentry_hash, &victim->hash_node);
+                if (victim->parent) {
+                    jlos_list_del(&victim->sibling);
+                    parent = victim->parent;
+                    victim->parent = NULL;
+                }
+            }
+        }
+        jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+        if (!victim) {
+            return;
+        }
+        jlos_vfs_inode_put(victim->inode);
+        jlos_kfree(victim);
+        if (parent) {
+            jlos_vfs_dentry_put(parent);
+        }
     }
 }
 
@@ -425,18 +466,23 @@ void jlos_vfs_dentry_put(jlos_vfs_dentry_t *dentry)
     if (!dentry) {
         return;
     }
+    bool free_now = false;
+    bool shrink_now = false;
+    uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
     if (jlos_atomic_dec_return(&dentry->ref_count) == 0) {
-        if (!dentry->unhashed) {
-            if (dentry->parent) {
-                uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
-                jlos_list_del(&dentry->sibling);
-                jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
-            }
-            jlos_hash_chain_remove(&s_dentry_hash, &dentry->hash_node);
-            
+        if (dentry->unhashed) {
+            free_now = true;
+        } else {
+            jlos_list_lru_add_tail(&s_dentry_lru, &dentry->lru);
+            shrink_now = (s_dentry_lru.count > JLOS_VFS_DCACHE_MAX);
         }
+    }
+    jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+    if (free_now) {
         jlos_vfs_inode_put(dentry->inode);
         jlos_kfree(dentry);
+    } else if (shrink_now) {
+        dentry_shrink();
     }
 }
 
@@ -464,6 +510,7 @@ jlos_vfs_dentry_t *jlos_vfs_dentry_alloc(const char *name, jlos_vfs_inode_t *ino
         return NULL;
     }
     jlos_memset(d, 0, sizeof(*d));
+    jlos_list_init(&d->lru);
     jlos_strlcpy(d->name, name, JLOS_VFS_NAME_MAX + 1);
     d->name_len = (uint32_t)jlos_strlen(d->name);
     d->inode = inode;

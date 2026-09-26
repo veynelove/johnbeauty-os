@@ -32,6 +32,8 @@
 #define JLOS_VFS_SEEK_CUR   1
 #define JLOS_VFS_SEEK_END   2
 
+#define JLOS_VFS_DCACHE_MAX    256
+
 typedef struct jlos_vfs_inode           jlos_vfs_inode_t;
 typedef struct jlos_vfs_super_block     jlos_vfs_super_block_t;
 typedef struct jlos_vfs_dentry          jlos_vfs_dentry_t;
@@ -48,6 +50,7 @@ typedef struct jlos_vfs_dentry {
     jlos_atomic_t       ref_count;
     jlos_hash_node_t    hash_node;
     bool                unhashed;
+    jlos_list_head_t    lru;
 } jlos_vfs_dentry_t;
 
 typedef struct jlos_vfs_inode_ops {

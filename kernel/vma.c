@@ -1,9 +1,14 @@
 #include <kernel/vma.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "vma"
 #include <kernel/printk.h>
+
+static jlos_memory_slab_cache_t *s_vma_cache;
+static jlos_memory_slab_cache_t *s_mm_cache;
+static jlos_memory_slab_cache_t *s_pctx_cache;
 
 static int jlos_vma_compare(const jlos_rbtree_node_t *a, const jlos_rbtree_node_t *b)
 {
@@ -33,11 +38,11 @@ static int jlos_vma_cmp_addr(const jlos_rbtree_node_t *node, const void *key)
 
 jlos_mm_t *jlos_mm_create(void)
 {
-    jlos_mm_t *mm = (jlos_mm_t *)jlos_kalloc(sizeof(jlos_mm_t));
+    jlos_mm_t *mm = (jlos_mm_t *)jlos_memory_slab_cache_alloc(s_mm_cache);
     if (!mm) {
         return NULL;
     }
-    mm->pc = (jlos_paging_context_t *)jlos_kalloc(sizeof(jlos_paging_context_t));
+    mm->pc = (jlos_paging_context_t *)jlos_memory_slab_cache_alloc(s_pctx_cache);
     if (!mm->pc) {
         jlos_kfree(mm);
         return NULL;
@@ -92,7 +97,7 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)
     jlos_rbtree_node_t *node = jlos_rbtree_first(&src->vma_tree);
     while (node) {
         jlos_vma_t *svma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
-        jlos_vma_t *dvma = (jlos_vma_t *)jlos_kalloc(sizeof(jlos_vma_t));
+        jlos_vma_t *dvma = (jlos_vma_t *)jlos_memory_slab_cache_alloc(s_vma_cache);
         if (!dvma) {
             return false;
         }
@@ -126,7 +131,7 @@ jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t f
     if (!mm || end <= start) {
         return NULL;
     }
-    jlos_vma_t *vma = (jlos_vma_t *)jlos_kalloc(sizeof(jlos_vma_t));
+    jlos_vma_t *vma = (jlos_vma_t *)jlos_memory_slab_cache_alloc(s_vma_cache);
     if (!vma) {
         return NULL;
     }
@@ -168,7 +173,7 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
             } else if (ov_e >= vma->end) {
                 vma->end = ov_s;
             } else {
-                jlos_vma_t *tail = (jlos_vma_t *)jlos_kalloc(sizeof(jlos_vma_t));
+                jlos_vma_t *tail = (jlos_vma_t *)jlos_memory_slab_cache_alloc(s_vma_cache);
                 if (!tail) {
                     node = next;
                     continue;
@@ -304,3 +309,12 @@ uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, u
     }
     return candidate;
 }
+
+static void jlos_vma_caches_init(void)
+{
+    s_vma_cache = jlos_memory_slab_cache_create("jlos_vma", sizeof(jlos_vma_t), sizeof(void *), 0, NULL, NULL);
+    s_mm_cache = jlos_memory_slab_cache_create("jlos_mm", sizeof(jlos_mm_t), sizeof(void *), 0, NULL, NULL);
+    s_pctx_cache = jlos_memory_slab_cache_create("jlos_pctx", sizeof(jlos_paging_context_t), sizeof(void *), 0, NULL, NULL);
+}
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_vma_caches_init);
