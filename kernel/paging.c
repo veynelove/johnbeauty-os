@@ -519,8 +519,12 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
     if (!user) {
-        for (;;) {
-            jlos_hal_halt();
+        if (fault_addr < KERNEL_VIRTUAL_BASE && g_current_task_ptr && g_current_task_ptr->mm) {
+            user = true;
+        } else {
+            for (;;) {
+                jlos_hal_halt();
+            }
         }
     }
 
@@ -580,6 +584,10 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     }
 
 page_fault_kill:
+    if (task->signal_handlers[JLOS_SIGSEGV] != 0 && task->signal_handlers[JLOS_SIGSEGV] != 1) {
+        task->signal_pending |= (1U << JLOS_SIGSEGV);
+        return;
+    }
     printk_err("user page fault. pid = %u, addr = 0x%x, present = %u, write = %u, ins_pointer = 0x%x\n",
         task->pid, fault_addr, present, write, context->instruction_pointer);
     jlos_process_exit(task, TASK_EXIT_PAGE_FAULT);

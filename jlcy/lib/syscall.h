@@ -125,6 +125,16 @@ static inline int32_t clone(uint32_t flags, uint32_t child_stack)
     return syscall(SYSCALL_CLONE, flags, child_stack, 0);
 }
 
+static inline int32_t signal(int32_t sig, void (*handler)(int))
+{
+    return syscall(SYSCALL_SIGNAL, (uint32_t)sig, (uint32_t)handler, 0);
+}
+
+static inline int32_t kill(uint32_t pid, int32_t sig)
+{
+    return syscall(SYSCALL_KILL, pid, (uint32_t)sig, 0);
+}
+
 void printf(const char *fmt, ...);
 
 #endif

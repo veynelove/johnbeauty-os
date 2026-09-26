@@ -27,6 +27,11 @@ void jlos_cpu_state_set_retval(jlos_cpu_state_t *s, int32_t val)
     ((jlos_x86_regs_t *)s)->eax = val;
 }
 
+int32_t jlos_cpu_state_get_retval(jlos_cpu_state_t *s)
+{
+    return ((jlos_x86_regs_t *)s)->eax;
+}
+
 void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uint32_t entry, uint32_t stack_top)
 {
     jlos_x86_regs_t *r = (jlos_x86_regs_t *)s;

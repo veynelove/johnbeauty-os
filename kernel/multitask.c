@@ -4,6 +4,7 @@
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
 #include <hal/paging.h>
+#include <hal/signal.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
@@ -164,6 +165,8 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->errno = 0;
     self->waiting_pid = self->pid;
     self->syscall_tf = NULL;
+    self->signal_pending = 0;
+    jlos_memset(self->signal_handlers, 0, sizeof(self->signal_handlers));
     self->priority = 0;
     self->default_slice = (2 << self->priority);
     self->remain_slice = self->default_slice;
@@ -604,6 +607,7 @@ static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task
     child->wake_tick = jlos_hal_timer_get_ticks();
     child->errno = 0;
     child->syscall_tf = NULL;
+    child->signal_pending = 0;
     child->exit_code = TASK_EXIT_DEFAULT;
     child->remain_slice = parent->default_slice;
     child->pid_hash_node.next = NULL;
@@ -761,6 +765,56 @@ void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid)
     }
 }
 
+int32_t jlos_signal_send(jlos_task_t *t, uint32_t sig)
+{
+    if (!t || sig == 0 || sig >= JLOS_SIGNAL_NUM) {
+        return -1;
+    }
+    if (sig == JLOS_SIGKILL) {
+        if (t->status == JLOS_TASK_ZOMBIE) {
+            return 0;
+        }
+        if (t == g_current_task_ptr) {
+            jlos_process_exit(t, sig);
+        }
+        JLOS_TASK_SET_ZOMBIE(t, sig);
+        jlos_sched_wake_waiter(g_task_manager_ptr, t->pid);
+        g_task_manager_ptr->need_resched = true;
+        return 0;
+    }
+    t->signal_pending |= (1u << sig);
+    return 0;
+}
+
+void jlos_signal_check_deliver(jlos_task_t *t, jlos_cpu_state_t *tf)
+{
+    if (!t || !tf) {
+        return;
+    }
+    uint32_t pend = t->signal_pending;
+    while (pend) {
+        uint32_t sig = __builtin_ctz(pend);
+        pend &= ~(1u << sig);
+        t->signal_pending &= ~(1u << sig);
+        if (sig == 0) {
+            continue;
+        }
+        uint32_t h = t->signal_handlers[sig];
+        if (h == 1) {
+            continue;
+        }
+        if (h != 0) {
+            jlos_arch_signal_frame_setup(tf, sig, h);
+            return;
+        }
+        if (sig == JLOS_SIGKILL || sig == JLOS_SIGSEGV || sig == JLOS_SIGTERM) {
+            jlos_process_exit(t, sig);
+        }
+    }
+}
+
+void jlos_signal_check_deliver(jlos_task_t *t, jlos_cpu_state_t *tf);
+
 void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick)
 {
     if (!self || !g_current_task_ptr) {
@@ -917,6 +971,8 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
         return -1;
     }
     task->is_user_process = true;
+    task->signal_pending = 0;
+    jlos_memset(task->signal_handlers, 0, sizeof(task->signal_handlers));
     if (!task->fds) {
         task->fds = (jlos_task_fd_t *)jlos_kalloc(sizeof(jlos_task_fd_t) * JLOS_TASK_FDS_NUM);
         if (task->fds) {

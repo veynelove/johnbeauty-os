@@ -8,7 +8,7 @@ void jlos_hal_paging_enable(uint32_t page_dir_physical_addr)
     __asm__ __volatile__(
         "movl %0, %%cr3\n\t"
         "movl %%cr0, %%eax\n\t"
-        "orl $0x80000001, %%eax\n\t"
+        "orl $0x80010001, %%eax\n\t"
         "movl %%eax, %%cr0\n\t"
         : : "r"(page_dir_physical_addr) : "eax"
     );

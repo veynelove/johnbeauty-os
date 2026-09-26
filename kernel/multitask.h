@@ -5,6 +5,7 @@
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
 #include <hal/ext_state.h>
+#include <hal/syscall_abi.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
 #include <kernel/vma.h>
@@ -110,6 +111,8 @@ typedef struct jlos_task {
     int32_t                 slot_idx;
     jlos_arch_ext_state_t   ext_state;
     jlos_cpu_state_t        *syscall_tf;
+    uint32_t                signal_pending;
+    uint32_t                signal_handlers[JLOS_SIGNAL_NUM];
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
@@ -151,6 +154,9 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 #define JLOS_TASK_SET_BLOCKED   jlos_task_set_blocked
 #define JLOS_TASK_SET_ZOMBIE    jlos_task_set_zombie
 #define JLOS_TASK_SET_WAITING   jlos_task_set_waiting
+
+int32_t jlos_signal_send(jlos_task_t *t, uint32_t sig);
+void jlos_signal_check_deliver(jlos_task_t *t, jlos_cpu_state_t *tf);
 
 void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick);
 const char *jlos_task_status_map_str(uint32_t status);

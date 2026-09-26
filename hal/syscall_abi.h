@@ -27,6 +27,9 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_UNLINK             = 19,
     JLOS_SYSCALL_FORK               = 20,
     JLOS_SYSCALL_CLONE              = 21,
+    JLOS_SYSCALL_SIGNAL             = 22,
+    JLOS_SYSCALL_KILL               = 23,
+    JLOS_SYSCALL_SIGRETURN          = 24,
 };
 
 enum jlos_syscall_misscode {
@@ -55,5 +58,15 @@ enum jlos_task_fd_std {
 #define JLOS_MMAP_PRIVATE   0x02
 #define JLOS_MMAP_FIXED     0x10
 #define JLOS_MMAP_ANON      0x20
+
+#define JLOS_SIGNAL_NUM     32
+
+#define JLOS_SIGHUP         1
+#define JLOS_SIGINT         2
+#define JLOS_SIGKILL        9
+#define JLOS_SIGUSR1        10
+#define JLOS_SIGSEGV        11
+#define JLOS_SIGUSR2        12
+#define JLOS_SIGTERM        15
 
 #endif

@@ -18,8 +18,12 @@ static uint32_t s_x86_syscall_entry(void *handler, uint32_t ctx)
     }
     if (jlos_hal_syscall_resched_check && jlos_hal_syscall_resched_check()) {
         if (jlos_hal_syscall_resched_do) {
-            return jlos_hal_syscall_resched_do(ctx);
+            ctx = jlos_hal_syscall_resched_do(ctx);
         }
+    }
+    jlos_task_t *curr = g_current_task_ptr;
+    if (curr) {
+        jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)ctx);
     }
     return ctx;
 }

@@ -8,6 +8,7 @@
 #include <hal/timer.h>
 #include <hal/kernel_syscall.h>
 #include <hal/paging.h>
+#include <hal/signal.h>
 #include <filesystem/vfs.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
@@ -639,6 +640,52 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)reaped_pid;
 }
 
+static int32_t syscall_signal(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg3;
+    if (!g_current_task_ptr) {
+        return -SYSCALL_ENOMEM;
+    }
+    uint32_t sig = arg1;
+    if (sig == 0 || sig >= JLOS_SIGNAL_NUM) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint32_t old = g_current_task_ptr->signal_handlers[sig];
+    g_current_task_ptr->signal_handlers[sig] = arg2;
+    return (int32_t)old;
+}
+
+static int32_t syscall_kill(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg3;
+    if (!g_task_manager_ptr) {
+        return -SYSCALL_ENOMEM;
+    }
+    uint32_t pid = arg1;
+    uint32_t sig = arg2;
+    if (sig == 0 || sig >= JLOS_SIGNAL_NUM) {
+        return -SYSCALL_ENINVAL;
+    }
+    jlos_task_t *target = jlos_task_manager_find_pid(g_task_manager_ptr, pid);
+    if (!target) {
+        return -SYSCALL_ENINVAL;
+    }
+    return jlos_signal_send(target, sig);
+}
+
+static int32_t syscall_sigreturn(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    jlos_task_t *me = g_current_task_ptr;
+    if (!me || !me->syscall_tf) {
+        return -SYSCALL_ENINVAL;
+    }
+    jlos_arch_signal_frame_restore(me->syscall_tf);
+    return jlos_cpu_state_get_retval(me->syscall_tf);
+}
+
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
 {
     if (!s_syscall_handler_ptr) {
@@ -697,6 +744,9 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_UNLINK, syscall_unlink);
     jlos_syscall_register(JLOS_SYSCALL_FORK, syscall_fork);
     jlos_syscall_register(JLOS_SYSCALL_CLONE, syscall_clone);
+    jlos_syscall_register(JLOS_SYSCALL_SIGNAL, syscall_signal);
+    jlos_syscall_register(JLOS_SYSCALL_KILL, syscall_kill);
+    jlos_syscall_register(JLOS_SYSCALL_SIGRETURN, syscall_sigreturn);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

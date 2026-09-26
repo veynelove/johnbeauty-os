@@ -233,6 +233,19 @@ uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)
     return self->hardware_interrupt_offset;
 }
 
+static void jlos_signal_deliver_check(uint32_t esp)
+{
+    jlos_task_t *curr = g_current_task_ptr;
+    if (!curr || !curr->is_user_process) {
+        return;
+    }
+    jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
+    if (!(cpu->cs & 3)) {
+        return;
+    }
+    jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)cpu);
+}
+
 uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uint32_t esp)
 {
     /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
@@ -240,6 +253,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
         jlos_irq_context_t context;
         jlos_irq_context_init(&context, esp);
         jlos_paging_page_fault_handler(&context);
+        jlos_signal_deliver_check(esp);
         return esp;
     }
     
@@ -310,6 +324,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
             jlos_task_manager_schedule(self->task_manager);
         }
     }
+    jlos_signal_deliver_check(esp);
     return esp;
 }
 

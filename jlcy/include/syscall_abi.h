@@ -28,6 +28,9 @@
 #define SYSCALL_UNLINK             19
 #define SYSCALL_FORK               20
 #define SYSCALL_CLONE              21
+#define SYSCALL_SIGNAL             22
+#define SYSCALL_KILL               23
+#define SYSCALL_SIGRETURN          24
 
 #ifndef __ASSEMBLY__
 #define PROT_READ       0x1
@@ -37,6 +40,14 @@
 #define MAP_PRIVATE     0x02
 #define MAP_FIXED       0x10
 #define MAP_ANONYMOUS   0x20
+
+#define SIGHUP          1
+#define SIGINT          2
+#define SIGUSR1         10
+#define SIGSEGV         11
+#define SIGUSR2         12
+#define SIGKILL         9
+#define SIGTERM         15
 
 typedef struct mmap_arg_struct {
     uint32_t addr;
