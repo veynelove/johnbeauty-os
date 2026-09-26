@@ -1,6 +1,7 @@
 #include <tools/tests/paging_te.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
+#include <arch/x86/pgtable.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 #include <kernel/printk.h>
@@ -10,7 +11,7 @@
 static uint32_t read_pte(jlos_paging_context_t *ctx, uint32_t va)
 {
     uint32_t pd_idx = jlos_paging_get_page_dir_index(va);
-    jlos_page_dir_entry_t pde = ctx->page_dir->entries[pd_idx];
+    jlos_page_dir_entry_t pde = ((jlos_page_dir_t *)ctx->root)->entries[pd_idx];
     if (!(pde & JLOS_PDE_PRESENT))
         return 0;
     if (pde & JLOS_PDE_4MB)
@@ -34,7 +35,7 @@ static int test_map_unmap(void)
     uint32_t phys = VIRT_TO_PHYS(frame);
     uint32_t va = TEST_VBASE;
 
-    if (!jlos_paging_map(&ctx, va, phys, JLOS_PTE_USER_RW)) {
+    if (!jlos_paging_map(&ctx, va, phys, JLOS_PG_USER_RW)) {
         printk_err("FAIL: map failed\n");
         fail++;
     }
@@ -75,7 +76,7 @@ static int test_map_range(void)
         printk_err("FAIL: seed malloc NULL\n");
         return 1;
     }
-    jlos_paging_map(&ctx, TEST_VBASE, VIRT_TO_PHYS(seed), JLOS_PTE_USER_RW);
+    jlos_paging_map(&ctx, TEST_VBASE, VIRT_TO_PHYS(seed), JLOS_PG_USER_RW);
 
     void *bulk = jlos_page_frame_alloc_n(N);
     if (!bulk) {
@@ -87,7 +88,7 @@ static int test_map_range(void)
     uint32_t phys = VIRT_TO_PHYS(bulk);
     uint32_t va = TEST_VBASE + JLOS_PAGE_FRAME_SIZE;
 
-    if (!jlos_paging_map_range(&ctx, va, phys, N * JLOS_PAGE_FRAME_SIZE, JLOS_PTE_USER_RW)) {
+    if (!jlos_paging_map_range(&ctx, va, phys, N * JLOS_PAGE_FRAME_SIZE, JLOS_PG_USER_RW)) {
         printk_err("FAIL: map_range failed\n");
         fail++;
     }
@@ -123,14 +124,14 @@ static int test_change_flags(void)
     uint32_t phys = VIRT_TO_PHYS(frame);
     uint32_t va = TEST_VBASE + 2 * JLOS_PAGE_FRAME_SIZE;
 
-    jlos_paging_map(&ctx, va, phys, JLOS_PTE_USER_RW);
+    jlos_paging_map(&ctx, va, phys, JLOS_PG_USER_RW);
     uint32_t pte = read_pte(&ctx, va);
     if (!(pte & JLOS_PTE_PRESENT) || !(pte & JLOS_PTE_USER) || !(pte & JLOS_PTE_WRITABLE)) {
         printk_err("FAIL: initial PTE flags wrong (0x%x)\n", pte);
         fail++;
     }
 
-    jlos_paging_change_flags(&ctx, va, JLOS_PTE_USER_RO);
+    jlos_paging_change_flags(&ctx, va, JLOS_PG_USER_RO);
     pte = read_pte(&ctx, va);
     if (!(pte & JLOS_PTE_PRESENT) || !(pte & JLOS_PTE_USER)) {
         printk_err("FAIL: RO PTE lost PRESENT/USER (0x%x)\n", pte);
@@ -161,12 +162,12 @@ static int test_clone(void)
         return 1;
     }
     uint32_t va = TEST_VBASE + 3 * JLOS_PAGE_FRAME_SIZE;
-    jlos_paging_map(&src, va, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW);
+    jlos_paging_map(&src, va, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW);
 
     jlos_paging_context_clone(&dst, &src);
 
-    if (!dst.page_dir) {
-        printk_err("FAIL: clone page_dir NULL\n");
+    if (!dst.root) {
+        printk_err("FAIL: clone root NULL\n");
         fail++;
     }
     if (jlos_paging_get_physical_addr(&dst, va) != 0) {
@@ -194,7 +195,7 @@ static int test_user_accessible(void)
         printk_err("FAIL: frame malloc NULL\n");
         return 1;
     }
-    jlos_paging_map(&ctx, TEST_VBASE, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW);
+    jlos_paging_map(&ctx, TEST_VBASE, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW);
 
     if (!jlos_paging_is_user_accessible(&ctx, TEST_VBASE, 4)) {
         printk_err("FAIL: user addr range rejected\n");

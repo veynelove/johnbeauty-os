@@ -18,7 +18,6 @@
 #include <kernel/printk.h>
 
 extern jlos_task_t              *g_current_task_ptr;
-extern jlos_paging_context_t    s_kernel_paging_context;
 
 static jlos_task_manager_t      s_task_manager;
 jlos_task_manager_t             *g_task_manager_ptr = &s_task_manager;
@@ -859,7 +858,7 @@ static uint32_t jlos_exec_setup_user_stack(jlos_task_t *task, int argc, char *co
         if (!frame) {
             return 0;
         }
-        if (!jlos_paging_map(task->mm->pc, addr, VIRT_TO_PHYS(frame), JLOS_PTE_USER_RW)) {
+        if (!jlos_paging_map(task->mm->pc, addr, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW)) {
             jlos_page_frame_free(frame);
             return 0;
         }

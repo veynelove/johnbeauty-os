@@ -121,7 +121,7 @@ void jlos_memory_manager_init_main(void)
         }
         uint32_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
         uint32_t phys = (uint32_t)VIRT_TO_PHYS(pf);
-        if (!jlos_paging_map(jlos_hal_paging_get_active_context(), va, phys, JLOS_PTE_KERNEL_RW)) {
+        if (!jlos_paging_map(jlos_hal_paging_get_active_context(), va, phys, JLOS_PG_KERNEL_RW)) {
             printk_err("out of memory: paging map failed at page %u\n", i);
             jlos_page_frame_free(pf);
             for (;;) {
@@ -177,7 +177,7 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     }
     uint32_t phys = (uint32_t)VIRT_TO_PHYS(vframe);
     size_t map_size = pages_needed * JLOS_PAGE_SIZE;
-    if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uint32_t)new_heap_start, phys, map_size, JLOS_PTE_KERNEL_RW)) {
+    if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uint32_t)new_heap_start, phys, map_size, JLOS_PG_KERNEL_RW)) {
         jlos_page_frame_free_n(vframe, (uint32_t)pages_needed);
         return NULL;
     }

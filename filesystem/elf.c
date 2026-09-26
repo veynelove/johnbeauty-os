@@ -30,9 +30,9 @@ static uint32_t elf_flags_to_vma_flags(uint32_t flags)
 static uint32_t elf_flags_to_pte_flags(uint32_t flags)
 {
     if (flags & JLOS_ELF_PF_W) {
-        return JLOS_PTE_USER_RW;
+        return JLOS_PG_USER_RW;
     }
-    return JLOS_PTE_USER_RO;
+    return JLOS_PG_USER_RO;
 }
 
 static bool elf_load_segment(jlos_mm_t *mm, jlos_vfs_file_t *file, const jlos_elf32_phdr_t *phdr)

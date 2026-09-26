@@ -247,7 +247,7 @@ bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr)
         return false;
     }
     uint32_t page = JLOS_PAGE_ALIGN_DOWN(fault_addr);
-    uint32_t flags = (vma->flags & JLOS_VMA_WRITE) ? JLOS_PTE_USER_RW : JLOS_PTE_USER_RO;
+    uint32_t flags = (vma->flags & JLOS_VMA_WRITE) ? JLOS_PG_USER_RW : JLOS_PG_USER_RO;
     void *frame = jlos_page_frame_malloc();
     if (!frame) {
         printk_err("oom addr=0x%x\n", fault_addr);
