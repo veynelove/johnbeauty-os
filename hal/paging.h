@@ -51,7 +51,6 @@ void jlos_hal_paging_flush_all_tlb(void);
 uint32_t jlos_hal_paging_get_fault_addr(void);
 bool jlos_hal_paging_supports_4mb_pages(void);
 
-struct jlos_paging_context;
 struct jlos_paging_context *jlos_hal_paging_get_active_context(void);
 void jlos_hal_paging_set_active_context(struct jlos_paging_context *ctx);
 
@@ -59,12 +58,16 @@ void jlos_hal_paging_enable_global_pages(void);
 uint32_t jlos_hal_paging_asid_alloc(void);
 void jlos_hal_paging_asid_free(uint32_t asid);
 
+void jlos_hal_paging_tlb_shootdown(uint32_t cpu_mask, uint32_t va);
+void jlos_hal_paging_tlb_shootdown_all(uint32_t va);
+
 bool jlos_arch_pte_present(jlos_paging_context_t *ctx, uint32_t va);
 uint32_t jlos_arch_pte_phys(jlos_paging_context_t *ctx, uint32_t va);
 void jlos_arch_pte_set(jlos_paging_context_t *ctx, uint32_t va, uint32_t pa, uint32_t prot);
 void jlos_arch_pte_set_rw(jlos_paging_context_t *ctx, uint32_t va);
 void jlos_arch_pte_make_ro(jlos_paging_context_t *ctx, uint32_t va);
 bool jlos_arch_pte_replace(jlos_paging_context_t *ctx, uint32_t va, uint32_t pa, uint32_t prot);
+uint32_t jlos_arch_pte_get_prot(jlos_paging_context_t *ctx, uint32_t va);
 
 bool jlos_arch_map_entry(jlos_paging_context_t *ctx, uint32_t va, uint32_t pa, uint32_t prot);
 bool jlos_arch_map_range_entry(jlos_paging_context_t *ctx, uint32_t va_start, uint32_t pa_start,
@@ -78,6 +81,7 @@ void jlos_arch_paging_context_tables_destroy(jlos_paging_context_t *ctx);
 void jlos_arch_paging_context_tables_clone(jlos_paging_context_t *dst, jlos_paging_context_t *src);
 void jlos_arch_paging_initialize_kernel(jlos_paging_table_alloc_fn alloc_fn);
 void jlos_arch_paging_print_states(jlos_paging_context_t *ctx);
-void jlos_arch_paging_free_user_pages(jlos_paging_context_t *ctx);
+
+void jlos_arch_paging_free_boot_tables(void);
 
 #endif

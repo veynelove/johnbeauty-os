@@ -73,7 +73,7 @@ void jlos_mm_destroy(jlos_mm_t *mm)
         node = jlos_rbtree_first(&mm->vma_tree);
     }
     if (mm->pc) {
-        jlos_paging_context_destroy(mm->pc);
+        jlos_arch_paging_context_tables_destroy(mm->pc);
         jlos_kfree(mm->pc);
     }
     jlos_kfree(mm);

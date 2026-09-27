@@ -6,15 +6,18 @@
 #include <hal/atomic.h>
 #include <dsa/list.h>
 
-#define JLOS_PAGE_FRAME_SIZE                JLOS_PAGE_SIZE
-#define JLOS_PAGE_FRAME_REFCOUNT_MAX        255
+#define JLOS_PAGE_FRAME_SIZE            JLOS_PAGE_SIZE
+#define JLOS_PAGE_FRAME_REFCOUNT_MAX    255
 
-#define JLOS_PFA_MAX_ORDER                  10
-#define JLOS_PFA_BUDDY_ORDER_INVALID        0xFF
+#define JLOS_PFA_MAX_ORDER              10
+#define JLOS_PFA_BUDDY_ORDER_INVALID    0xFF
 
-#define JLOS_PFA_FLAG_OCCUPIED              0x01
+#define JLOS_PFA_FLAG_OCCUPIED          0x01
 
-#define JLOS_PFA_FREE_N_MAX                 1024
+#define JLOS_PFA_FREE_N_MAX             1024
+
+#define JLOS_PFA_PERCPU_HIGN            16
+#define JLOS_PFA_PERCPU_BATCH           8
 
 typedef struct jlos_page_t {
 union {
@@ -27,6 +30,11 @@ union {
     uint8_t       pt_present_count;
     jlos_atomic_t refcount;
 } jlos_page_t;
+
+typedef struct {
+    jlos_list_head_t free_list;
+    uint32_t count;
+} jlos_pfa_percpu_t;
 
 void jlos_pfa_boot_alloc_init(uint32_t start_phys);
 void *jlos_pfa_boot_alloc(uint32_t size);

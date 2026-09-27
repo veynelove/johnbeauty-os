@@ -1,5 +1,5 @@
-#ifndef _JLOS_ARCH_X86_PGTABLE_H
-#define _JLOS_ARCH_X86_PGTABLE_H
+#ifndef _JLOS_ARCH_X86_PAGING_H
+#define _JLOS_ARCH_X86_PAGING_H
 
 #include <common/types.h>
 #include <hal/paging.h>

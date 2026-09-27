@@ -26,6 +26,9 @@ static volatile uint32_t g_file_test_pid = 0;
 static volatile int g_signal_test_exited = 0;
 static volatile uint32_t g_signal_test_pid = 0;
 
+static volatile int g_mmap_test_exited = 0;
+static volatile uint32_t g_mmap_test_pid = 0;
+
 static void alt_task_exit(void)
 {
     jlos_task_t *me = jlos_task_manager_curr_task_on_tick(s_mgr);
@@ -86,6 +89,16 @@ static void ring3_signal_test_entry(void)
     char *argv[] = {"/signal_test.elf", NULL};
     char *envp[] = {NULL};
     int ret = jlos_process_exec_elf(g_current_task_ptr, "/signal_test.elf", 1, argv, envp);
+    if (ret < 0) {
+        jlos_process_exit(g_current_task_ptr, 0);
+    }
+}
+
+static void ring3_mmap_test_entry(void)
+{
+    char *argv[] = {"/mmap_test.elf", NULL};
+    char *envp[] = {NULL};
+    int ret = jlos_process_exec_elf(g_current_task_ptr, "/mmap_test.elf", 1, argv, envp);
     if (ret < 0) {
         jlos_process_exit(g_current_task_ptr, 0);
     }
@@ -163,12 +176,19 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
             g_signal_test_pid = t->pid;
         }
     }
+    printk_info("[test 7] ring3 mmap test\n");
+    {
+        jlos_task_t *t = spawn_kernel_task(mmu, ring3_mmap_test_entry, "t7_mmap", &spawn_fails);
+        if (t) {
+            g_mmap_test_pid = t->pid;
+        }
+    }
 
     if (spawn_fails) {
         printk_err("FAIL: spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
         goto teardown;
     }
-    printk_info("OK: 6 seed tasks spawned, run schedule budget...\n");
+    printk_info("OK: 7 seed tasks spawned, run schedule budget...\n");
 
     uint32_t t0 = jlos_hal_timer_get_ticks();
     const uint32_t TIMEOUT_TICKS = 5000;
@@ -199,8 +219,15 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
                 g_signal_test_exited = 1;
             }
         }
+        if (g_mmap_test_pid && !g_mmap_test_exited) {
+            jlos_task_t *mt = jlos_task_manager_find_pid(s_mgr, g_mmap_test_pid);
+            if (mt && mt->status == JLOS_TASK_ZOMBIE && mt->exit_code == 42) {
+                g_mmap_test_exited = 1;
+            }
+        }
         int all = (g_alt_a >= 500 && g_alt_b >= 500) && (g_fork_test_exited >= 1)
-            && (g_ring3_exited >= 1) && (g_file_test_exited >= 1) && (g_signal_test_exited >= 1);
+            && (g_ring3_exited >= 1) && (g_file_test_exited >= 1) && (g_signal_test_exited >= 1)
+            && (g_mmap_test_exited >= 1);
         if (all)
             break;
         if (now - t0 >= TIMEOUT_TICKS)
@@ -247,6 +274,14 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
 
     printk_info("[6] signal: exited=%d -> ", g_signal_test_exited);
     if (g_signal_test_exited >= 1)
+        printk_info("PASS\n");
+    else {
+        printk_err("FAIL\n");
+        fails++;
+    }
+
+    printk_info("[7] mmap: exited=%d -> ", g_mmap_test_exited);
+    if (g_mmap_test_exited >= 1)
         printk_info("PASS\n");
     else {
         printk_err("FAIL\n");

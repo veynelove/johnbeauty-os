@@ -23,6 +23,7 @@
 /* .boot 段: VMA == LMA == 物理地址, GRUB 未开分页时直接执行 */
 .section .boot, "awx"
 .align 4096
+.global boot_page_dir
 boot_page_dir:
     .fill 1024, 4, 0
 

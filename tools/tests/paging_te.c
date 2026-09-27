@@ -1,24 +1,12 @@
 #include <tools/tests/paging_te.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <arch/x86/pgtable.h>
+#include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 #include <kernel/printk.h>
 
 #define TEST_VBASE 0x10000000
-
-static uint32_t read_pte(jlos_paging_context_t *ctx, uint32_t va)
-{
-    uint32_t pd_idx = jlos_paging_get_page_dir_index(va);
-    jlos_page_dir_entry_t pde = ((jlos_page_dir_t *)ctx->root)->entries[pd_idx];
-    if (!(pde & JLOS_PDE_PRESENT))
-        return 0;
-    if (pde & JLOS_PDE_4MB)
-        return pde;
-    jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT(pde & JLOS_PAGE_ADDR_MASK);
-    return pt->entries[jlos_paging_get_page_table_index(va)];
-}
 
 static int test_map_unmap(void)
 {
@@ -43,7 +31,7 @@ static int test_map_unmap(void)
         printk_err("FAIL: get_phys != mapped phys\n");
         fail++;
     }
-    if (!(read_pte(&ctx, va) & JLOS_PTE_PRESENT)) {
+    if (!jlos_arch_pte_present(&ctx, va)) {
         printk_err("FAIL: PTE not present\n");
         fail++;
     }
@@ -57,7 +45,7 @@ static int test_map_unmap(void)
         fail++;
     }
 
-    jlos_paging_context_destroy(&ctx);
+    jlos_arch_paging_context_tables_destroy(&ctx);
     if (!fail)
         printk_info("OK: map -> get -> unmap -> get(0)\n");
     return fail;
@@ -82,7 +70,7 @@ static int test_map_range(void)
     if (!bulk) {
         printk_err("FAIL: alloc_n NULL\n");
         jlos_paging_unmap(&ctx, TEST_VBASE);
-        jlos_paging_context_destroy(&ctx);
+        jlos_arch_paging_context_tables_destroy(&ctx);
         return 1;
     }
     uint32_t phys = VIRT_TO_PHYS(bulk);
@@ -103,7 +91,7 @@ static int test_map_range(void)
     for (uint32_t i = 0; i < N; i++)
         jlos_paging_unmap(&ctx, va + i * JLOS_PAGE_FRAME_SIZE);
 
-    jlos_paging_context_destroy(&ctx);
+    jlos_arch_paging_context_tables_destroy(&ctx);
     if (!fail)
         printk_info("OK: %u pages mapped/unmapped\n", N);
     return fail;
@@ -125,25 +113,25 @@ static int test_change_flags(void)
     uint32_t va = TEST_VBASE + 2 * JLOS_PAGE_FRAME_SIZE;
 
     jlos_paging_map(&ctx, va, phys, JLOS_PG_USER_RW);
-    uint32_t pte = read_pte(&ctx, va);
-    if (!(pte & JLOS_PTE_PRESENT) || !(pte & JLOS_PTE_USER) || !(pte & JLOS_PTE_WRITABLE)) {
-        printk_err("FAIL: initial PTE flags wrong (0x%x)\n", pte);
+    uint32_t prot = jlos_arch_pte_get_prot(&ctx, va);
+    if (!(prot & JLOS_PG_READ) || !(prot & JLOS_PG_USER) || !(prot & JLOS_PG_WRITE)) {
+        printk_err("FAIL: initial PTE flags wrong (0x%x)\n", prot);
         fail++;
     }
 
     jlos_paging_change_flags(&ctx, va, JLOS_PG_USER_RO);
-    pte = read_pte(&ctx, va);
-    if (!(pte & JLOS_PTE_PRESENT) || !(pte & JLOS_PTE_USER)) {
-        printk_err("FAIL: RO PTE lost PRESENT/USER (0x%x)\n", pte);
+    prot = jlos_arch_pte_get_prot(&ctx, va);
+    if (!(prot & JLOS_PG_READ) || !(prot & JLOS_PG_USER)) {
+        printk_err("FAIL: RO PTE lost READ/USER (0x%x)\n", prot);
         fail++;
     }
-    if (pte & JLOS_PTE_WRITABLE) {
+    if (prot & JLOS_PG_WRITE) {
         printk_err("FAIL: RO PTE still writable\n");
         fail++;
     }
 
     jlos_paging_unmap(&ctx, va);
-    jlos_paging_context_destroy(&ctx);
+    jlos_arch_paging_context_tables_destroy(&ctx);
     if (!fail)
         printk_info("OK: RW -> RO flag transition\n");
     return fail;
@@ -164,7 +152,7 @@ static int test_clone(void)
     uint32_t va = TEST_VBASE + 3 * JLOS_PAGE_FRAME_SIZE;
     jlos_paging_map(&src, va, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW);
 
-    jlos_paging_context_clone(&dst, &src);
+    jlos_arch_paging_context_tables_clone(&dst, &src);
 
     if (!dst.root) {
         printk_err("FAIL: clone root NULL\n");
@@ -175,9 +163,9 @@ static int test_clone(void)
         fail++;
     }
 
-    jlos_paging_context_destroy(&dst);
+    jlos_arch_paging_context_tables_destroy(&dst);
     jlos_paging_unmap(&src, va);
-    jlos_paging_context_destroy(&src);
+    jlos_arch_paging_context_tables_destroy(&src);
     if (!fail)
         printk_info("OK: user mapping not cloned\n");
     return fail;
@@ -211,7 +199,7 @@ static int test_user_accessible(void)
     }
 
     jlos_paging_unmap(&ctx, TEST_VBASE);
-    jlos_paging_context_destroy(&ctx);
+    jlos_arch_paging_context_tables_destroy(&ctx);
     if (!fail)
         printk_info("OK: user<->kernel boundary enforced\n");
     return fail;

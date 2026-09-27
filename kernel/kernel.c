@@ -5,9 +5,9 @@
 #include <hal/hal.h>
 #include <hal/context.h>
 #include <hal/hal_arch.h>
+#include <hal/paging.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
-#include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/device.h>
 #include <kernel/initcall.h>
@@ -36,7 +36,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
 
     jlos_device_init(multiboot_structure);
     jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
-    jlos_paging_initialize_kernel_paging(jlos_pfa_boot_alloc_page);
+    jlos_arch_paging_initialize_kernel(jlos_pfa_boot_alloc_page);
     jlos_page_frame_allocator_init();
     printk_info("paging initialized\n");
 

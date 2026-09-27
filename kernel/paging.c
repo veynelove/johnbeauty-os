@@ -18,16 +18,6 @@ void jlos_paging_context_init(jlos_paging_context_t *self)
     jlos_spinlock_init(&self->lock);
 }
 
-void jlos_paging_context_destroy(jlos_paging_context_t *self)
-{
-    jlos_arch_paging_context_tables_destroy(self);
-}
-
-void jlos_paging_context_clone(jlos_paging_context_t *dst, jlos_paging_context_t *src)
-{
-    jlos_arch_paging_context_tables_clone(dst, src);
-}
-
 bool jlos_paging_map(jlos_paging_context_t *self, uint32_t virtual_addr, uint32_t physical_addr, uint32_t prot)
 {
     if (!self) {
@@ -168,14 +158,8 @@ void jlos_paging_switch(jlos_paging_context_t *self)
     jlos_hal_paging_switch(VIRT_TO_PHYS(self->root));
 }
 
-void jlos_paging_initialize_kernel_paging(jlos_paging_table_alloc_fn alloc_fn)
-{
-    jlos_arch_paging_initialize_kernel(alloc_fn);
-}
-
 bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uint32_t virtual_addr, uint32_t len)
 {
-    /* 经典 access_ok：用户地址必须在 0~3GB */
     if (!ctx || !ctx->root) {
         return false;
     }

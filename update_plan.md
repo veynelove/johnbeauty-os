@@ -132,6 +132,8 @@ graph TD
 | PAG-9  | context\_clone malloc 失败处理                                  | ✅    | paging.c               |
 | PAG-11 | fork COW 只遍历 present PDE                                     | ✅    | paging.c + multitask.c |
 | PAG-D7 | **flush\_all\_tlb asm 缺 early-clobber（严重 Bug）**：输出约束 `"=r"(cr4)` 允许 GCC 将输入与 `%0` 分配同一寄存器，而 asm 先写 `%0` 再读输入 → 输入被 CR4 值摧毁 → `andl` 退化为 `and %0,%0` 空操作 → PGE 从未翻转，**整个 flush 变空操作**。后果：COW 置 RO 后父进程 TLB 内陈旧 RW 表项存活，写直落共享帧，fork 子进程栈隔离失效（10 子压测间歇 `pressure N FAIL r=0 code=0`，printk 拖慢时序即掩盖）。修复：`"=r"` → `"=&r"` | ✅    | arch/x86/paging.c     |
+| PAG-D8 | paging 架构分层：页表原语下沉 arch/x86（pgtable.h + paging_table.c），通用算法留 kernel/paging.c，权限位抽象 `JLOS_PG_*`，ctx 用不透明 `root` 指针（multi-arch 就位） | ✅ | hal/paging.h + arch/x86/paging_table.c |
+| PAG-D9 | unmap 用 `jlos_page_frame_refcount_dec` 替代 `free`，对齐 COW refcount 语义（防 fork 后 munmap 共享页误释放） | ✅ | arch/x86/paging_table.c |
 
 ### 已知遗留（低优先级）
 
@@ -222,7 +224,7 @@ graph TD
 | ~~PFA-6~~ | ~~`set_owner_type` 用独立 `s_owner_lock`~~ | **已实现**：`s_owner_lock` 已保护 owner/type 读写，与 buddy 锁无交叉 | page_frame_allocator.c | — | ✅ 已完成 |
 | ~~MM-1a~~ | ~~拆 `s_mm_lock` 为 `s_slab_lock` + `s_heap_lock`~~ | **已实现**：slab 路径用 `s_slab_lock`，heap 路径用 `s_heap_lock`，数据结构无交叉，消除全局串行化 | memory_manager.c | — | ✅ 已完成 |
 | ~~MM-2~~ | ~~`kvfree` DIRECT_MAP 区域非 SLAB_OBJ/KV_CONTIG type 加 assertion 日志~~ | **已实现**：非预期 type `printk_err("bad type ...")` + halt 兜底，等价 Linux BUG_ON（memory_manager.c:362-366） | memory_manager.c | — | ✅ 已完成 |
-| PAG-7 | `jlos_active_paging_context` HAL 化为 per-CPU 访问器 | 裸全局指针，SMP 下多核 switch 乱序；HAL 抽象方便 ARM/RISC-V | paging.c / hal/paging.h | 中 | 待做 |
+| ~~PAG-7~~ | ~~`jlos_active_paging_context` HAL 化为 per-CPU 访问器~~ | **已实现**：`s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 数组 + get/set 访问器用 `jlos_hal_get_cpu_id()` 索引（arch/x86/paging.c:17/587/594） | arch/x86/paging.c + hal/paging.h | — | ✅ 已完成 |
 
 ### 5.2 性能热点（高频路径 O(1) / 跳空扫 / 批量化）
 
@@ -230,7 +232,7 @@ graph TD
 | --- | --- | --- | --- | --- | --- |
 | ~~PAG-1~~ | ~~`context_destroy` 4MB PDE 批量释放~~ | **已实现**：destroy 对 4MB PDE 已 `free_order(MAX_ORDER)` 单次释放；unmap 4MB 用户区分支 `free_bulk(1024)` 无创建者，属死路径 | paging.c | — | ✅ 已完成 |
 | ~~PAG-2~~ | ~~`pt_used_count[1024]` 替 PT 空扫~~ | **已实现**：判空用帧级 `pt_present_count` O(1)，map/unmap/clone/destroy 全程维护；再加一层计数属负优化 | paging.h / paging.c | — | ✅ 已完成 |
-| PAG-4 | 内核 4KB PDE 共享（4MB PDE 已浅拷贝共享；低直接区 + heap 的 4KB PT 每进程仍深拷贝） | Linux 内核半页共享方案：boot 期低直接 4KB 段全局一次置 USER（删 `create_user_mm` 逐进程 `change_flags_range`）→ clone 内核半区浅拷贝 / destroy 跳过内核半区 → 内核 vmalloc/heap 边界 PT boot 期预建 | paging.c + multitask.c | 高 | 待做（可选） |
+| PAG-4 | 内核 4KB PDE 共享（可选细粒度优化） | **核心已实现**：clone 对内核半区 PDE（含 4KB PT 与 4MB PDE）全部浅拷贝共享、destroy 跳过内核半区。剩可选优化：boot 期低直接 4KB 段一次性置 USER、内核 vmalloc/heap 边界 PT boot 期预建 | paging.c + multitask.c | 高 | ✅ 核心已实现（细粒度可选未做） |
 | ~~PAG-6~~ | ~~`change_flags_range` 批量 TLB 刷新~~ | **已实现**：< 阈值逐页 flush、≥ 阈值循环外统一 `flush_all_tlb`，非 active context 不刷 | paging.c | — | ✅ 已完成 |
 | ~~MT-3~~ | ~~fork COW PT 内层连续 non-present 跳过~~ | **已实现短路**：fork 已 skip 非 present PDE + `pt_present_count==0` 整 PT 跳过；残余仅省分支无内存读收益，正解随 F11 mmap/VMA 按映射区遍历 | multitask.c (fork) | — | ✅ 已完成 |
 | ~~MT-1~~ | ~~wait queue + timer 唤醒经典化~~ | **已实现**：sleep 走 `sleep_queue` 有序链表（`wake_tick` 排序插入，`task.wait_node` 即 timer node，multitask.c:739-755）；schedule 到期从队首批量唤醒（multitask.c:491-503），O(到期数) 非全表扫描；wait_pid 走 WAITING + pid hash 直连唤醒 | multitask.c | — | ✅ 已完成 |
@@ -250,7 +252,7 @@ graph TD
 | ID | 任务 | 说明 | 涉及文件 | 复杂度 |
 | --- | --- | --- | --- | --- |
 | ~~PAG-5~~ | ~~HAL 层加 `jlos_hal_paging_global_pages(enable)`（x86 CR4.PGE）+ `jlos_hal_paging_asid_alloc/free`（ARM/RISC-V 留占位，x86 返回 0）；内核页 PTE 统一加 `JLOS_PTE_GLOBAL` 标志~~ | **已实现**：`jlos_hal_paging_enable_global_pages()`（CR4.PGE 置位）+ `asid_alloc/free` 占位（arch/x86/paging.c:90-106）；`JLOS_PDE/PTE_GLOBAL` 已用于内核直接映射（paging.c:481-494）；CR3 切换保留 GLOBAL 位（paging.c:258-298） | hal/paging.h + arch/x86/paging.c | ✅ 已完成 |
-| PFA-5 | 对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)` | 目前 malloc 单帧 + reserve_bulk 多帧两条独立路径，调用方用错会泄漏；统一出口便于批量优化 | page_frame_allocator.h / .c | 低 |
+| ~~PFA-5~~ | ~~对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)`~~ | **已实现**：`jlos_page_frame_alloc_n/free_n` 统一多帧 API（page_frame_allocator.c:551/370），malloc/alloc_order/free_order 复用，mm/paging/测试全量切换 | page_frame_allocator.h / .c | ✅ 已完成 |
 | ~~MM-5~~ | ~~`memset`/`memcpy` SSE2 32B 宽写~~ | **已实现**：common/types.c 标 weak，arch/x86/lib/memset.s + memcpy.s strong 覆盖，SSE2 安全模式（保存 CR0→clts→保存 xmm0→操作→恢复） | common/types.c + arch/x86/lib/memset.s + memcpy.s | ✅ 已完成 |
 
 ***
@@ -470,16 +472,16 @@ read32 是"发起硬件访问"的原语（地址编码 + 端口操作整体 arch
 
 ## 升级路线（v3.1 批次规划）
 
-P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均已大部分收尾（仅剩 PAG-7 / PFA-5 / MM-3 / PAG-4）。剩余工作按依赖与收益分 5 个批次：
+P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均已收尾（PAG-7 / PFA-5 已核销，MM-3 跳过，仅剩 PAG-4 可选细粒度优化）。剩余工作按依赖与收益分 5 个批次：
 
 | 批次 | 内容 | 理由 | 依赖 |
 | ---- | ---- | ---- | ---- |
 | ~~**1（P1）**~~ | ~~F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持~~ | **已完成**：open/close/read/write/lseek/unlink syscall + fat32 write/create/unlink + file\_test（write/read match、lseek、unlink+reopen-fail）ALL PASSED | Phase 8 ✅ |
 | ~~**2（P1）**~~ | ~~5.1/5.4 接口收尾：PAG-7 + PFA-5~~ | **已完成**：PAG-7 `s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 化（arch/x86/paging.c）；PFA-5 `jlos_page_frame_alloc_n/free_n` 统一多帧 API，mm/paging/测试全量切换 | 无 |
-| **3（P1/P2）** | F7 signal/kill + F11 mmap/munmap（匿名映射） | ✅ F8 fork/clone（COW + ret\_from\_fork）已完成并压测通过；剩 F7 信号（经典进程模型最后缺件）与 F11（VMA/demand paging 已就绪，syscall 14/15 stub 已留号） | 批次 2 ✅ |
+| ~~**3（P1/P2）**~~ | ~~F7 signal/kill + F11 mmap/munmap（匿名映射）~~ | **已完成**：F7 signal/kill（signal\_test ALL PASSED）+ F11 mmap/munmap（mmap\_test ALL PASSED）+ F8 fork/clone（COW + ret\_from\_fork）压测通过 | 批次 2 ✅ |
 | **3.5（穿插加固）** | 调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治） | 三个已知竞态/时序缺陷一次收口；均小时级 | 无 |
-| **4（P2）** | 经典化收尾：MM-3 per-type size class cache + MT-4 残留（fork 入口 JLOS_TASK_MAX_NUM 硬上限，multitask.c:565）+ FS-3 dentry cache LRU 淘汰 + PAG-4 内核 4KB PDE 共享（可选） | 消除剩余结构性短板：task 表扩容已做但 fork 路径仍限 256；MM-3 精确尺寸 cache 降低 slab 内部碎片 | 批次 3 |
-| **5（P3）** | SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理 | 多核落地前置；A2（0~1MB 恒等映射残留）/ A3（boot_page_dir 未释放）为 GRUB 退出后的历史残留 | 批次 4 |
+| ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
+| ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
 | 穿插 | F9 DHCP + F10 DNS（网络栈已通，经典收尾）；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~3 console 遗留 | 无依赖、量级小，可穿插任意批次间隙 | 无 |
 
 完成后进入 Phase 4 SMP 实现 + 多架构（ARM/RISC-V）阶段。
@@ -495,12 +497,12 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | **P0** | 6     | Console/Display 子系统 + Initcall 机制                              | ✅ 已完成    |
 | **P0** | 7     | HAL 层架构合规重构（分层模式 + 职责归属 + 下沉 arch + 去 drivers） | ✅ 已完成    |
 | **P0** | 8     | 文件系统 + ELF 加载器 + execve + 用户态程序 + SSE2 优化             | ✅ 已完成    |
-| **P1** | 5.1   | 锁粒度细化 + 正确性收紧                                             | ✅ MM-2 已核销，仅剩 PAG-7（批次 2） |
-| **P1** | 5.2   | 性能热点                                                            | ✅ MT-1/MT-2 已核销，仅剩 PAG-4 可选（批次 4） |
+| **P1** | 5.1   | 锁粒度细化 + 正确性收紧                                             | ✅ 全部核销（PAG-7 → 批次 2 已完成） |
+| **P1** | 5.2   | 性能热点                                                            | ✅ MT-1/MT-2 已核销，PAG-4 核心已实现（细粒度可选） |
 | **P1** | F5/F7 | open/close/read/write syscall + signal/kill 信号机制                | F5/F7 → 批次 1/3 |
 | **P2** | 5.3   | 经典化 / 扩展性                                                     | ✅ MT-4 已核销（残留 fork 上限 → 批次 4），仅剩 MM-3 |
 | **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | → 批次 3 |
-| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | PAG-5 已核销，仅剩 PFA-5（批次 2）；4.1~4.6 → 批次 5 |
+| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成 |
 | **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | → 穿插 |
 
 ***
@@ -532,8 +534,8 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | #   | 问题                       | 说明                                                                               |
 | --- | -------------------------- | ---------------------------------------------------------------------------------- |
 | ~~A1~~ | ~~用户态代码与内核混编~~ | **已解决**：jlcy/ 独立子项目 + ELF 加载器 + execve，用户态 ELF 独立链接 0x08048000 |
-| A2  | 0\~1MB 恒等映射残留        | GRUB 退出后不再需要，经典做法移除                                                  |
-| A3  | boot\_page\_dir 内存未释放 | 切到内核页表后 4KB 无法回收                                                        |
+| ~~A2~~  | ~~0\~1MB 恒等映射残留~~        | **核验无残留**：内核页表不含 0~1MB 恒等映射，切换 CR3 后 boot 恒等映射即失效                                                  |
+| ~~A3~~  | ~~boot\_page\_dir 内存未释放~~ | **已解决**：PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，`jlos_page_frame_refcount_dec` 将 boot_page_dir 页面 refcount 从 1 减到 0，进入 per-CPU freelist 可被复用 |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
 
 ***

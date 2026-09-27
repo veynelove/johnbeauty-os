@@ -6,6 +6,7 @@
 #include <hal/cpu_state.h>
 #include <hal/ext_state.h>
 #include <hal/syscall_abi.h>
+#include <hal/smp.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
 #include <kernel/vma.h>
@@ -113,23 +114,28 @@ typedef struct jlos_task {
     jlos_cpu_state_t        *syscall_tf;
     uint32_t                signal_pending;
     uint32_t                signal_handlers[JLOS_SIGNAL_NUM];
+    uint32_t                cpu;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
-    jlos_task_t         **tasks;
-    uint32_t            max_tasks;
-    jlos_hash_chain_t   pid_hash;
-    uint32_t            num_tasks;
-    int                 current_task;
-    jlos_list_head_t    zombie_head;
-    jlos_list_head_t    sleep_queue;
     struct {
         jlos_list_head_t head;
         uint32_t count;
-    }                   rq[JLOS_TASK_MLFQ_LEVELS];
-    uint32_t            rq_nonempty;
-    jlos_task_t         *idle_task;
-    bool                need_resched;
+    }                   queue[JLOS_TASK_MLFQ_LEVELS];
+    uint32_t            nonempty;
+} jlos_task_runqueue_t;
+
+typedef struct {
+    jlos_task_t             **tasks;
+    uint32_t                max_tasks;
+    jlos_hash_chain_t       pid_hash;
+    uint32_t                num_tasks;
+    int                     current_task;
+    jlos_list_head_t        zombie_head;
+    jlos_list_head_t        sleep_queue;
+    jlos_task_runqueue_t    rq[JLOS_MAX_CPUS];
+    jlos_task_t             *idle_task;
+    bool                    need_resched;
 } jlos_task_manager_t;
 
 extern jlos_task_t *g_current_task_ptr;
@@ -180,6 +186,7 @@ __attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exi
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);
 void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
+void jlos_sched_balance(jlos_task_manager_t *self);
 
 #define JLOS_EXECVE_MAX_ARGS    256
 #define JLOS_EXECVE_MAX_STRLEN  256
