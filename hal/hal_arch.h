@@ -13,6 +13,8 @@ void jlos_hal_disable_interrupts(void);
 uint32_t jlos_hal_irq_save(void);
 void jlos_hal_irq_restore(uint32_t flags);
 
+void jlos_hal_cpu_relax(void);
+
 void jlos_hal_arch_display_register(void);
 void jlos_hal_arch_display_init_fb(void);
 

@@ -1,5 +1,4 @@
 #include <hal/context.h>
-#include <hal/timer.h>
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
@@ -11,6 +10,7 @@
 #include <kernel/paging.h>
 #include <kernel/ipc.h>
 #include <kernel/initcall.h>
+#include <kernel/timek.h>
 #include <filesystem/elf.h>
 #include <filesystem/vfs.h>
 
@@ -66,7 +66,7 @@ static jlos_task_t *rq_dequeue(jlos_task_manager_t *self)
         rq->nonempty &= ~(1U << level);
     }
     jlos_task_t *t = container_of(first, jlos_task_t, rq_node);
-    uint32_t now = jlos_hal_timer_get_ticks();
+    uint32_t now = jlos_timek_get_ticks();
     uint32_t boost = (now - t->last_ready_tick) / JLOS_TASK_MLFQ_AGING_TICKS;
     boost = JLOS_CAP_UPPER(boost, (uint32_t)level);
     level -= boost;
@@ -95,7 +95,7 @@ void jlos_task_set_ready(jlos_task_t *t)
         return;
     }
     t->status = JLOS_TASK_READY;
-    t->last_ready_tick = jlos_hal_timer_get_ticks();
+    t->last_ready_tick = jlos_timek_get_ticks();
     t->yield = false;
 }
 
@@ -166,7 +166,7 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->exit_code = TASK_EXIT_DEFAULT;
     self->mm = NULL;
     self->sleeping = false;
-    self->wake_tick = jlos_hal_timer_get_ticks();
+    self->wake_tick = jlos_timek_get_ticks();
     self->errno = 0;
     self->waiting_pid = self->pid;
     self->syscall_tf = NULL;
@@ -503,7 +503,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
         }
     }
 
-    uint32_t now_tick = jlos_hal_timer_get_ticks();
+    uint32_t now_tick = jlos_timek_get_ticks();
     while (!jlos_list_empty(&self->sleep_queue)) {
         jlos_task_t *t = container_of(self->sleep_queue.next, jlos_task_t, wait_node);
         if (t->wake_tick > now_tick) {
@@ -609,7 +609,7 @@ static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task
     child->parent_pid = parent->pid;
     child->waiting_pid = child->pid;
     child->sleeping = false;
-    child->wake_tick = jlos_hal_timer_get_ticks();
+    child->wake_tick = jlos_timek_get_ticks();
     child->errno = 0;
     child->syscall_tf = NULL;
     child->signal_pending = 0;

@@ -30,6 +30,8 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_SIGNAL             = 22,
     JLOS_SYSCALL_KILL               = 23,
     JLOS_SYSCALL_SIGRETURN          = 24,
+    JLOS_SYSCALL_GETTIMEOFDAY       = 25,
+    JLOS_SYSCALL_CLOCK_GETTIME      = 26,
 };
 
 enum jlos_syscall_misscode {

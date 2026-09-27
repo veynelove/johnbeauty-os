@@ -2,7 +2,6 @@
 #include <arch/x86/cpu_state.h>
 #include <arch/x86/io.h>
 #include <arch/x86/gdt.h>
-#include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
@@ -11,6 +10,7 @@
 #include <hal/hal_arch.h>
 #include <kernel/initcall.h>
 #include <kernel/paging.h>
+#include <kernel/timek.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
 #include <kernel/printk.h>
@@ -313,7 +313,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
 
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
     if (interrupt == 0 && self && self->task_manager) {
-        jlos_hal_timer_on_tick();
+        jlos_timek_on_tick();
         jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
 
         bool resched = self->task_manager->need_resched;

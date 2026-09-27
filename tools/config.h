@@ -19,4 +19,7 @@
 #define JLOS_KERNEL_LOG_PRINT_LEVEL     1
 #define JLOS_KERNEL_LOG_PRINT_SUBSYS    1
 #define JLOS_KERNEL_LOG_FUNC            1
+
+#define JLOS_KERNEL_LOG_REALTIME        0
+
 #endif

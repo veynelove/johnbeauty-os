@@ -1,7 +1,8 @@
+#include <hal/serial.h>
+#include <hal/clock_event.h>
 #include <kernel/printk.h>
 #include <kernel/console.h>
-#include <hal/serial.h>
-#include <hal/timer.h>
+#include <kernel/timek.h>
 
 void jlos_printk_init(void)
 {
@@ -101,7 +102,7 @@ static void printk_utoa(unsigned int value, int base, bool uppercase)
     }
 }
 
-#if JLOS_KERNEL_LOG_PRINT_TIME
+#if JLOS_KERNEL_LOG_PRINT_TIME || JLOS_KERNEL_LOG_REALTIME
 static void printk_put_us_padded(unsigned int value, int width)
 {
     char buf[16];
@@ -110,6 +111,59 @@ static void printk_put_us_padded(unsigned int value, int width)
     do { buf[i++] = digits[value % 10]; value /= 10; } while (value > 0);
     while (i < width) buf[i++] = '0';
     while (i > 0) jlos_console_putc(buf[--i]);
+}
+#endif
+
+#if JLOS_KERNEL_LOG_REALTIME
+static const uint16_t s_days_before_month[] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+};
+
+static void printk_put_realtime(void)
+{
+    uint64_t ns = jlos_timek_get_realtime_ns();
+    uint32_t unix_sec = ns / 1000000000;
+    uint32_t secs_in_day = unix_sec % 86400;
+    uint32_t h = secs_in_day / 3600;
+    uint32_t m = (secs_in_day % 3600) / 60;
+    uint32_t s = secs_in_day % 60;
+    uint32_t days = unix_sec / 86400;
+    uint32_t year = 1970;
+
+    while (1) {
+        uint32_t diy = ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) ? 366 : 365;
+        if (days < diy) {
+            break;
+        }
+        days -= diy;
+        year++;
+    }
+
+    uint32_t leap = ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0);
+    uint32_t month = 1;
+    while (month < 12) {
+        uint32_t dim = s_days_before_month[month] + (leap && month >= 2 ? 1 : 0);
+        if (days < dim) {
+            break;
+        }
+        month++;
+    }
+    uint32_t day = days - s_days_before_month[month - 1] - (leap && month - 1 >= 2 ? 1 : 0) + 1;
+
+    jlos_console_putc('[');
+    printk_utoa(year, 10, false);
+    jlos_console_putc('-');
+    printk_put_us_padded(month, 2);
+    jlos_console_putc('-');
+    printk_put_us_padded(day, 2);
+    jlos_console_putc(' ');
+    printk_put_us_padded(h, 2);
+    jlos_console_putc(':');
+    printk_put_us_padded(m, 2);
+    jlos_console_putc(':');
+    printk_put_us_padded(s, 2);
+    jlos_console_putc(']');
+    jlos_console_putc(' ');
 }
 #endif
 
@@ -132,7 +186,9 @@ static char printk_level_char(int level)
 
 static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, const char *func)
 {
-#if JLOS_KERNEL_LOG_PRINT_TIME
+#if JLOS_KERNEL_LOG_REALTIME
+    printk_put_realtime();
+#elif JLOS_KERNEL_LOG_PRINT_TIME
     uint32_t sec = ticks / JLOS_HAL_TIME_FREQ_HZ;
     uint32_t us  = (ticks % JLOS_HAL_TIME_FREQ_HZ) * (1000000 / JLOS_HAL_TIME_FREQ_HZ);
     jlos_console_putc('[');
@@ -170,7 +226,7 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
     uint32_t *args = (uint32_t *)&fmt + 1;
     uint32_t flags;
     jlos_console_lock(&flags);
-    uint32_t ticks = jlos_hal_timer_get_ticks();
+    uint32_t ticks = jlos_timek_get_ticks();
     int at_line_start = 1;
 
     for (int i = 0; fmt[i] != '\0'; i++) {

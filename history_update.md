@@ -4,6 +4,61 @@
 > 当前计划与待办以 update_plan.md 为准，本文件仅用于追溯。
 
 ***
+
+## 2026-09-27（v3.2）时间子系统升级
+
+### 阶段 1：clocksource/clock_event_device 分离 + TSC + timekeeping
+
+- **clocksource 抽象**：新建 `hal/clocksource.h/c`，结构体含 name/rating/read/mult/shift/mask/list，提供注册/选优/cycles_to_ns 接口。clocksource 按 rating 选优，TSC（rating=300）优先于 PIT（rating=100）。
+
+- **clock_event_device 抽象**：新建 `hal/clock_event.h/c`，从 hal/timer.h 迁移 `JLOS_HAL_TIME_FREQ_HZ` 宏。`arch/x86/pit.c` 从 `jlos_timer_device_t` 改为 `jlos_clock_event_device_t`。
+
+- **TSC clocksource**：新建 `arch/x86/tsc.c`，用 PIT Channel 2 轮询法（Linux 2.6 经典方法）校准 TSC 频率。校准结果 2497 MHz，正确。SUBSYS 级 initcall 注册。
+
+- **timekeeping**：新建 `kernel/timek.h/c`，提供 monotonic ns + realtime ns + tick 计数器。`s_timek_inited` 标志保护，因为 on_tick 可能在 clocksource 选优之前被调用。`jlos_timek_init()` 开头加 `if (s_timek_inited) return;` 防止重复初始化覆盖 RTC 设置的 realtime_base_ns。
+
+- **64 位除法**：GCC 在 32 位平台上对 `uint64_t / uint32_t` 生成 `__udivdi3` 调用。JLOS 不链接 libgcc，采用 weak/strong 模式：`common/lib/udivdi3.c` 通用 C 移位-减法实现（weak），`arch/x86/udivdi3.c` 用 `divl` 指令优化（strong）。修复 `__udivmoddi4` 中 `*remainder == dividend` typo（应为赋值）。
+
+- **hal/timer 废弃删除**：tick 计数器迁移到 `kernel/timek.c`，HAL 层不再维护任何计数器。6 个文件 include 和调用点从 `jlos_hal_timer_get_ticks/on_tick/reset_ticks` 改为 `jlos_timek_get_ticks/on_tick/reset_ticks`。`hal/diag.c` 中保留 extern 声明方式。
+
+- **gettimeofday/clock_gettime syscall**：新增 syscall 编号 25/26，调用 `jlos_timek_get_realtime_ns`/`jlos_timek_get_monotonic_ns`。
+
+### 阶段 2：RTC + wall-clock 时间
+
+- **RTC 读取**：新建 `hal/rtc.h` + `arch/x86/rtc.c`，从 CMOS 端口 0x70/0x71 读 BCD 编码时间，等待 UIP=0 后读取。年份假设 year<70→20xx，year>=70→19xx。Unix 时间戳转换。
+
+- **RTC initcall**：LATE 级执行，通过 `jlos_timek_set_realtime()` 设置 realtime_base_ns。读取结果 1790550207 秒 ≈ 2026-09-27 23:03:27，正确。
+
+### 阶段 3：日志时间戳宏切换
+
+- **`JLOS_KERNEL_LOG_REALTIME` 宏**：`tools/config.h` 新增，0=tick 相对时间（`[0.010000]`），1=wall-clock 真实时间（`[2026-09-27 14:30:25]`）。
+
+- **printk_print_prefix 修改**：`kernel/printk.c` 中 `#if JLOS_KERNEL_LOG_REALTIME` 走 `printk_put_realtime()`，`#elif JLOS_KERNEL_LOG_PRINT_TIME` 走 tick 格式。`printk_put_us_padded` 编译条件改为 `PRINT_TIME || REALTIME`。
+
+- **printk_put_realtime 实现**：从 `jlos_timek_get_realtime_ns()` 获取 ns，`ns / 1000000000` → Unix 秒（调用 `__udivdi3`），`unix_sec % 86400` → 时分秒，`unix_sec / 86400` → 天数，逐年减去每年天数得到年份，逐月减去 `days_before_month` 累计值得到月份和日。输出 `[YYYY-MM-DD HH:MM:SS]`。
+
+- **早期日志显示 `[1970-01-01 00:00:00]`**：RTC initcall（LATE 级）前 realtime_base_ns=0，显示 Unix epoch，预期行为。RTC 执行后切换到真实时间。
+
+### 阶段 4a：HAL cpu_relax 抽象 + 修复 arp.c 违规
+
+- **HAL cpu_relax 抽象**：`hal/hal_arch.h` 添加 `void jlos_hal_cpu_relax(void);` 声明，`arch/x86/hal_arch.c` 实现为 `__asm__ __volatile__("pause" ::: "memory");`。各架构实现：x86=`pause`，ARM=`yield`，RISC-V=编译屏障。
+
+- **arp.c 修复**：`net/arp.c:139` 裸 `__asm__ __volatile__("pause" ::: "memory")` 改为 `jlos_hal_cpu_relax()`。`net/arp.c` 添加 `#include <hal/hal_arch.h>`。`arch/x86/spinlock.c:38` 保留裸 `pause`（架构层自身用汇编原语无层次问题）。
+
+- **multitask_te 双时间戳修复**：`printk` 的 `at_line_start` 是局部变量，每次调用都重新输出前缀。`multitask_te.c` 中 6 个 subcase 先 `printk_info("... -> ")` 再 `printk_info("PASS\n")` 产生双时间戳。修复：合并为单次 `printk` 调用。
+
+### 阶段 4 重新设计：NTP 同步改为用户空间路线
+
+- **原方案（否决）**：在内核中实现 SNTP（`net/sntp.c`），编译时宏开关，硬编码 NTP 服务器 IP，`pause` 指令直接写在网络层。
+
+- **否决理由**：① NTP 同步是用户空间守护进程的职责（ntpd/chronyd），内核只提供 syscall；② 编译时宏开关是小内核做法，生产级内核用运行时配置或用户空间服务控制；③ 硬编码 NTP 服务器不符合生产级要求，应从配置文件读取；④ `net/sntp.c` 中裸 `pause` 违反层次分离；⑤ SNTP 不是独立子系统，不应添加 `"sntp"` 日志标志。
+
+- **重新设计**：4b `settimeofday`/`clock_settime` syscall → 4c 网络 socket syscall（大工程）→ 4d 用户空间 NTP 客户端。4c 是关键路径——用户空间目前 0 个网络 syscall，需向用户空间暴露内核 UDP/TCP 栈。
+
+- **验证**：全测试 ALL PASSED，ARP 解析正常，framebuffer 显示正常，日志真实时间戳正确。
+
+***
+
 ## 历史版本（v2.3 及以前，保留参考）
 
 ### 已完成里程碑（历史）

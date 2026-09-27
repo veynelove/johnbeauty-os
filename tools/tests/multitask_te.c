@@ -3,9 +3,9 @@
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/timek.h>
 #include <hal/hal.h>
 #include <hal/context.h>
-#include <hal/timer.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "test"
 #include <kernel/printk.h>
@@ -190,11 +190,11 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     }
     printk_info("OK: 7 seed tasks spawned, run schedule budget...\n");
 
-    uint32_t t0 = jlos_hal_timer_get_ticks();
+    uint32_t t0 = jlos_timek_get_ticks();
     const uint32_t TIMEOUT_TICKS = 5000;
     uint32_t now = t0;
     for (;;) {
-        now = jlos_hal_timer_get_ticks();
+        now = jlos_timek_get_ticks();
         if (g_fork_test_pid && !g_fork_test_exited) {
             jlos_task_t *ft2 = jlos_task_manager_find_pid(s_mgr, g_fork_test_pid);
             if (ft2 && ft2->status == JLOS_TASK_ZOMBIE && ft2->exit_code == 42) {
@@ -240,51 +240,45 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     int fails = 0;
     printk_info("subcase results:\n");
 
-    printk_info("[1] alternation: A=%d B=%d -> ", g_alt_a, g_alt_b);
     if (g_alt_a >= 500 && g_alt_b >= 500)
-        printk_info("PASS\n");
+        printk_info("[1] alternation: A=%d B=%d -> PASS\n", g_alt_a, g_alt_b);
     else {
-        printk_err("FAIL (both >= 500)\n");
+        printk_err("[1] alternation: A=%d B=%d -> FAIL (both >= 500)\n", g_alt_a, g_alt_b);
         fails++;
     }
 
-    printk_info("[2] fork+pressure: exited=%d -> ", g_fork_test_exited);
     if (g_fork_test_exited >= 1)
-        printk_info("PASS\n");
+        printk_info("[2] fork+pressure: exited=%d -> PASS\n", g_fork_test_exited);
     else {
-        printk_err("FAIL\n");
+        printk_err("[2] fork+pressure: exited=%d -> FAIL\n", g_fork_test_exited);
         fails++;
     }
 
-    printk_info("[4] ring3 smoke: exited=%d -> ", g_ring3_exited);
     if (g_ring3_exited >= 1)
-        printk_info("PASS\n");
+        printk_info("[4] ring3 smoke: exited=%d -> PASS\n", g_ring3_exited);
     else {
-        printk_err("FAIL\n");
+        printk_err("[4] ring3 smoke: exited=%d -> FAIL\n", g_ring3_exited);
         fails++;
     }
 
-    printk_info("[5] file syscall: exited=%d -> ", g_file_test_exited);
     if (g_file_test_exited >= 1)
-        printk_info("PASS\n");
+        printk_info("[5] file syscall: exited=%d -> PASS\n", g_file_test_exited);
     else {
-        printk_err("FAIL\n");
+        printk_err("[5] file syscall: exited=%d -> FAIL\n", g_file_test_exited);
         fails++;
     }
 
-    printk_info("[6] signal: exited=%d -> ", g_signal_test_exited);
     if (g_signal_test_exited >= 1)
-        printk_info("PASS\n");
+        printk_info("[6] signal: exited=%d -> PASS\n", g_signal_test_exited);
     else {
-        printk_err("FAIL\n");
+        printk_err("[6] signal: exited=%d -> FAIL\n", g_signal_test_exited);
         fails++;
     }
 
-    printk_info("[7] mmap: exited=%d -> ", g_mmap_test_exited);
     if (g_mmap_test_exited >= 1)
-        printk_info("PASS\n");
+        printk_info("[7] mmap: exited=%d -> PASS\n", g_mmap_test_exited);
     else {
-        printk_err("FAIL\n");
+        printk_err("[7] mmap: exited=%d -> FAIL\n", g_mmap_test_exited);
         fails++;
     }
 

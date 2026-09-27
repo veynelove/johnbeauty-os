@@ -1,4 +1,5 @@
 #include <net/arp.h>
+#include <hal/hal_arch.h>
 #include <tools/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "arp"
@@ -136,7 +137,7 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
     /* 忙等 + CPU relax，避免 hlt 卡死；超时返回 FFFF 标记未解析 */
     volatile uint32_t timeout = 0;
     while (result == 0xFFFFFFFFFFFF && timeout < 5000000) {
-        __asm__ __volatile__("pause" ::: "memory");
+        jlos_hal_cpu_relax();
         timeout++;
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }

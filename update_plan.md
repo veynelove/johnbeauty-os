@@ -1,7 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.1 | 日期: 2026-09-21 | 作者: JohnLove
+版本: v3.2 | 日期: 2026-09-27 | 作者: JohnLove
 
+> v3.2 变更：时间子系统升级（clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象）；NTP 同步方案重新设计为用户空间守护进程路线。
 > v3.1 变更：与代码逐项核对后修正 5 处过时状态（MM-2 / MT-1 / MT-2 / MT-4 / PAG-5 / F13）；「实施优先级」重写为批次升级路线；开发日志与 v2.3 以前历史档案迁至 history_update.md。
 
 ***
@@ -106,8 +107,8 @@ graph TD
 
 | #      | 问题                       | 说明                                          | 优先级 |
 | ------ | -------------------------- | --------------------------------------------- | ------ |
-| PFA-R1 | 全局单 spinlock → 多核瓶颈 | 留给 Phase 4 per-CPU cache                    | 低     |
-| PFA-R2 | boot\_alloc 用完不释放指针 | s\_boot\_heap\_ptr 后续不再被引用，无实际影响 | 极低   |
+| ~~PFA-R1~~ | ~~全局单 spinlock → 多核瓶颈~~ | **已解决**：5.1 拆为 buddy+refcount+owner 三套锁 + 批次 5 per-CPU frame cache | — |
+| ~~PFA-R2~~ | ~~boot\_alloc 用完不释放指针~~ | **核验无影响**：`s_boot_heap_ptr` 为 4 字节 static 标量，init 后不再被引用；boot_alloc 区域已 `mark_reserve`，无数据结构需释放 | — |
 
 ***
 
@@ -193,7 +194,7 @@ graph TD
 | ---- | ------------------------------ | -------------------------------- | ------ |
 | ~~MT-3~~ | ~~O(n) 调度选择（4 层 × n 任务）~~ | **已解决**：`rq[]` 已是 per-level 链表数组 + `rq_nonempty` bitmap ctz 选层（multitask.h:117-121），选择路径 O(1) | 已解决 |
 | ~~MT-4~~ | ~~静态 256 task 数组~~ | **已解决**：tasks 动态数组 + add_task 倍增扩容（见 5.3）；fork 入口残留 256 硬上限，见批次 4 | 已解决 |
-| MT-6 | 单全局 runqueue                | per-CPU runqueue 留给 Phase 4    | 低     |
+| ~~MT-6~~ | ~~单全局 runqueue~~ | **已解决**：批次 5 per-CPU runqueue（`rq[JLOS_MAX_CPUS]` + `rq_nonempty[JLOS_MAX_CPUS]`，multitask.h/c） | — |
 
 ***
 
@@ -479,12 +480,66 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**1（P1）**~~ | ~~F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持~~ | **已完成**：open/close/read/write/lseek/unlink syscall + fat32 write/create/unlink + file\_test（write/read match、lseek、unlink+reopen-fail）ALL PASSED | Phase 8 ✅ |
 | ~~**2（P1）**~~ | ~~5.1/5.4 接口收尾：PAG-7 + PFA-5~~ | **已完成**：PAG-7 `s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 化（arch/x86/paging.c）；PFA-5 `jlos_page_frame_alloc_n/free_n` 统一多帧 API，mm/paging/测试全量切换 | 无 |
 | ~~**3（P1/P2）**~~ | ~~F7 signal/kill + F11 mmap/munmap（匿名映射）~~ | **已完成**：F7 signal/kill（signal\_test ALL PASSED）+ F11 mmap/munmap（mmap\_test ALL PASSED）+ F8 fork/clone（COW + ret\_from\_fork）压测通过 | 批次 2 ✅ |
-| **3.5（穿插加固）** | 调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治） | 三个已知竞态/时序缺陷一次收口；均小时级 | 无 |
+| ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init NULL/fork clear），exit 经 kfree 隐式回收 | 无 |
 | ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
 | ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
+| ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | 穿插 | F9 DHCP + F10 DNS（网络栈已通，经典收尾）；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~3 console 遗留 | 无依赖、量级小，可穿插任意批次间隙 | 无 |
 
 完成后进入 Phase 4 SMP 实现 + 多架构（ARM/RISC-V）阶段。
+
+***
+
+## 时间子系统升级（2026-09-27，v3.2）
+
+### 阶段 1：clocksource/clock_event_device 分离 + TSC + timekeeping ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| clocksource 抽象 | ✅ | `hal/clocksource.h/c`：name/rating/read/mult/shift/mask/list + 注册/选优/cycles_to_ns |
+| clock_event_device 抽象 | ✅ | `hal/clock_event.h/c`：结构体 + `JLOS_HAL_TIME_FREQ_HZ` 宏迁移至此 |
+| TSC clocksource | ✅ | `arch/x86/tsc.c`：TSC clocksource + PIT Channel 2 轮询校准（2497 MHz） |
+| timekeeping | ✅ | `kernel/timek.h/c`：monotonic ns + realtime ns + tick 计数器，`s_timek_inited` 防重入 |
+| 64 位除法 | ✅ | `common/lib/udivdi3.c` weak + `arch/x86/udivdi3.c` strong（divl 指令优化） |
+| hal/timer 废弃删除 | ✅ | tick 计数器迁移到 timek，6 个文件 include/调用点改名 |
+| gettimeofday/clock_gettime | ✅ | syscall 编号 25/26，调用 `jlos_timek_get_realtime_ns`/`jlos_timek_get_monotonic_ns` |
+
+### 阶段 2：RTC + wall-clock 时间 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| RTC 读取 | ✅ | `arch/x86/rtc.c`：CMOS 端口 0x70/0x71 BCD→bin、12/24h、Unix 时间戳转换 |
+| RTC initcall | ✅ | LATE 级，通过 `jlos_timek_set_realtime()` 设置 realtime_base_ns |
+| 验证 | ✅ | 读取结果 1790550207 秒 ≈ 2026-09-27 23:03:27，正确 |
+
+### 阶段 3：日志时间戳宏切换 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `JLOS_KERNEL_LOG_REALTIME` 宏 | ✅ | `tools/config.h`：0=tick 相对时间 `[0.010000]`，1=wall-clock `[2026-09-27 14:30:25]` |
+| printk_print_prefix | ✅ | `kernel/printk.c`：`#if REALTIME` 走 `printk_put_realtime()`，`#elif PRINT_TIME` 走 tick 格式 |
+| printk_put_realtime | ✅ | ns→Unix 秒→年月日时分秒，`printk_utoa` + `printk_put_us_padded` 输出 |
+| 早期日志 |B-01-01 00:00:00]` | ✅ | RTC initcall（LATE 级）前 realtime_base_ns=0，显示 Unix epoch，预期行为 |
+
+### 阶段 4a：HAL cpu_relax 抽象 + 修复 arp.c 违规 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `jlos_hal_cpu_relax()` | ✅ | `hal/hal_arch.h` 声明 + `arch/x86/hal_arch.c` 实现（`pause` 指令） |
+| arp.c 修复 | ✅ | `net/arp.c:139` 裸 `__asm__("pause")` 改为 `jlos_hal_cpu_relax()` |
+| multitask_te 双时间戳修复 | ✅ | 6 个 subcase 合并两次 printk 为一次，消除续行重复前缀 |
+
+### 后续规划（备忘）
+
+NTP 同步重新设计为用户空间守护进程路线（经典做法），内核只提供 syscall 支持：
+
+| 子步骤 | 内容 | 依赖 | 备注 |
+| --- | --- | --- | --- |
+| 4b | `settimeofday`/`clock_settime` syscall + jlcy 封装 | 无 | 中等工作量 |
+| 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | **大工程**，向用户空间暴露内核 UDP/TCP 栈，建议独立阶段 |
+| 4d | 用户空间 NTP 客户端 `jlcy/user/ntpclient.c` | 4b + 4c | NTP 服务器地址从命令行参数读取 |
+| 5 | hrtimer 高精度定时器（红黑树） | 无 | 独立阶段 |
+| 6 | nanosleep syscall | 5 | 依赖 hrtimer |
 
 ### 实施优先级（历史，已被批次规划取代）
 

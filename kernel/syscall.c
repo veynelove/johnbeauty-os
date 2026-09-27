@@ -1,3 +1,7 @@
+#include <hal/kernel_syscall.h>
+#include <hal/paging.h>
+#include <hal/signal.h>
+#include <filesystem/vfs.h>
 #include <kernel/syscall.h>
 #include <kernel/paging.h>
 #include <kernel/memory_manager.h>
@@ -5,11 +9,7 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/initcall.h>
 #include <kernel/multitask.h>
-#include <hal/timer.h>
-#include <hal/kernel_syscall.h>
-#include <hal/paging.h>
-#include <hal/signal.h>
-#include <filesystem/vfs.h>
+#include <kernel/timek.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
 #include <kernel/printk.h>
@@ -564,7 +564,7 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!g_current_task_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_sleep_until(g_task_manager_ptr, jlos_hal_timer_get_ticks() + arg1);
+    jlos_task_sleep_until(g_task_manager_ptr, jlos_timek_get_ticks() + arg1);
     (void)arg2;
     (void)arg3;
     return 0;
@@ -586,7 +586,39 @@ static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     (void)arg1;
     (void)arg2;
     (void)arg3;
-    return (int32_t)jlos_hal_timer_get_ticks();
+    return (int32_t)jlos_timek_get_ticks();
+}
+
+static int32_t syscall_gettimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    uint64_t ns = jlos_timek_get_realtime_ns();
+    uint32_t tv[2];
+    tv[0] = (uint32_t)(ns / 1000000000ULL);
+    tv[1] = (uint32_t)((ns % 1000000000ULL) / 1000);
+    if (arg1 && !jlos_copy_to_user((void *)arg1, tv, sizeof(tv))) {
+        return -SYSCALL_EFAULT;
+    }
+    (void)arg2;
+    (void)arg3;
+    return 0;
+}
+
+static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    uint64_t ns;
+    if (arg1 == 0) {
+        ns = jlos_timek_get_realtime_ns();
+    } else {
+        ns = jlos_timek_get_monotonic_ns();
+    }
+    uint32_t ts[2];
+    ts[0] = (uint32_t)(ns / 1000000000ULL);
+    ts[1] = (uint32_t)(ns % 1000000000ULL);
+    if (arg2 && !jlos_copy_to_user((void *)arg2, ts, sizeof(ts))) {
+        return -SYSCALL_EFAULT;
+    }
+    (void)arg3;
+    return 0;
 }
 
 static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg3)
@@ -747,6 +779,8 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_SIGNAL, syscall_signal);
     jlos_syscall_register(JLOS_SYSCALL_KILL, syscall_kill);
     jlos_syscall_register(JLOS_SYSCALL_SIGRETURN, syscall_sigreturn);
+    jlos_syscall_register(JLOS_SYSCALL_GETTIMEOFDAY, syscall_gettimeofday);
+    jlos_syscall_register(JLOS_SYSCALL_CLOCK_GETTIME, syscall_clock_gettime);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

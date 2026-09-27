@@ -126,3 +126,8 @@ void jlos_hal_irq_restore(uint32_t flags)
 {
     __asm__ __volatile__("pushl %0\n\tpopfl" :: "r"(flags) : "memory", "cc");
 }
+
+void jlos_hal_cpu_relax(void)
+{
+    __asm__ __volatile__("pause" ::: "memory");
+}
