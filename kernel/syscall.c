@@ -621,6 +621,46 @@ static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
+static int32_t syscall_settimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg2;
+    (void)arg3;
+    if (!arg1) {
+        return -SYSCALL_EFAULT;
+    }
+    uint32_t tv[2];
+    if (!jlos_copy_from_user(tv, (const void *)arg1, sizeof(tv))) {
+        return -SYSCALL_EFAULT;
+    }
+    if (tv[1] >= 1000000) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint64_t ns = (uint64_t)tv[0] * 1000000000 + (uint64_t)tv[1] * 1000;
+    jlos_timek_set_realtime(ns);
+    return 0;
+}
+
+static int32_t syscall_clock_settime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg3;
+    if (arg1 != 0) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (!arg2) {
+        return -SYSCALL_EFAULT;
+    }
+    uint32_t ts[2];
+    if (!jlos_copy_from_user(ts, (const void *)arg2, sizeof(ts))) {
+        return -SYSCALL_EFAULT;
+    }
+    if (ts[1] >= 1000000000) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint64_t ns = (uint64_t)ts[0] * 1000000000 + ts[1];
+    jlos_timek_set_realtime(ns);
+    return 0;
+}
+
 static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     if (!g_task_manager_ptr) {
@@ -781,6 +821,8 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_SIGRETURN, syscall_sigreturn);
     jlos_syscall_register(JLOS_SYSCALL_GETTIMEOFDAY, syscall_gettimeofday);
     jlos_syscall_register(JLOS_SYSCALL_CLOCK_GETTIME, syscall_clock_gettime);
+    jlos_syscall_register(JLOS_SYSCALL_SETTIMEOFDAY, syscall_settimeofday);
+    jlos_syscall_register(JLOS_SYSCALL_CLOCK_SETTIME, syscall_clock_settime);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

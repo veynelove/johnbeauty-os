@@ -8,6 +8,8 @@
 #define JLOS_SWAP_ENDIAN_16(x) ((((x) & 0x00FF) << 8) | (((x) & 0xFF00) >> 8))
 #define JLOS_SWAP_ENDIAN_32(x) ((((x) & 0xFF000000) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | (((x) & 0x000000FF) << 24))
 
+#define JLOS_ETHER_BROADCAST_MAC    0xFFFFFFFFFFFF
+
 typedef struct {
     uint8_t     dstMAC[6];
     uint8_t     srcMAC[6];

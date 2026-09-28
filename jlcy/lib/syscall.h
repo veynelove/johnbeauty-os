@@ -135,6 +135,26 @@ static inline int32_t kill(uint32_t pid, int32_t sig)
     return syscall(SYSCALL_KILL, pid, (uint32_t)sig, 0);
 }
 
+static inline int32_t gettimeofday(timeval_t *tv, void *tz)
+{
+    return syscall(SYSCALL_GETTIMEOFDAY, (uint32_t)tv, (uint32_t)tz, 0);
+}
+
+static inline int32_t clock_gettime(uint32_t clk_id, timespec_t *tp)
+{
+    return syscall(SYSCALL_CLOCK_GETTIME, clk_id, (uint32_t)tp, 0);
+}
+
+static inline int32_t settimeofday(const timeval_t *tv, void *tz)
+{
+    return syscall(SYSCALL_SETTIMEOFDAY, (uint32_t)tv, (uint32_t)tz, 0);
+}
+
+static inline int32_t clock_settime(uint32_t clk_id, const timespec_t *tp)
+{
+    return syscall(SYSCALL_CLOCK_SETTIME, clk_id, (uint32_t)tp, 0);
+}
+
 void printf(const char *fmt, ...);
 
 #endif

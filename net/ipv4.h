@@ -21,6 +21,10 @@ typedef struct {
 #define JLOS_IPV4_GET_IHL(msg)     ((msg)->version_ihl & 0x0F)
 #define JLOS_IPV4_SET_VERSION_IHL(msg, ver, ihl) ((msg)->version_ihl = (((ver) & 0x0F) << 4) | ((ihl) & 0x0F))
 
+#define JLOS_IPV4_BROADCAST 0xFFFFFFFF
+
+#define JLOS_IPV4_FMT(ip)   ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF
+
 typedef struct jlos_internet_protocol_provider jlos_internet_protocol_provider_t;
 
 typedef struct jlos_internet_protocol_handler {

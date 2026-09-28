@@ -5,6 +5,61 @@
 
 ***
 
+## 2026-09-28（v3.3）网络栈 DHCP/DNS 完善
+
+### 批次 1：IPv4 广播支持
+
+- **广播宏**：`net/etherframe.h` 加 `JLOS_ETHER_BROADCAST_MAC`，`net/ipv4.h` 加 `JLOS_IPV4_BROADCAST`。
+- **IPv4 接收**：`net/ipv4.c` 接收端增加 `dst_ip == JLOS_IPV4_BROADCAST` 判断，广播包不再被丢弃。
+- **IPv4 发送**：`net/ipv4.c` 发送端广播地址用广播 MAC 直接发送，单播走 ARP 解析。
+
+### 批次 2：网络配置结构 + 去硬编码
+
+- **`jlos_network_config_t`**：`net/network.h` 定义 ip/gateway/subnet_mask/dns_server 四字段，`network_stack_t` 加 config 字段。
+- **去硬编码**：`network_init` 不再内置任何 IP，config 初始 memset 0（未配置态），IP 由 DHCP 或用户空间设置。
+- **`jlos_network_apply_config`**：将 config 写入网卡驱动 logical_address + IPv4 gateway/subnet。
+- **删冗余自检**：`network_init` 从 238 行精简到 66 行，删除所有字段级自检（检查 init 函数是否正确设置 backend/handler/hash 等字段），保留 kalloc 失败和 eth0 NULL 检查。修复 `gateway_ip_be`/`subnet_be` 未定义引用编译错误。
+
+### 批次 3：DHCP 状态机
+
+- **新建 `net/dhcp.h`/`net/dhcp.c`**：`jlos_dhcp_header_t`（240 字节 BOOTP 固定部分）+ options 常量 + 状态机（INIT→SELECTING→REQUESTING→BOUND）。
+- **DISCOVER/REQUEST 构造**：填充 BOOTP 头 + options（msg_type/requested_ip/server_id）+ PAD 填充到 300 字节。
+- **OFFER/ACK 解析**：中断回调 `jlos_dhcp_on_message` 检查 op/xid/magic_cookie，解析 options 提取 server_id/yiaddr/subnet_mask/gateway/dns_server。
+- **xid 生成**：discover 时用 `jlos_timek_get_monotonic_ns()` 低 32 位。init 在 DEVICE 级，timek 未初始化，xid=0 占位；discover 在 POST 级，timek 已初始化。
+- **UDP 广播接收改进**：`net/udp.c` `udp_match_socket` 广播包跳过 IP 精确匹配；`on_internet_protocol_received` 广播包额外用 {0, port} 查找，匹配 IP=0.0.0.0 的 DHCP socket。
+- **验证**：DISCOVER 发送 342 字节（14+20+8+300），xid=0x87b413 非零，编译通过。
+
+### 批次 4：DHCP 触发 + DNS
+
+- **DHCP 触发**：`net/network.c` 注册 POST 级 initcall `network_dhcp_start`。DISCOVER 发送不需要中断（广播直发），OFFER 到达时 sti 已执行（微秒 << 毫秒网络延迟），时序安全。
+- **新建 `net/dns.h`/`net/dns.c`**：DNS 查询构造（域名编码 + header + Question）+ 响应解析（跳过 Question + 遍历 Answer 找 TYPE=A）+ 同步 `jlos_dns_resolve`（connect 临时 socket → 发查询 → 忙等响应 → disconnect）。
+- **DNS 服务器地址**：从 DHCP option 6 获取（`config.dns_server`），不硬编码。
+- **超时**：用 `jlos_timek_get_monotonic_ns()` + `JLOS_DNS_TIMEOUT_NS`（2 秒），与 DHCP 一致。
+- **边界检查**：DNS 响应解析全程 `p + N > end` 检查，防越界。
+
+### 网卡驱动 DMA 地址修复
+
+DHCP 调试过程中发现网卡驱动两个历史 bug，导致 RXON=0（接收器未启动）和 MAC 地址截断：
+
+- **DMA 地址未转换**：`drivers/amd_am79c973.c` 传给网卡的 DMA 地址（init_block、描述符环、buffer）是虚拟地址（0xC0000000+），但网卡 DMA 需物理地址。5 处加 `VIRT_TO_PHYS()` 转换。修复后 `RXON=1 TXON=1`。
+- **CPU 访问未转回**：描述符 address 字段改为物理地址后，send/recv 函数里 CPU 访问需 `PHYS_TO_VIRT()` 转回虚拟地址。2 处修复。首次修复后虚拟机崩溃（CPU 访问物理地址 0x760008 触发页错误），加 `PHYS_TO_VIRT` 后正常。
+- **MAC 地址截断**：`net/network.c` 用 `uint32_t` 接收 `jlos_ether_frame_provider_get_mac_address` 的 `uint64_t` 返回值，截断高 16 位（MAC 后 2 字节变 0）。DHCP DISCOVER 的 chaddr 错误，服务器不响应。改为 `uint64_t` 后 OFFER 正常到达。
+- **IP 格式宏字节序**：`JLOS_IPV4_FMT` 宏字节顺序反了。网络字节序 uint32 在小端机器上最低字节是第一个八位组，宏应从 `ip & 0xFF` 开始而非 `(ip >> 24) & 0xFF`。
+
+### 验证结果
+
+VMware Player NAT 模式，DHCP 全流程验证通过：
+
+```
+BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192.168.159.2
+```
+
+- `ping 192.168.159.133` — 7/7 packets received, 0% loss
+- `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
+- `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
+
+***
+
 ## 2026-09-27（v3.2）时间子系统升级
 
 ### 阶段 1：clocksource/clock_event_device 分离 + TSC + timekeeping

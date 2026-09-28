@@ -1,8 +1,5 @@
 #include <common/multiboot.h>
-#include <hal/irq.h>
-#include <hal/io.h>
 #include <hal/mmu.h>
-#include <hal/hal.h>
 #include <hal/context.h>
 #include <hal/hal_arch.h>
 #include <hal/paging.h>

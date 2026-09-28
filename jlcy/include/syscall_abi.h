@@ -31,6 +31,10 @@
 #define SYSCALL_SIGNAL             22
 #define SYSCALL_KILL               23
 #define SYSCALL_SIGRETURN          24
+#define SYSCALL_GETTIMEOFDAY       25
+#define SYSCALL_CLOCK_GETTIME      26
+#define SYSCALL_SETTIMEOFDAY       27
+#define SYSCALL_CLOCK_SETTIME      28
 
 #ifndef __ASSEMBLY__
 #define PROT_READ       0x1
@@ -49,6 +53,9 @@
 #define SIGKILL         9
 #define SIGTERM         15
 
+#define CLOCK_REALTIME  0
+#define CLOCK_MONOTONIC 1
+
 typedef struct mmap_arg_struct {
     uint32_t addr;
     uint32_t len;
@@ -57,6 +64,16 @@ typedef struct mmap_arg_struct {
     uint32_t fd;
     uint32_t offset;
 } mmap_arg_struct_t;
+
+typedef struct timeval {
+    int32_t tv_sec;
+    int32_t tv_usec;
+} timeval_t;
+
+typedef struct timespec {
+    int32_t tv_sec;
+    int32_t tv_nsec;
+} timespec_t;
 
 enum syscall_misscode {
     SYSCALL_ENINVAL  = 1,

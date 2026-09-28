@@ -98,7 +98,10 @@ static int udp_match_socket(jlos_hash_node_t *node, void *args1)
 {
     jlos_udp_socket_t *socket = container_of(node, jlos_udp_socket_t, hash_node);
     uint32_t *args = args1;
-    if (socket->local_ip != args[2] || socket->local_port != (uint16_t)args[3]) {
+    if (socket->local_port != (uint16_t)args[3]) {
+        return -1;
+    }
+    if (socket->local_ip != args[2] && args[2] != JLOS_IPV4_BROADCAST) {
         return -1;
     }
     if (socket->remote_ip == args[0] && socket->remote_port == (uint16_t)args[1]) {
@@ -121,10 +124,15 @@ bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, 
     }
     jlos_udp_header_t *msg = (jlos_udp_header_t *)internet_protocol_payload;
     printk_debug("destination port=%x%x\n", msg->dst_port & 0xFF, (msg->dst_port >> 8) & 0xFF);
+
     jlos_udp_socket_t *socket = NULL;
     jlos_udp_key_t key = {dstIP_BE, msg->dst_port};
     uint32_t args[] = {srcIP_BE, msg->src_port, dstIP_BE, msg->dst_port};
     jlos_hash_node_t *node = jlos_hash_chain_find(&self->sockets, &key, udp_match_socket, args);
+    if (!node && dstIP_BE == JLOS_IPV4_BROADCAST) {
+        jlos_udp_key_t bkey = {0, msg->dst_port};
+        node = jlos_hash_chain_find(&self->sockets, &bkey, udp_match_socket, args);
+    }
     if (node) {
         socket = container_of(node, jlos_udp_socket_t, hash_node);
         printk_debug("socket matched\n");

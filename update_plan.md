@@ -1,7 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.2 | 日期: 2026-09-27 | 作者: JohnLove
+版本: v3.3 | 日期: 2026-09-28 | 作者: JohnLove
 
+> v3.3 变更：网络栈 DHCP/DNS 完善（IPv4 广播收发 + 网络配置结构去硬编码 + DHCP 状态机 + DNS 解析器）。
 > v3.2 变更：时间子系统升级（clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象）；NTP 同步方案重新设计为用户空间守护进程路线。
 > v3.1 变更：与代码逐项核对后修正 5 处过时状态（MM-2 / MT-1 / MT-2 / MT-4 / PAG-5 / F13）；「实施优先级」重写为批次升级路线；开发日志与 v2.3 以前历史档案迁至 history_update.md。
 
@@ -529,13 +530,76 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | arp.c 修复 | ✅ | `net/arp.c:139` 裸 `__asm__("pause")` 改为 `jlos_hal_cpu_relax()` |
 | multitask_te 双时间戳修复 | ✅ | 6 个 subcase 合并两次 printk 为一次，消除续行重复前缀 |
 
+## 网络栈 DHCP/DNS 完善（2026-09-28，v3.3）
+
+### 批次 1：IPv4 广播支持 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 广播 MAC 宏 | ✅ | `net/etherframe.h`：`JLOS_ETHER_BROADCAST_MAC` |
+| 广播 IP 宏 | ✅ | `net/ipv4.h`：`JLOS_IPV4_BROADCAST` + `JLOS_IPV4_FMT` 点分十进制格式化宏 |
+| IPv4 接收广播 | ✅ | `net/ipv4.c`：接收端增加 `dst_ip == BROADCAST` 判断 |
+| IPv4 发送广播 | ✅ | `net/ipv4.c`：发送端广播地址用广播 MAC，单播走 ARP |
+
+### 批次 2：网络配置结构 + 去硬编码 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `jlos_network_config_t` | ✅ | `net/network.h`：ip/gateway/subnet_mask/dns_server 四字段 |
+| `network_stack_t.config` | ✅ | 网络栈加 config 字段，初始 memset 0（未配置态） |
+| 去硬编码 IP | ✅ | `network_init` 不再内置 IP，IP 由 DHCP 或用户空间设置 |
+| `jlos_network_apply_config` | ✅ | 将 config 写入网卡驱动 + IPv4 gateway/subnet |
+| 删冗余自检 | ✅ | `network_init` 从 238 行精简到 66 行，删除所有字段级自检 |
+
+### 批次 3：DHCP 状态机 ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| DHCP 报文结构 | ✅ | `net/dhcp.h`：`jlos_dhcp_header_t`（240 字节固定部分）+ options 常量 |
+| DHCP 客户端 | ✅ | `net/dhcp.c`：DISCOVER/REQUEST 构造 + OFFER/ACK 解析 + 状态转换 |
+| xid 生成 | ✅ | discover 时用 `jlos_timek_get_monotonic_ns()` 低 32 位（init 时 timek 未初始化） |
+| UDP 广播接收 | ✅ | `net/udp.c`：广播包额外用 {0, port} 查找，匹配 IP=0.0.0.0 的 socket |
+| PAD 填充 | ✅ | 填充到 300 字节，兼容老式 DHCP 服务器 |
+
+### 批次 4：DHCP 触发 + DNS ✅
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| DHCP 触发 | ✅ | `net/network.c`：POST 级 initcall `network_dhcp_start`，sti 后中断驱动接收 OFFER/ACK |
+| DNS 解析器 | ✅ | `net/dns.h/c`：查询构造 + 响应解析 + 同步 resolve（忙等 + monotonic_ns 超时） |
+| DNS 服务器地址 | ✅ | 从 DHCP option 6 获取，不硬编码 |
+| 边界检查 | ✅ | DNS 响应解析全程 `p + N > end` 检查，防越界 |
+
+### 网卡驱动 DMA 地址修复 ✅
+
+DHCP 调试过程中发现网卡驱动两个历史 bug，导致 RXON=0（接收器未启动）和 MAC 地址截断：
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| DMA 地址转换 | ✅ | `amd_am79c973.c`：5 处 DMA 地址（init_block/描述符环/buffer）加 `VIRT_TO_PHYS()`，网卡 DMA 需物理地址非虚拟地址 |
+| CPU 访问转回 | ✅ | `amd_am79c973.c`：send/recv 函数 2 处 CPU 访问加 `PHYS_TO_VIRT()`，描述符 address 存物理地址但 CPU 需虚拟地址 |
+| MAC 地址截断 | ✅ | `net/network.c`：`uint32_t` → `uint64_t` 接收 MAC 地址，原截断高 16 位致 DHCP chaddr 后 2 字节为 0 |
+| IP 格式宏字节序 | ✅ | `net/ipv4.h`：`JLOS_IPV4_FMT` 字节顺序修正，网络字节序 uint32 最低字节是第一个八位组 |
+
+### 验证结果 ✅
+
+VMware Player NAT 模式，DHCP 全流程验证通过：
+
+```
+BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192.168.159.2
+```
+
+- `ping 192.168.159.133` — 7/7 packets received, 0% loss
+- `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
+- `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
+
 ### 后续规划（备忘）
 
 NTP 同步重新设计为用户空间守护进程路线（经典做法），内核只提供 syscall 支持：
 
 | 子步骤 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- |
-| 4b | `settimeofday`/`clock_settime` syscall + jlcy 封装 | 无 | 中等工作量 |
+| 4b | `settimeofday`/`clock_settime` syscall + jlcy 封装 | 无 | ✅ 已完成 |
 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | **大工程**，向用户空间暴露内核 UDP/TCP 栈，建议独立阶段 |
 | 4d | 用户空间 NTP 客户端 `jlcy/user/ntpclient.c` | 4b + 4c | NTP 服务器地址从命令行参数读取 |
 | 5 | hrtimer 高精度定时器（红黑树） | 无 | 独立阶段 |
@@ -558,7 +622,7 @@ NTP 同步重新设计为用户空间守护进程路线（经典做法），内�
 | **P2** | 5.3   | 经典化 / 扩展性                                                     | ✅ MT-4 已核销（残留 fork 上限 → 批次 4），仅剩 MM-3 |
 | **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | → 批次 3 |
 | **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成 |
-| **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | → 穿插 |
+| **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | ✅ 已完成（v3.3） |
 
 ***
 
@@ -574,8 +638,8 @@ NTP 同步重新设计为用户空间守护进程路线（经典做法），内�
 | ~~F6~~ | ~~ELF 用户态程序加载~~                                   | **已实现**：jlcy/ + crt0.S + execve | —            |
 | F7   | signal/kill 信号机制                                     | syscall.c + multitask.c           | 无                 |
 | F8   | 线程支持（共享地址空间）                                 | multitask.c                       | **已实现**（fork/clone + COW） |
-| F9   | DHCP 自动获取 IP                                         | net                               | 无                 |
-| F10  | DNS 域名解析                                             | net                               | 依赖 F9            |
+| ~~F9~~ | ~~DHCP 自动获取 IP~~                                         | **已实现**：`net/dhcp.h/c` 状态机 + POST 级 initcall 触发 | — |
+| ~~F10~~ | ~~DNS 域名解析~~                                             | **已实现**：`net/dns.h/c` 同步 resolve + DHCP option 6 获取 DNS 服务器 | — |
 | F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4（已完成，VMA/按需分页就绪） |
 | ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
 | ~~F13~~ | ~~O(1) 调度选择（per-level runqueue + bitmap）~~         | **已实现**：rq[] per-level 链表 + rq\_nonempty bitmap ctz 选层（multitask.h:117-121） | —                  |

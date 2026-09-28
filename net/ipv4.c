@@ -63,7 +63,7 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
     bool send_back = false;
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
     printk_debug("protocol=%x\n", ip_message->protocol);
-    if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
+    if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend) || ip_message->dst_ip == JLOS_IPV4_BROADCAST) {
         printk_debug("packet is for us\n");
         int length = JLOS_SWAP_ENDIAN_16(ip_message->total_length);
         if (length > (int)size) {
@@ -113,16 +113,22 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     for (int i = 0; i < (int)size; i++) {
         data_buffer[i] = data[i];
     }
-    uint32_t route = dstIP_BE;
-    if ((dstIP_BE & self->subnet_mask) != (message->src_ip & self->subnet_mask)) {
-        route = self->gateway_ip;
+    uint64_t dst_mac;
+    if (dstIP_BE == JLOS_IPV4_BROADCAST) {
+        dst_mac = JLOS_ETHER_BROADCAST_MAC;
+    } else {
+        uint32_t route = dstIP_BE;
+        if ((dstIP_BE & self->subnet_mask) != (message->src_ip & self->subnet_mask)) {
+            route = self->gateway_ip;
+        }
+        dst_mac = jlos_arp_lookup_or_request(self->arp, route);
+        if (dst_mac == 0xFFFFFFFFFFFF) {
+            printk_warn("ARP pending for route=%x, packet dropped\n", route);
+            jlos_kfree(buffer);
+            return;
+        }
     }
-    uint64_t dst_mac = jlos_arp_lookup_or_request(self->arp, route);
-    if (dst_mac == 0xFFFFFFFFFFFF) {
-        printk_warn("ARP pending for route=%x, packet dropped\n", route);
-        jlos_kfree(buffer);
-        return;
-    }
+    
     jlos_ether_frame_handler_send(&self->base_handler, dst_mac, self->base_handler.etherType_BE, buffer, sizeof(jlos_ipv4_message_t) + size);
     jlos_kfree(buffer);
 }
