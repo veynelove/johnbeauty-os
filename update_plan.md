@@ -1,7 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.3 | 日期: 2026-09-28 | 作者: JohnLove
+版本: v3.4 | 日期: 2026-09-28 | 作者: JohnLove
 
+> v3.4 变更：Console 历史回看（F14 日志环形缓冲 + Shift+PgUp/PgDn）+ F15 串口输出宏开关 + framebuffer 列数适配（128×48）。
 > v3.3 变更：网络栈 DHCP/DNS 完善（IPv4 广播收发 + 网络配置结构去硬编码 + DHCP 状态机 + DNS 解析器）。
 > v3.2 变更：时间子系统升级（clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象）；NTP 同步方案重新设计为用户空间守护进程路线。
 > v3.1 变更：与代码逐项核对后修正 5 处过时状态（MM-2 / MT-1 / MT-2 / MT-4 / PAG-5 / F13）；「实施优先级」重写为批次升级路线；开发日志与 v2.3 以前历史档案迁至 history_update.md。
@@ -52,6 +53,8 @@
 | execve 系统调用 | execve + argv/envp 栈布局（System V ABI x86 32-bit）+ copy\_from\_user 拷贝                      | argc/argv 正确传递，hello.elf 运行   |
 | 用户态子项目   | jlcy/ 独立子项目 + crt0.S 汇编入口 + user\_syscall stub + 0x08048000 经典基址                    | hello.elf 编译 + 链接 + 运行通过      |
 | MM-5 SSE2 优化 | weak/strong 链接模式 + SSE2 32B 宽写 + CR4.OSFXSR 安全检查 + movdqu 栈保存                       | memset/memcpy 性能提升，ALL PASSED    |
+| F14 Console 历史回看 | 日志环形缓冲(512行×256列) + Shift+PgUp/PgDn + render_view + framebuffer 列数适配(128×48) | 历史回看正常，光标不覆盖日志          |
+| F15 串口宏开关 | `JLOS_SERIAL_ECHO` 编译期宏 + \b 不输出串口（日志 append-only）                                  | 串口日志无 BS 字样                    |
 
 ***
 
@@ -318,8 +321,8 @@ graph TD
 
 | # | 问题 | 说明 | 优先级 |
 | --- | --- | --- | --- |
-| CON-1 | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看 | printk 全部历史保存，类比 Linux ring buffer + dmesg | 中 |
-| CON-2 | 串口宏开关 `JLOS_SERIAL_ECHO` | 当前串口始终输出，需宏控制开关 | 低 |
+| ~~CON-1~~ | ~~日志环形缓冲 + Shift+PgUp/PgDn 历史查看~~ | **已实现**：F14 环形缓冲 + render_view + 键盘 PgUp/PgDn | — |
+| ~~CON-2~~ | ~~串口宏开关 `JLOS_SERIAL_ECHO`~~ | **已实现**：F15 编译期宏 + \b 不输出串口 | — |
 | CON-3 | PCI 总线枚举从 HAL 拆到 `drivers/pci/` | arch 无关总线枚举逻辑可上提 drivers 层 | 低 |
 
 ***
@@ -485,7 +488,7 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
 | ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
-| 穿插 | F9 DHCP + F10 DNS（网络栈已通，经典收尾）；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~3 console 遗留 | 无依赖、量级小，可穿插任意批次间隙 | 无 |
+| ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
 完成后进入 Phase 4 SMP 实现 + 多架构（ARM/RISC-V）阶段。
 
@@ -593,17 +596,22 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 - `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
 - `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
 
-### 后续规划（备忘）
+### 后续规划（v3.4 路线，基于项目核心子系统扫描）
 
-NTP 同步重新设计为用户空间守护进程路线（经典做法），内核只提供 syscall 支持：
+NTP 同步走用户空间守护进程路线（经典做法），内核只提供 syscall。以下按依赖与收益排序：
 
-| 子步骤 | 内容 | 依赖 | 备注 |
-| --- | --- | --- | --- |
-| 4b | `settimeofday`/`clock_settime` syscall + jlcy 封装 | 无 | ✅ 已完成 |
-| 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | **大工程**，向用户空间暴露内核 UDP/TCP 栈，建议独立阶段 |
-| 4d | 用户空间 NTP 客户端 `jlcy/user/ntpclient.c` | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| 5 | hrtimer 高精度定时器（红黑树） | 无 | 独立阶段 |
-| 6 | nanosleep syscall | 5 | 依赖 hrtimer |
+| 优先级 | 阶段 | 内容 | 依赖 | 备注 |
+| --- | --- | --- | --- | --- |
+| 高 | hrtimer | 高精度定时器（红黑树 + oneshot 模式） | 无 | 基础设施：TCP 重传/keepalive/2MSL、DHCP 租约续期、watchdog、nanosleep、POSIX timer、ARP 缓存过期都依赖 |
+| 高 | FS 缓存 | buffer cache + page cache | 无 | FAT32 每次读 FAT 扇区走裸 IO，重大性能短板 |
+| 高 | sk_buff | 统一网络缓冲区管理 | 无 | 当前每层 kalloc+memcpy，零拷贝不可能 |
+| 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
+| 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
+| 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
+| 中 | SMP 实现 | APIC+IPI+per-CPU 激活、锁粒度细化 | — | 架构性升级，Phase 4 预留接口已就位 |
+| 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
+| 低 | nanosleep | nanosleep syscall | hrtimer | |
+| 低 | 中断现代化 | 8259→APIC、软中断/tasklet | SMP | |
 
 ### 实施优先级（历史，已被批次规划取代）
 
@@ -643,8 +651,8 @@ NTP 同步重新设计为用户空间守护进程路线（经典做法），内�
 | F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4（已完成，VMA/按需分页就绪） |
 | ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
 | ~~F13~~ | ~~O(1) 调度选择（per-level runqueue + bitmap）~~         | **已实现**：rq[] per-level 链表 + rq\_nonempty bitmap ctz 选层（multitask.h:117-121） | —                  |
-| F14  | 日志环形缓冲 + Shift+PgUp/PgDn 历史查看                  | kernel/console.c + printk.c       | 无                 |
-| F15  | 串口输出宏开关 `JLOS_SERIAL_ECHO`                        | kernel/console.c + hal/serial.h   | 无                 |
+| ~~F14~~ | ~~日志环形缓冲 + Shift+PgUp/PgDn 历史查看~~                  | **已实现**：`kernel/console.c` 环形缓冲 + render_view + 键盘 PgUp/PgDn | —  |
+| ~~F15~~ | ~~串口输出宏开关 `JLOS_SERIAL_ECHO`~~                        | **已实现**：`tools/config.h` + console.c `#if` 包裹 + \b 不输出串口 | —   |
 
 ***
 

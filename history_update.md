@@ -5,6 +5,31 @@
 
 ***
 
+## 2026-09-28（v3.4）Console 历史回看 + 串口开关
+
+### F15：串口输出宏开关
+
+- **`JLOS_SERIAL_ECHO` 宏**：`tools/config.h` 新增，`1`=同时输出串口+framebuffer，`0`=仅 framebuffer。
+- **console.c 包裹**：`console_putc_locked` 中 3 处 `jlos_hal_serial_default_putc` 调用用 `#if JLOS_SERIAL_ECHO` 包裹（\n/\b/普通字符）。
+- **\b 串口不输出**：退格是 framebuffer console 的交互操作，串口日志是 append-only 流，\b 在日志里无意义。删除 \b 分支的串口输出，消除串口日志中多余的 "BS" 字样。
+
+### F14：日志环形缓冲 + Shift+PgUp/PgDn 历史回看
+
+- **环形历史缓冲**：`kernel/console.c` 新增 `s_history[512][256]` 行级环形缓冲（`console_cell_t` = 字符+属性），`history_write_cell`/`history_newline` 在 `console_putc_locked` 中同步写入。`s_history_write_idx`/`s_history_line_count`/`s_view_scoll` 管理缓冲区与回看偏移。
+- **列上限宏**：`JLOS_CONSOLE_MAX_COLS 256`（`console.h`），history 第二维用它而非 `JLOS_CONSOLE_DEFAULT_COLS=80`。framebuffer 实际 128 列（1024/8），原 80 列导致越界。`jlos_console_init`/`reinit` 加 `s_cols > MAX_COLS` clamp。
+- **history_newline 清整行**：清 `JLOS_CONSOLE_MAX_COLS` 列而非 `s_cols`，VGA 阶段（80列）写入的行切到 framebuffer（128列）后也能正确 render。
+- **键盘功能键接口**：`drivers/keyboard.h` 加 `jlos_special_key_t` 枚举（PGUP/PGDN）+ `on_special_key` 回调。`drivers/keyboard.c` 处理 scan code 0x49/0x51（Set 1 PgUp/PgDn make code）。
+- **input.c 连接滚动**：`console_keyboard_special_key` 调 `jlos_console_scroll_view(±rows)`，一次滚一屏。`jlos_console_get_rows()` 获取行数（s_rows 是 console.c static）。
+- **render_view**：从 history 渲染指定偏移的 s_rows 行到 framebuffer。`eff_count = line_count + 1`（当前行 write_idx 总是光标所在行，必须包含），`base_idx` 用环形索引计算。
+- **scroll_view/reset_view**：`s_view_scoll` clamp 到 `[0, eff_count - s_rows]`。`jlos_console_putc`/`puts` 入口检测 `s_view_scoll > 0` 自动回实时视图。
+- **render 当前空行修复**：`\n` 后当前行是空行（write_idx），`line_count` 包含它但 `latest = line_count - 1` 漏了它，render 把最后一行日志放到光标行导致重叠。修复：`eff_count = line_count + 1` 总是成立，当前空行正确占据最后一行。
+
+### 验证
+
+framebuffer 1024×768（128×48），日志输出后 Shift+PgUp 回看历史、Shift+PgDn 回实时，光标位置正确不覆盖日志。
+
+***
+
 ## 2026-09-28（v3.3）网络栈 DHCP/DNS 完善
 
 ### 批次 1：IPv4 广播支持

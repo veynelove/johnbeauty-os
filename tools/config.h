@@ -22,4 +22,6 @@
 
 #define JLOS_KERNEL_LOG_REALTIME        0
 
+#define JLOS_SERIAL_ECHO                1
+
 #endif

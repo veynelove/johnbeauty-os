@@ -13,6 +13,23 @@ typedef struct {
     jlos_keyboard_event_handler_t base;
 } console_keyboard_handler_t;
 
+static void console_keyboard_special_key(jlos_keyboard_event_handler_t *self, jlos_special_key_t key, bool shift)
+{
+    (void)self;
+    (void)shift;
+    int32_t page = (int32_t)jlos_console_get_rows();
+    switch (key) {
+        case JLOS_KEY_PGUP:
+            jlos_console_scroll_view(page);
+            break;
+        case JLOS_KEY_PGDN:
+            jlos_console_scroll_view(-page);
+            break;
+        default:
+            break;
+    }
+}
+
 static void console_keyboard_key_down(jlos_keyboard_event_handler_t* self, char c)
 {
     (void)self;
@@ -54,6 +71,7 @@ static void input_device_init(void)
     console_keyboard_handler_t *kbhandler = (console_keyboard_handler_t *)jlos_kalloc(sizeof(console_keyboard_handler_t));
     jlos_keyboard_event_handler_init(&kbhandler->base);
     kbhandler->base.key_down = console_keyboard_key_down;
+    kbhandler->base.on_special_key = console_keyboard_special_key;
 
     jlos_keyboard_driver_t *keyboard = (jlos_keyboard_driver_t *)jlos_kalloc(sizeof(jlos_keyboard_driver_t));
     jlos_keyboard_driver_init(keyboard, jlos_active_irq_manager, &kbhandler->base);

@@ -125,6 +125,9 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
         case 0x2A: case 0x36: shift = true; break;
         case 0xAA: case 0xB6: shift = false; break;
         case 0x3A: break;
+
+        case 0x49: if(keyboard->handler->on_special_key) keyboard->handler->on_special_key(keyboard->handler, JLOS_KEY_PGUP, shift); break;
+        case 0x51: if(keyboard->handler->on_special_key) keyboard->handler->on_special_key(keyboard->handler, JLOS_KEY_PGDN, shift); break;
         
         default:
             break;

@@ -6,6 +6,14 @@
 #define JLOS_CONSOLE_DEFAULT_COLS 80
 #define JLOS_CONSOLE_DEFAULT_ROWS 25
 
+#define JLOS_CONSOLE_HISTORY_LINES  512
+#define JLOS_CONSOLE_MAX_COLS       256
+
+typedef struct {
+    char    ch;
+    uint8_t attr;
+} console_cell_t;
+
 void jlos_console_init(void);
 void jlos_console_reinit(void);
 
@@ -20,5 +28,8 @@ uint32_t jlos_console_get_cols(void);
 uint32_t jlos_console_get_rows(void);
 void jlos_console_lock(uint32_t *flags);
 void jlos_console_unlock(uint32_t flags);
+
+void jlos_console_scroll_view(int32_t delta);
+void jlos_console_reset_view(void);
 
 #endif
