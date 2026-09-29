@@ -1,8 +1,16 @@
+#include <stdarg.h>
 #include <hal/serial.h>
 #include <hal/clock_event.h>
 #include <kernel/printk.h>
 #include <kernel/console.h>
 #include <kernel/timek.h>
+
+static int g_printk_loglevel = JLOS_KERNEL_LOG_DEBUG;
+
+void jlos_printk_set_loglevel(int level)
+{
+    g_printk_loglevel = level;
+}
 
 void jlos_printk_init(void)
 {
@@ -15,102 +23,56 @@ void printf(const char *str)
     jlos_console_puts(str);
 }
 
-void printf_hex(uint8_t key)
-{
-    char foo[3] = "00";
-    char *hex = "0123456789ABCDEF";
-    foo[0] = hex[(key >> 4) & 0x0F];
-    foo[1] = hex[key & 0x0F];
-    jlos_console_puts(foo);
-}
-
-void printf_hex16(uint16_t value)
-{
-    char foo[5] = "0000";
-    char *hex = "0123456789ABCDEF";
-    foo[0] = hex[(value >> 12) & 0x0F];
-    foo[1] = hex[(value >> 8) & 0x0F];
-    foo[2] = hex[(value >> 4) & 0x0F];
-    foo[3] = hex[value & 0x0F];
-    jlos_console_puts(foo);
-}
-
-void printf_hex32(uint32_t value)
-{
-    char foo[9] = "00000000";
-    char *hex = "0123456789ABCDEF";
-    foo[0] = hex[(value >> 28) & 0x0F];
-    foo[1] = hex[(value >> 24) & 0x0F];
-    foo[2] = hex[(value >> 20) & 0x0F];
-    foo[3] = hex[(value >> 16) & 0x0F];
-    foo[4] = hex[(value >> 12) & 0x0F];
-    foo[5] = hex[(value >> 8) & 0x0F];
-    foo[6] = hex[(value >> 4) & 0x0F];
-    foo[7] = hex[value & 0x0F];
-    jlos_console_puts(foo);
-}
-
-void printf_char(char c)
-{
-    jlos_console_putc(c);
-}
-
-static void printk_itoa(int value, int base)
+static void printk_put_uint(uint64_t value, int base, bool uppercase)
 {
     char buffer[32];
-    char *digits = "0123456789ABCDEF";
+    const char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
     int i = 0;
-    bool negative = false;
+
     if (value == 0) {
         jlos_console_putc('0');
         return;
     }
+
+    while (value > 0) {
+        buffer[i++] = digits[value % base];
+        value /= base;
+    }
+
+    while (i > 0) {
+        jlos_console_putc(buffer[--i]);
+    }
+}
+
+static void printk_put_int(int64_t value, int base)
+{
     if (value < 0 && base == 10) {
-        negative = true;
-        value = -value;
-    }
-    while (value > 0) {
-        buffer[i++] = digits[value % base];
-        value /= base;
-    }
-    if (negative) {
         jlos_console_putc('-');
-    }
-    while (i > 0) {
-        jlos_console_putc(buffer[--i]);
-    }
-}
-
-static void printk_utoa(unsigned int value, int base, bool uppercase)
-{
-    char buffer[32];
-    char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
-    int i = 0;
-    
-    if (value == 0) {
-        jlos_console_putc('0');
-        return;
-    }
-    
-    while (value > 0) {
-        buffer[i++] = digits[value % base];
-        value /= base;
-    }
-    
-    while (i > 0) {
-        jlos_console_putc(buffer[--i]);
+        printk_put_uint((uint64_t)(-value), base, false);
+    } else {
+        printk_put_uint((uint64_t)value, base, false);
     }
 }
 
 #if JLOS_KERNEL_LOG_PRINT_TIME || JLOS_KERNEL_LOG_REALTIME
-static void printk_put_us_padded(unsigned int value, int width)
+static void printk_put_uint_padded(unsigned int value, int width)
 {
     char buf[16];
     const char *digits = "0123456789";
     int i = 0;
-    do { buf[i++] = digits[value % 10]; value /= 10; } while (value > 0);
-    while (i < width) buf[i++] = '0';
-    while (i > 0) jlos_console_putc(buf[--i]);
+
+    do {
+        buf[i++] = digits[value % 10];
+        value /= 10;
+    } while (value > 0);
+
+    while (i < width) {
+        buf[i++] = '0';
+    }
+
+    while (i > 0) {
+        jlos_console_putc(buf[--i]);
+    }
 }
 #endif
 
@@ -151,17 +113,17 @@ static void printk_put_realtime(void)
     uint32_t day = days - s_days_before_month[month - 1] - (leap && month - 1 >= 2 ? 1 : 0) + 1;
 
     jlos_console_putc('[');
-    printk_utoa(year, 10, false);
+    printk_put_uint(year, 10, false);
     jlos_console_putc('-');
-    printk_put_us_padded(month, 2);
+    printk_put_uint_padded(month, 2);
     jlos_console_putc('-');
-    printk_put_us_padded(day, 2);
+    printk_put_uint_padded(day, 2);
     jlos_console_putc(' ');
-    printk_put_us_padded(h, 2);
+    printk_put_uint_padded(h, 2);
     jlos_console_putc(':');
-    printk_put_us_padded(m, 2);
+    printk_put_uint_padded(m, 2);
     jlos_console_putc(':');
-    printk_put_us_padded(s, 2);
+    printk_put_uint_padded(s, 2);
     jlos_console_putc(']');
     jlos_console_putc(' ');
 }
@@ -171,7 +133,7 @@ static void printk_put_realtime(void)
 static char printk_level_char(int level)
 {
     switch (level) {
-    case JLOS_KERNEL_LOG_EMERG:  return 'P';  /* panic */
+    case JLOS_KERNEL_LOG_EMERG:  return 'P';
     case JLOS_KERNEL_LOG_ALERT:  return 'A';
     case JLOS_KERNEL_LOG_CRIT:   return 'C';
     case JLOS_KERNEL_LOG_ERR:    return 'E';
@@ -188,15 +150,18 @@ static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, c
 {
 #if JLOS_KERNEL_LOG_REALTIME
     printk_put_realtime();
+    (void)ticks;
 #elif JLOS_KERNEL_LOG_PRINT_TIME
     uint32_t sec = ticks / JLOS_HAL_TIME_FREQ_HZ;
     uint32_t us  = (ticks % JLOS_HAL_TIME_FREQ_HZ) * (1000000 / JLOS_HAL_TIME_FREQ_HZ);
     jlos_console_putc('[');
-    printk_utoa(sec, 10, false);
+    printk_put_uint(sec, 10, false);
     jlos_console_putc('.');
-    printk_put_us_padded(us, 6);
+    printk_put_uint_padded(us, 6);
     jlos_console_putc(']');
     jlos_console_putc(' ');
+#else
+    (void)ticks;
 #endif
 #if JLOS_KERNEL_LOG_PRINT_LEVEL
     jlos_console_putc('[');
@@ -218,12 +183,17 @@ static void printk_print_prefix(uint32_t ticks, int level, const char *subsys, c
     }
     (void)level;
     (void)subsys;
-    (void)ticks;
 }
 
 void printk(int level, const char *subsys, const char *func, const char *fmt, ...)
 {
-    uint32_t *args = (uint32_t *)&fmt + 1;
+    if (level > g_printk_loglevel) {
+        return;
+    }
+
+    va_list ap;
+    va_start(ap, fmt);
+
     uint32_t flags;
     jlos_console_lock(&flags);
     uint32_t ticks = jlos_timek_get_ticks();
@@ -241,41 +211,85 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
         }
         if (fmt[i] == '%') {
             i++;
-            switch(fmt[i]) {
+            bool is_long_long = false;
+            bool is_long = false;
+            if (fmt[i] == 'l' && fmt[i + 1] == 'l') {
+                is_long_long = true;
+                i += 2;
+            } else if (fmt[i] == 'l') {
+                is_long = true;
+                i += 1;
+            } else if (fmt[i] == 'z') {
+                is_long = true;
+                i += 1;
+            }
+            switch (fmt[i]) {
                 case 'd': {
-                    int value = *args++;
-                    printk_itoa(value, 10);
+                    if (is_long_long) {
+                        int64_t value = va_arg(ap, int64_t);
+                        printk_put_int(value, 10);
+                    } else if (is_long) {
+                        long value = va_arg(ap, long);
+                        printk_put_int(value, 10);
+                    } else {
+                        int value = va_arg(ap, int);
+                        printk_put_int(value, 10);
+                    }
                     break;
                 }
                 case 'u': {
-                    unsigned int value = *args++;
-                    printk_utoa(value, 10, false);
+                    if (is_long_long) {
+                        uint64_t value = va_arg(ap, uint64_t);
+                        printk_put_uint(value, 10, false);
+                    } else if (is_long) {
+                        unsigned long value = va_arg(ap, unsigned long);
+                        printk_put_uint(value, 10, false);
+                    } else {
+                        unsigned int value = va_arg(ap, unsigned int);
+                        printk_put_uint(value, 10, false);
+                    }
                     break;
                 }
                 case 'x': {
-                    unsigned int value = *args++;
-                    printk_utoa(value, 16, false);
+                    if (is_long_long) {
+                        uint64_t value = va_arg(ap, uint64_t);
+                        printk_put_uint(value, 16, false);
+                    } else if (is_long) {
+                        unsigned long value = va_arg(ap, unsigned long);
+                        printk_put_uint(value, 16, false);
+                    } else {
+                        unsigned int value = va_arg(ap, unsigned int);
+                        printk_put_uint(value, 16, false);
+                    }
                     break;
                 }
                 case 'X': {
-                    unsigned int value = *args++;
-                    printk_utoa(value, 16, true);
+                    if (is_long_long) {
+                        uint64_t value = va_arg(ap, uint64_t);
+                        printk_put_uint(value, 16, true);
+                    } else if (is_long) {
+                        unsigned long value = va_arg(ap, unsigned long);
+                        printk_put_uint(value, 16, true);
+                    } else {
+                        unsigned int value = va_arg(ap, unsigned int);
+                        printk_put_uint(value, 16, true);
+                    }
+                    break;
+                }
+                case 'p': {
+                    unsigned int value = va_arg(ap, unsigned int);
+                    jlos_console_puts("0x");
+                    printk_put_uint(value, 16, false);
                     break;
                 }
                 case 's': {
-                    const char *str = (const char *)*args++;
+                    const char *str = va_arg(ap, const char *);
                     jlos_console_puts(str);
                     break;
                 }
                 case 'c': {
-                    char c = (char)*args++;
+                    char c = (char)va_arg(ap, int);
                     jlos_console_putc(c);
-                    break;
-                }
-                case 'p': {
-                    unsigned int value = *args++;
-                    jlos_console_puts("0x");
-                    printk_utoa(value, 16, false);
                     break;
                 }
                 case '%': {
@@ -293,4 +307,5 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
         }
     }
     jlos_console_unlock(flags);
+    va_end(ap);
 }

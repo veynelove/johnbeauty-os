@@ -1,7 +1,7 @@
 #ifndef _COMMON_TYPES_H
 #define _COMMON_TYPES_H
 
-#include <tools/config.h>
+#include <include/config.h>
 
 typedef unsigned char              uint8_t;
 typedef unsigned short             uint16_t;

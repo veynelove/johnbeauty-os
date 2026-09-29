@@ -2,7 +2,7 @@
 #include <net/network.h>
 #include <kernel/timek.h>
 #include <hal/hal_arch.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_SUBSYS "dns"
 #include <kernel/printk.h>

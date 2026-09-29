@@ -5,6 +5,44 @@
 
 ***
 
+## 2026-09-29（v3.5）hrtimer 高精度定时器 + nanosleep + 测试体系改造
+
+### hrtimer 批次 1：PIT oneshot + clock_event oneshot 接口
+
+- **PIT oneshot 模式**：`arch/x86/pit.c` 加 `pit_set_state_oneshot`（mode 0）+ `pit_set_next_event`（ns→PIT count + clamp 0xFFFF，PIT 16 位最大间隔 ≈ 55ms）+ features 加 ONESHOT。
+- **clock_event oneshot 接口**：`hal/clock_event.h/c` 加 `start_oneshot`/`set_next` 接口。
+
+### hrtimer 批次 2：核心结构 + API
+
+- **新建 `kernel/hrtimer.h`/`kernel/hrtimer.c`**：`jlos_hrtimer_t`（node + function + expires + period + base）+ `jlos_hrtimer_base_t`（红黑树 root + current_time_ns）+ API（init/start/cancel/forward）。hrtimer 节点嵌入 `jlos_rbtree_node_t`，按 expires 排序。
+
+### hrtimer 批次 3：中断集成 + 周期性 tick hrtimer
+
+- **hrtimer interrupt**：全局 `s_base` + `jlos_hrtimer_interrupt`（遍历到期 hrtimer → 回调 → forward 周期性 → 重编程 next_event）。
+- **s_base 初始化修复**：BSS 零初始化但 `jlos_rbtree_init` 未调用 → root=NULL → triple fault。加 SUBSYS 级 initcall `hrtimer_base_setup`。
+- **tick hrtimer**：`kernel/timek.c` tick hrtimer 实例 + 回调 + `jlos_tick_init` POST 级 initcall。
+- **调度记账分离**：`multitask.c` 加 `tick_and_schedule`；`interrupts.c` IRQ0 精简为 `hrtimer_interrupt()` + `tick_and_schedule()`，消除 arch 层耦合。
+
+### hrtimer 批次 4：nanosleep syscall
+
+- **sleeper 结构**：`jlos_hrtimer_sleeper_t`（hrtimer + task 指针），栈上构造（对应 Linux `hrtimer_sleeper`）。
+- **统一唤醒原语**：`jlos_task_wakeup`（对应 `wake_up_process`）；`nanosleep_wakeup` 用 `container_of` 反查 sleeper。
+- **syscall_nanosleep**：`JLOS_SYSCALL_NANOSLEEP = 29`；用 REL + monotonic（免疫 NTP 校准）。信号中断留后续。
+
+### 测试体系改造
+
+- **initcall TEST 级别**：`JLOS_INITCALL_TEST = 5`；linker.ld 加 `.initcall5` section；initcall.c 加遍历。测试用 initcall 自注册，`KERNEL_CONFIG_ENABLE_TESTS` 宏控制。
+- **测试文件迁移**：`tools/tests/` → 各子系统 `tests/`（kernel/tests/、dsa/tests/、drivers/tests/、net/tests/）。
+- **tag 规范化**：`"test"` → `t_` + 子系统名（`t_mm`/`t_sched`/`t_paging`/`t_pfa`/`t_rbtree`/`t_ata`/`t_http`/`t_udp`）。
+- **签名改无参**：`memory_manager_test`/`multitask_test` 去参数，统一 `void(void)`。
+- **config.h 迁移**：`tools/config.h` → `include/config.h`，`tools/` 目录删除。
+
+### 验证
+
+`make clean && make` 编译通过。
+
+***
+
 ## 2026-09-28（v3.4）Console 历史回看 + 串口开关
 
 ### F15：串口输出宏开关
@@ -125,7 +163,7 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 - **arp.c 修复**：`net/arp.c:139` 裸 `__asm__ __volatile__("pause" ::: "memory")` 改为 `jlos_hal_cpu_relax()`。`net/arp.c` 添加 `#include <hal/hal_arch.h>`。`arch/x86/spinlock.c:38` 保留裸 `pause`（架构层自身用汇编原语无层次问题）。
 
-- **multitask_te 双时间戳修复**：`printk` 的 `at_line_start` 是局部变量，每次调用都重新输出前缀。`multitask_te.c` 中 6 个 subcase 先 `printk_info("... -> ")` 再 `printk_info("PASS\n")` 产生双时间戳。修复：合并为单次 `printk` 调用。
+- **multitask_te 双时间戳修复**：`printk` 的 `at_line_start` 是局部变量，每次调用都重新输出前缀。`multitask_test.c` 中 6 个 subcase 先 `printk_info("... -> ")` 再 `printk_info("PASS\n")` 产生双时间戳。修复：合并为单次 `printk` 调用。
 
 ### 阶段 4 重新设计：NTP 同步改为用户空间路线
 
@@ -322,7 +360,7 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
   - 修复: 父 `jlos_task_set_waiting(child_pid)` 主动阻塞, 调度器子 ZOMBIE 时自动唤醒父
 
-  - 文件: tools/tests/multitask\_te.c
+  - 文件: tools/tests/multitask\_test.c
 
 - **PF handler 简化** (按需分页, 非临时方案):
 
@@ -334,9 +372,9 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 - **测试代码格式统一 + 架构合规**:
 
-  - memory\_te.c: 统一 K\&R 大括号风格, 删冗余空行, 简化日志上下文标签
+  - memory\_test.c: 统一 K\&R 大括号风格, 删冗余空行, 简化日志上下文标签
 
-  - multitask\_te.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child\*, 子返回 NULL, 调用方据此判 is\_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
+  - multitask\_test.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child\*, 子返回 NULL, 调用方据此判 is\_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
 
 - **HAL 层架构合规重构** (HAL 不含汇编, 汇编全在 arch/):
 

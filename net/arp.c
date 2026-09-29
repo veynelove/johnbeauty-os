@@ -1,6 +1,6 @@
 #include <net/arp.h>
 #include <hal/hal_arch.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "arp"
 #include <kernel/printk.h>

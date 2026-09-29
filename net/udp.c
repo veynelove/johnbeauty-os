@@ -1,6 +1,6 @@
 #include <net/udp.h>
 #include <kernel/memory_manager.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "udp"
 #include <kernel/printk.h>

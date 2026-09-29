@@ -1,11 +1,12 @@
-/* tools/tests/memory_te.c — JLOS kalloc/kfree 统一入口测试
+/* tools/tests/memory_test.c — JLOS kalloc/kfree 统一入口测试
  * 覆盖：边界 / SLAB small / 连续物理 large / kv-heap fallback / roundtrip */
-#include <tools/tests/memory_te.h>
+#include <kernel/tests/memory_test.h>
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
+#include <kernel/initcall.h>
 
-#define JLOS_KERNEL_LOG_SUBSYS "test"
+#define JLOS_KERNEL_LOG_SUBSYS "t_mm"
 #include <kernel/printk.h>
 
 /* buf[i] = i ^ seed ^ (i>>8 & 0xFF) */
@@ -37,10 +38,10 @@ static int test_boundary(void)
 
     void *p0 = jlos_kalloc(0);
     if (p0) {
-        printk_err("FAIL: kalloc(0)=%p want NULL\n", p0);
+        printk_err("kalloc(0)=%p want NULL\n", p0);
         fail++;
     } else {
-        printk_info("OK: kalloc(0) == NULL\n");
+        printk_info("kalloc(0) == NULL\n");
     }
     jlos_kfree(p0);
 
@@ -52,7 +53,7 @@ static int test_boundary(void)
         size_t sz = cases[i];
         uint8_t *p = (uint8_t *)jlos_kalloc(sz);
         if (!p) {
-            printk_err("FAIL: kalloc(%u)=NULL\n", (unsigned)sz);
+            printk_err("kalloc(%u)=NULL\n", (unsigned)sz);
             fail++;
             continue;
         }
@@ -61,7 +62,7 @@ static int test_boundary(void)
             fail++;
         jlos_kfree(p);
     }
-    printk_info("OK: boundary (%u cases)\n",
+    printk_info("boundary (%u cases)\n",
            (unsigned)(sizeof(cases) / sizeof(cases[0])));
     return fail;
 }
@@ -80,7 +81,7 @@ static int test_small_slab(void)
     for (size_t i = 0; i < N; i++) {
         ptrs[i] = jlos_kalloc(cases[i]);
         if (!ptrs[i]) {
-            printk_err("FAIL: kalloc(%u)=NULL\n", (unsigned)cases[i]);
+            printk_err("kalloc(%u)=NULL\n", (unsigned)cases[i]);
             fail++;
             continue;
         }
@@ -94,7 +95,7 @@ static int test_small_slab(void)
             fail++;
         jlos_kfree(ptrs[i]);
     }
-    printk_info("OK: small slab (%u sizes)\n", (unsigned)N);
+    printk_info("small slab (%u sizes)\n", (unsigned)N);
     return fail;
 }
 
@@ -117,7 +118,7 @@ static int test_large_contig(void)
         if (check_pattern(p, sz, (uint8_t)(0x11 + i * 0x22), "contig"))
             fail++;
         jlos_kfree(p);
-        printk_info("OK: %u pages\n", (unsigned)(sz / JLOS_PAGE_FRAME_SIZE));
+        printk_info("%u pages\n", (unsigned)(sz / JLOS_PAGE_FRAME_SIZE));
     }
     return fail;
 }
@@ -133,7 +134,7 @@ static int test_kvheap_fallback(void)
         size_t sz = cases[i];
         uint8_t *p = (uint8_t *)jlos_kvalloc(sz);
         if (!p) {
-            printk_err("FAIL: kvalloc(%u)=NULL\n", (unsigned)sz);
+            printk_err("kvalloc(%u)=NULL\n", (unsigned)sz);
             fail++;
             continue;
         }
@@ -142,7 +143,7 @@ static int test_kvheap_fallback(void)
             fail++;
         jlos_kvfree(p);
     }
-    printk_info("OK: kvheap fallback\n");
+    printk_info("kvheap fallback\n");
     return fail;
 }
 
@@ -157,7 +158,7 @@ static int test_roundtrip(void)
     for (unsigned n = 0; n < N; n++) {
         uint8_t *p = (uint8_t *)jlos_kalloc(SZ);
         if (!p) {
-            printk_err("FAIL: iter %u NULL\n", n);
+            printk_err("iter %u NULL\n", n);
             fail++;
             break;
         }
@@ -170,7 +171,7 @@ static int test_roundtrip(void)
         jlos_kfree(p);
     }
     if (!fail)
-        printk_info("OK: %u iters\n", N);
+        printk_info("%u iters\n", N);
 
     const unsigned M = 100;
     const size_t BIG = 16 * JLOS_PAGE_FRAME_SIZE;
@@ -180,7 +181,7 @@ static int test_roundtrip(void)
     for (unsigned n = 0; n < M; n++) {
         uint8_t *p = (uint8_t *)jlos_kalloc(BIG);
         if (!p) {
-            printk_err("FAIL: iter %u NULL\n", n);
+            printk_err("iter %u NULL\n", n);
             fail++;
             break;
         }
@@ -193,15 +194,13 @@ static int test_roundtrip(void)
         jlos_kfree(p);
     }
     if (!fail)
-        printk_info("OK: %u iters\n", M);
+        printk_info("%u iters\n", M);
     return fail;
 }
 
 /* ---- 主入口 ---- */
-void memory_manager_test(const void *multiboot_structure)
+void memory_manager_test(void)
 {
-    (void)multiboot_structure;
-
     printk_info("=== memory test start ===\n");
     printk_info("MIN_ALLOC=%uB CLASS_COUNT=%u PAGE=%uB\n",
            (unsigned)JLOS_MM_MIN_ALLOC, (unsigned)JLOS_MM_CLASS_COUNT,
@@ -219,10 +218,14 @@ void memory_manager_test(const void *multiboot_structure)
     fails += test_roundtrip();
 
     if (!fails)
-        printk_info("memory: ALL PASSED\n");
+        printk_info("memory: all passed\n");
     else
-        printk_err("memory: FAILS: %d, check above\n", fails);
+        printk_err("memory: %d failures\n", fails);
 
     printk_info("post-test heap stats:\n");
     jlos_kvalloc_stats(jlos_active_memory_manager);
 }
+
+#if KERNEL_CONFIG_ENABLE_TESTS
+JLOS_INITCALL(JLOS_INITCALL_TEST, memory_manager_test);
+#endif

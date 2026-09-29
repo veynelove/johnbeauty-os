@@ -57,6 +57,7 @@ SECTIONS
         __initcall2_start = .; KEEP(*(.initcall2))  __initcall2_end = .;
         __initcall3_start = .; KEEP(*(.initcall3))  __initcall3_end = .;
         __initcall4_start = .; KEEP(*(.initcall4))  __initcall4_end = .;
+        __initcall5_start = .; KEEP(*(.initcall5))  __initcall5_end = .;
         . = ALIGN(4K);
         _data_end = .;
     } :data

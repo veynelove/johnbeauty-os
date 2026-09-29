@@ -1,8 +1,9 @@
-#include <tools/tests/udp_server_te.h>
+#include <net/tests/udp_server_test.h>
 #include <kernel/memory_manager.h>
 #include <net/network.h>
+#include <kernel/initcall.h>
 
-#define JLOS_KERNEL_LOG_SUBSYS "test"
+#define JLOS_KERNEL_LOG_SUBSYS "t_udp"
 #include <kernel/printk.h>
 
 typedef struct {
@@ -26,3 +27,6 @@ void udp_server_test(void)
     jlos_udp_provider_bind(udp, udpsocket, &udphandler->base);
     printk_info("udp server listening on port 5678\n");
 }
+#if KERNEL_CONFIG_ENABLE_TESTS
+JLOS_INITCALL(JLOS_INITCALL_TEST, udp_server_test);
+#endif

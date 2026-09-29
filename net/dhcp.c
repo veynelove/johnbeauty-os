@@ -2,7 +2,7 @@
 #include <net/network.h>
 #include <kernel/memory_manager.h>
 #include <kernel/timek.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "dhcp"
 #include <kernel/printk.h>

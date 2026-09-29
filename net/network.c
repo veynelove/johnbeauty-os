@@ -1,7 +1,7 @@
 #include <net/network.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
 #include <kernel/printk.h>

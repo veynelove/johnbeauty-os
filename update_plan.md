@@ -1,7 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.4 | 日期: 2026-09-28 | 作者: JohnLove
+版本: v3.5 | 日期: 2026-09-29 | 作者: JohnLove
 
+> v3.5 变更：hrtimer 高精度定时器（红黑树 + PIT oneshot + 周期性 tick + sleeper/nanosleep syscall）+ 测试体系改造（initcall TEST 级别自注册 + 测试文件迁移到各子系统 tests/ + tag 规范化 + config.h 移到 include/ + tools/ 目录删除）。
 > v3.4 变更：Console 历史回看（F14 日志环形缓冲 + Shift+PgUp/PgDn）+ F15 串口输出宏开关 + framebuffer 列数适配（128×48）。
 > v3.3 变更：网络栈 DHCP/DNS 完善（IPv4 广播收发 + 网络配置结构去硬编码 + DHCP 状态机 + DNS 解析器）。
 > v3.2 变更：时间子系统升级（clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象）；NTP 同步方案重新设计为用户空间守护进程路线。
@@ -44,7 +45,7 @@
 | 多任务测试基线 | fork copy\_thread+ret\_from\_fork 经典范式 + buddy 经典顺序构造 + wait/wake 阻塞 + PF 按需分页   | MEMORY/MULTITASK ALL PASSED, TEST1-4 全 PASS |
 | VMA/mmap 阶段1 | VMA 结构统一 brk/stack + page\_fault/fork/destroy VMA 驱动 + mmap 接口预留 + COW 批量锁优化 `jlos_paging_cow_range` | 四套测试 + rbtree 5 项 ALL PASSED    |
 | 红黑树 DSA     | CLRS 风格红黑树（哨兵 nil 节点 + 侵入式 container\_of），find/find\_le/insert/remove/遍历           | rbtree 5 项 ALL PASSED                |
-| Initcall 机制  | 5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST）+ 链接器段 + `jlos_do_initcalls()` 替代 call\_constructors | 全部子系统自动注册，ALL PASSED        |
+| Initcall 机制  | 6 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST/TEST）+ 链接器段 + `jlos_do_initcalls()` 替代 call\_constructors | 全部子系统自动注册，ALL PASSED        |
 | Framebuffer Console | VBE 1024×768×32 framebuffer + 8×16 ASCII 字体 + 软件光标(erase/draw) + 鼠标光标(invert) | 1024×768 显示，键盘/鼠标正常          |
 | 输入子系统     | keyboard/mouse 驱动自动注册 + 事件回调（console 键盘输入 + 鼠标光标移动）                        | initcall DEVICE 级自动注册             |
 | HAL 层重构     | timer B2 链表选优 + serial/dma/pci/ext\_state A 分层 + 职责归属 + 去 drivers 依赖                | 编译通过 + 全测试 PASSED               |
@@ -55,6 +56,8 @@
 | MM-5 SSE2 优化 | weak/strong 链接模式 + SSE2 32B 宽写 + CR4.OSFXSR 安全检查 + movdqu 栈保存                       | memset/memcpy 性能提升，ALL PASSED    |
 | F14 Console 历史回看 | 日志环形缓冲(512行×256列) + Shift+PgUp/PgDn + render_view + framebuffer 列数适配(128×48) | 历史回看正常，光标不覆盖日志          |
 | F15 串口宏开关 | `JLOS_SERIAL_ECHO` 编译期宏 + \b 不输出串口（日志 append-only）                                  | 串口日志无 BS 字样                    |
+| hrtimer 高精度定时器 | 红黑树 + PIT oneshot + 周期性 tick hrtimer + sleeper/nanosleep syscall（REL + monotonic） | 编译通过，IRQ0 精简为 hrtimer+tick_and_schedule |
+| 测试体系改造 | initcall TEST 级别自注册 + 测试迁移到各子系统 tests/ + tag 规范化(t_xxx) + config.h→include/ | 编译通过，kernel.c 删硬编码调用列表    |
 
 ***
 
@@ -268,9 +271,9 @@ graph TD
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| 5 级 initcall 宏 (CORE/SUBSYS/DEVICE/LATE/POST) | ✅ | `kernel/initcall.h`，两层宏 `__JLOS_INITCALL` + `JLOS_INITCALL` 先展开 level 再字符串化 |
-| 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall4` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
-| `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 5 个段执行 |
+| 5 级 initcall 宏 (CORE/SUBSYS/DEVICE/LATE/POST/TEST) | ✅ | `kernel/initcall.h`，两层宏 `__JLOS_INITCALL` + `JLOS_INITCALL` 先展开 level 再字符串化 |
+| 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall5` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
+| `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 6 个段执行 |
 | 删除 `call_constructors` | ✅ | `loader.s` 删除调用 + `kernel.c` 删除函数定义 + `linker.ld` 删除 `.init_array` 段 |
 | `john_beauty_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
 
@@ -283,6 +286,7 @@ graph TD
 | DEVICE (2) | timer, network, display\_device, input\_device, syscall\_handler | 设备/驱动注册 |
 | LATE (3) | driver\_manager\_activate\_all | 驱动激活（依赖 DEVICE 注册完成） |
 | POST (4) | irq\_manager\_activate | 中断最终激活（依赖全部初始化完成） |
+| TEST (5) | 各子系统测试 | `KERNEL_CONFIG_ENABLE_TESTS` 宏控制，最晚运行 |
 
 ### 6.2 Framebuffer Console（VBE 1024×768×32）
 
@@ -304,8 +308,8 @@ graph TD
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
 | `debug_console.c` → `drivers/input/input.c` | ✅ | 键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册 |
-| 删除 `KERNEL_CONFIG_DEBUG_CONSOLE` | ✅ | `tools/config.h` 清理 |
-| 删除 `KERNEL_CONFIG_DEBUG_NETWORK` | ✅ | `tools/config.h` 清理 |
+| 删除 `KERNEL_CONFIG_DEBUG_CONSOLE` | ✅ | `include/config.h` 清理 |
+| 删除 `KERNEL_CONFIG_DEBUG_NETWORK` | ✅ | `include/config.h` 清理 |
 | 删除 `tools/samples/debug_console.c/.h` | ✅ | 迁移完成，原文件删除 |
 
 ### 6.4 Bug 修复
@@ -520,7 +524,7 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| `JLOS_KERNEL_LOG_REALTIME` 宏 | ✅ | `tools/config.h`：0=tick 相对时间 `[0.010000]`，1=wall-clock `[2026-09-27 14:30:25]` |
+| `JLOS_KERNEL_LOG_REALTIME` 宏 | ✅ | `include/config.h`：0=tick 相对时间 `[0.010000]`，1=wall-clock `[2026-09-27 14:30:25]` |
 | printk_print_prefix | ✅ | `kernel/printk.c`：`#if REALTIME` 走 `printk_put_realtime()`，`#elif PRINT_TIME` 走 tick 格式 |
 | printk_put_realtime | ✅ | ns→Unix 秒→年月日时分秒，`printk_utoa` + `printk_put_us_padded` 输出 |
 | 早期日志 |B-01-01 00:00:00]` | ✅ | RTC initcall（LATE 级）前 realtime_base_ns=0，显示 Unix epoch，预期行为 |
@@ -602,7 +606,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
-| 高 | hrtimer | 高精度定时器（红黑树 + oneshot 模式） | 无 | 基础设施：TCP 重传/keepalive/2MSL、DHCP 租约续期、watchdog、nanosleep、POSIX timer、ARP 缓存过期都依赖 |
+| ~~高~~ | ~~hrtimer~~ | ~~高精度定时器（红黑树 + oneshot 模式）~~ | ~~无~~ | **已完成**：4 批次落地（PIT oneshot + 核心结构 + 中断集成 + nanosleep sleeper），详见 history_update.md v3.5 |
 | 高 | FS 缓存 | buffer cache + page cache | 无 | FAT32 每次读 FAT 扇区走裸 IO，重大性能短板 |
 | 高 | sk_buff | 统一网络缓冲区管理 | 无 | 当前每层 kalloc+memcpy，零拷贝不可能 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
@@ -610,7 +614,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 中 | SMP 实现 | APIC+IPI+per-CPU 激活、锁粒度细化 | — | 架构性升级，Phase 4 预留接口已就位 |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| 低 | nanosleep | nanosleep syscall | hrtimer | |
+| ~~低~~ | ~~nanosleep~~ | ~~nanosleep syscall~~ | ~~hrtimer~~ | **已完成**：hrtimer 批次 4（REL + monotonic + sleeper 栈上构造） |
 | 低 | 中断现代化 | 8259→APIC、软中断/tasklet | SMP | |
 
 ### 实施优先级（历史，已被批次规划取代）
@@ -652,7 +656,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
 | ~~F13~~ | ~~O(1) 调度选择（per-level runqueue + bitmap）~~         | **已实现**：rq[] per-level 链表 + rq\_nonempty bitmap ctz 选层（multitask.h:117-121） | —                  |
 | ~~F14~~ | ~~日志环形缓冲 + Shift+PgUp/PgDn 历史查看~~                  | **已实现**：`kernel/console.c` 环形缓冲 + render_view + 键盘 PgUp/PgDn | —  |
-| ~~F15~~ | ~~串口输出宏开关 `JLOS_SERIAL_ECHO`~~                        | **已实现**：`tools/config.h` + console.c `#if` 包裹 + \b 不输出串口 | —   |
+| ~~F15~~ | ~~串口输出宏开关 `JLOS_SERIAL_ECHO`~~                        | **已实现**：`include/config.h` + console.c `#if` 包裹 + \b 不输出串口 | —   |
 
 ***
 

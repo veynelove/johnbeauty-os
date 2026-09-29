@@ -2,7 +2,7 @@
 #define _JLOS_KERNEL_PRINTK_H
 
 #include <common/types.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_EMERG  0
 #define JLOS_KERNEL_LOG_ALERT  1
@@ -41,5 +41,6 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
 #endif
 
 void jlos_printk_init(void);
+void jlos_printk_set_loglevel(int level);
 
 #endif

@@ -167,6 +167,9 @@ void jlos_signal_check_deliver(jlos_task_t *t, jlos_cpu_state_t *tf);
 void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick);
 const char *jlos_task_status_map_str(uint32_t status);
 
+void jlos_task_wakeup(jlos_task_t *task);
+void jlos_task_sleep_hrtimer(jlos_task_manager_t *self, uint64_t ns);
+
 void jlos_task_manager_init();
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
@@ -175,6 +178,7 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self);
 
 jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid);
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
+void jlos_task_manager_tick_and_schedule(jlos_task_manager_t *self);
 
 jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe);
 jlos_task_t *jlos_process_clone(jlos_task_manager_t *self,

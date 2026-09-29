@@ -1,6 +1,6 @@
 #include <net/etherframe.h>
 #include <kernel/memory_manager.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
 #include <kernel/printk.h>

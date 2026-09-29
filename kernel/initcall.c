@@ -5,6 +5,7 @@ extern jlos_initcall_fn_t __initcall1_start, __initcall1_end;
 extern jlos_initcall_fn_t __initcall2_start, __initcall2_end;
 extern jlos_initcall_fn_t __initcall3_start, __initcall3_end;
 extern jlos_initcall_fn_t __initcall4_start, __initcall4_end;
+extern jlos_initcall_fn_t __initcall5_start, __initcall5_end;
 
 void jlos_do_initcalls(void)
 {
@@ -13,4 +14,5 @@ void jlos_do_initcalls(void)
     for (jlos_initcall_fn_t *p = &__initcall2_start; p < &__initcall2_end; p++) (*p)();
     for (jlos_initcall_fn_t *p = &__initcall3_start; p < &__initcall3_end; p++) (*p)();
     for (jlos_initcall_fn_t *p = &__initcall4_start; p < &__initcall4_end; p++) (*p)();
+    for (jlos_initcall_fn_t *p = &__initcall5_start; p < &__initcall5_end; p++) (*p)();
 }

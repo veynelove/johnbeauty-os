@@ -155,6 +155,11 @@ static inline int32_t clock_settime(uint32_t clk_id, const timespec_t *tp)
     return syscall(SYSCALL_CLOCK_SETTIME, clk_id, (uint32_t)tp, 0);
 }
 
+static inline int32_t nanosleep(const timespec_t *req)
+{
+    return syscall(SYSCALL_NANOSLEEP, (uint32_t)req, 0, 0);
+}
+
 void printf(const char *fmt, ...);
 
 #endif

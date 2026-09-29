@@ -11,6 +11,7 @@
 #include <kernel/ipc.h>
 #include <kernel/initcall.h>
 #include <kernel/timek.h>
+#include <kernel/hrtimer.h>
 #include <filesystem/elf.h>
 #include <filesystem/vfs.h>
 
@@ -578,6 +579,18 @@ jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self)
     return curr;
 }
 
+void jlos_task_manager_tick_and_schedule(jlos_task_manager_t *self)
+{
+    jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self);
+    bool resched = self->need_resched;
+    if (!curr || curr->status != JLOS_TASK_RUNNING || (KERNEL_CONFIG_PREEMPTIVE && !curr->remain_slice)) {
+        resched = true;
+    }
+    if (resched) {
+        jlos_task_manager_schedule(self);
+    }
+}
+
 static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task_t *parent,
     const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack)
 {
@@ -860,6 +873,43 @@ const char *jlos_task_status_map_str(uint32_t status)
             break;
     }
     return "error";
+}
+
+void jlos_task_wakeup(jlos_task_t *task)
+{
+    if (task->sleeping) {
+        task->sleeping = false;
+    }
+    if (task->status == JLOS_TASK_BLOCKED) {
+        JLOS_TASK_SET_READY(task);
+        rq_enqueue(g_task_manager_ptr, task);
+    }
+    g_task_manager_ptr->need_resched = true;
+}
+
+static int nanosleep_wakeup(jlos_hrtimer_t *timer)
+{
+    jlos_hrtimer_sleeper_t *sleeper = container_of(timer, jlos_hrtimer_sleeper_t, timer);
+    jlos_task_t *task = sleeper->task;
+    sleeper->task = NULL;
+    if (task) {
+        jlos_task_wakeup(task);
+    }
+    return 0;
+}
+
+void jlos_task_sleep_hrtimer(jlos_task_manager_t *self, uint64_t ns)
+{
+    if (!self || !g_current_task_ptr) {
+        return;
+    }
+    jlos_hrtimer_sleeper_t sleeper;
+    sleeper.task = g_current_task_ptr;
+    jlos_hrtimer_init(&sleeper.timer, nanosleep_wakeup, NULL);
+    g_current_task_ptr->sleeping = true;
+    JLOS_TASK_SET_BLOCKED(g_current_task_ptr);
+    jlos_hrtimer_start(jlos_hrtimer_get_base(), &sleeper.timer, ns, 0, JLOS_HRTIMER_MODE_REL);
+    jlos_task_manager_schedule(self);
 }
 
 static uint32_t jlos_exec_setup_user_stack(jlos_task_t *task, int argc, char *const argv[], char *const envp[])

@@ -6,6 +6,7 @@
 #define JLOS_PIT_CMD_PORT     0x43
 #define JLOS_PIT_CH0_PORT     0x40
 #define JLOS_PIT_CMD_MODE3    0x36
+#define JLOS_PIT_CMD_MODE0    0x30
 
 static void pit_set_state_periodic(uint32_t hz)
 {
@@ -32,12 +33,36 @@ static void pit_set_state_shutdown(void)
     jlos_io8_slow_write(&pit_cmd, 0x30);
 }
 
+static void pit_set_state_oneshot(void)
+{
+    jlos_io8_slow_t pit_cmd;
+    jlos_io8_slow_init(&pit_cmd, JLOS_PIT_CMD_PORT);
+    jlos_io8_slow_write(&pit_cmd, JLOS_PIT_CMD_MODE0);
+}
+
+static void pit_set_next_event(uint64_t delta_ns)
+{
+    uint64_t count = (delta_ns * JLOS_PIT_INPUT_HZ) / 1000000000ULL;
+    if (count == 0) {
+        count = 1;
+    }
+    if (count > 0xFFFF) {
+        count = 0xFFFF;
+    }
+    jlos_io8_slow_t pit_ch0;
+    jlos_io8_slow_init(&pit_ch0, JLOS_PIT_CH0_PORT);
+    jlos_io8_slow_write(&pit_ch0, (uint8_t)(count & 0xFF));
+    jlos_io8_slow_write(&pit_ch0, (uint8_t)((count >> 8) & 0xFF));
+}
+
 static jlos_clock_event_device_t s_pit_evt_dev = {
     .name                = "8253 PIT",
     .rating              = 100,
-    .features            = JLOS_CLOCK_EVT_FEAT_PERIODIC,
+    .features            = JLOS_CLOCK_EVT_FEAT_PERIODIC | JLOS_CLOCK_EVT_FEAT_ONESHOT,
     .set_state_periodic  = pit_set_state_periodic,
+    .set_state_oneshot   = pit_set_state_oneshot,
     .set_state_shutdown  = pit_set_state_shutdown,
+    .set_next_event      = pit_set_next_event,
 };
 
 static void pit_register(void)

@@ -1,16 +1,22 @@
 #include <kernel/timek.h>
+#include <kernel/initcall.h>
+#include <kernel/hrtimer.h>
 #include <hal/clocksource.h>
 #include <hal/rtc.h>
-#include <kernel/initcall.h>
+#include <hal/clock_event.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "timek"
 #include <kernel/printk.h>
+
+#define JLOS_TICK_PERIOD_NS  (1000000000ULL / JLOS_HAL_TIME_FREQ_HZ)
 
 static uint64_t             s_realtime_base_ns;
 static uint64_t             s_last_cycles;
 static uint64_t             s_monotonic_ns;
 static bool                 s_timek_inited;
 static volatile uint32_t    s_ticks;
+
+static jlos_hrtimer_t       s_tick_hrtimer;
 
 void jlos_timek_init(void)
 {
@@ -78,4 +84,21 @@ static void jlos_timek_rtc_init(void)
     jlos_timek_set_realtime(jlos_hal_rtc_read_ns());
 }
 
+static int tick_hrtimer_func(jlos_hrtimer_t *timer)
+{
+    (void)timer;
+    jlos_timek_on_tick();
+    return 0;
+}
+
+static void jlos_tick_init(void)
+{
+    jlos_hrtimer_init(&s_tick_hrtimer, tick_hrtimer_func, NULL);
+    jlos_clock_event_shutdown();
+    jlos_clock_event_start_oneshot();
+    jlos_hrtimer_start(jlos_hrtimer_get_base(), &s_tick_hrtimer, JLOS_TICK_PERIOD_NS, JLOS_TICK_PERIOD_NS, JLOS_HRTIMER_MODE_REL);
+    jlos_clock_event_set_next(JLOS_TICK_PERIOD_NS);
+}
+
+JLOS_INITCALL(JLOS_INITCALL_POST, jlos_tick_init);
 JLOS_INITCALL(JLOS_INITCALL_LATE, jlos_timek_rtc_init);

@@ -10,16 +10,17 @@
 #include <hal/hal_arch.h>
 #include <kernel/initcall.h>
 #include <kernel/paging.h>
-#include <kernel/timek.h>
+#include <kernel/hrtimer.h>
+#include <kernel/multitask.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
 #include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);
-extern jlos_task_t *g_current_task_ptr;
 
-static jlos_irq_manager_t s_interrupt_manager;
-jlos_irq_manager_t        *jlos_active_irq_manager = &s_interrupt_manager;
+extern jlos_task_t              *g_current_task_ptr;
+static jlos_irq_manager_t       s_interrupt_manager;
+jlos_irq_manager_t              *jlos_active_irq_manager = &s_interrupt_manager;
 
 /* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
 uint32_t                        jlos_syscall_ring3_ctx = 0;
@@ -313,16 +314,8 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
 
     /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
     if (interrupt == 0 && self && self->task_manager) {
-        jlos_timek_on_tick();
-        jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
-
-        bool resched = self->task_manager->need_resched;
-        if (!curr || curr->status != JLOS_TASK_RUNNING || (KERNEL_CONFIG_PREEMPTIVE && !curr->remain_slice)) {
-            resched = true;
-        }
-        if (resched) {
-            jlos_task_manager_schedule(self->task_manager);
-        }
+        jlos_hrtimer_interrupt();
+        jlos_task_manager_tick_and_schedule(self->task_manager);
     }
     jlos_signal_deliver_check(esp);
     return esp;

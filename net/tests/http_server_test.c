@@ -1,8 +1,9 @@
-#include <tools/tests/http_server_te.h>
+#include <net/tests/http_server_test.h>
 #include <kernel/memory_manager.h>
 #include <net/network.h>
+#include <kernel/initcall.h>
 
-#define JLOS_KERNEL_LOG_SUBSYS "test"
+#define JLOS_KERNEL_LOG_SUBSYS "t_http"
 #include <kernel/printk.h>
 
 typedef struct {
@@ -61,3 +62,7 @@ void http_server_test(void)
     jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler->base);
     printk_info("tcp server listening on port 1234\n");
 }
+
+#if KERNEL_CONFIG_ENABLE_TESTS
+JLOS_INITCALL(JLOS_INITCALL_TEST, http_server_test);
+#endif

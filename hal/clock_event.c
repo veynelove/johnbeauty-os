@@ -54,4 +54,20 @@ static void clock_event_select_and_start(void)
     jlos_clock_event_start_periodic(JLOS_HAL_TIME_FREQ_HZ);
 }
 
+void jlos_clock_event_start_oneshot(void)
+{
+    if (!s_active_evt || !s_active_evt->set_state_oneshot) {
+        return;
+    }
+    s_active_evt->set_state_oneshot();
+}
+
+void jlos_clock_event_set_next(uint64_t delta_ns)
+{
+    if (!s_active_evt || !s_active_evt->set_next_event) {
+        return;
+    }
+    s_active_evt->set_next_event(delta_ns);
+}
+
 JLOS_INITCALL(JLOS_INITCALL_DEVICE, clock_event_select_and_start);

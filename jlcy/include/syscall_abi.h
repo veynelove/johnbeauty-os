@@ -35,6 +35,7 @@
 #define SYSCALL_CLOCK_GETTIME      26
 #define SYSCALL_SETTIMEOFDAY       27
 #define SYSCALL_CLOCK_SETTIME      28
+#define SYSCALL_NANOSLEEP          29
 
 #ifndef __ASSEMBLY__
 #define PROT_READ       0x1

@@ -5,7 +5,7 @@
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
-#include <tools/config.h>
+#include <include/config.h>
 
 static uint32_t         s_cursor_col = 0;
 static uint32_t         s_cursor_row = 0;

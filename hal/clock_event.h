@@ -31,4 +31,7 @@ jlos_clock_event_device_t *jlos_clock_event_get_active(void);
 void jlos_clock_event_start_periodic(uint32_t hz);
 void jlos_clock_event_shutdown(void);
 
+void jlos_clock_event_start_oneshot(void);
+void jlos_clock_event_set_next(uint64_t delta_ns);
+
 #endif

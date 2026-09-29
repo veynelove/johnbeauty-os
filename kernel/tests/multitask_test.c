@@ -1,13 +1,15 @@
-#include <tools/tests/multitask_te.h>
+#include <kernel/tests/multitask_test.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/timek.h>
+#include <hal/mmu.h>
 #include <hal/hal.h>
 #include <hal/context.h>
+#include <kernel/initcall.h>
 
-#define JLOS_KERNEL_LOG_SUBSYS "test"
+#define JLOS_KERNEL_LOG_SUBSYS "t_sched"
 #include <kernel/printk.h>
 
 static jlos_task_manager_t *s_mgr;
@@ -28,6 +30,9 @@ static volatile uint32_t g_signal_test_pid = 0;
 
 static volatile int g_mmap_test_exited = 0;
 static volatile uint32_t g_mmap_test_pid = 0;
+
+static volatile int g_nanosleep_test_exited = 0;
+static volatile uint32_t g_nanosleep_test_pid = 0;
 
 static void alt_task_exit(void)
 {
@@ -104,6 +109,16 @@ static void ring3_mmap_test_entry(void)
     }
 }
 
+static void ring3_nanosleep_test_entry(void)
+{
+    char *argv[] = {"/nanosleep_test.elf", NULL};
+    char *envp[] = {NULL};
+    int ret = jlos_process_exec_elf(g_current_task_ptr, "/nanosleep_test.elf", 1, argv, envp);
+    if (ret < 0) {
+        jlos_process_exit(g_current_task_ptr, 0);
+    }
+}
+
 static jlos_task_t *spawn_kernel_task(jlos_mmu_t *mmu, void (*fn)(void), const char *name, int *fail_cnt)
 {
     jlos_task_t *t = (jlos_task_t *)jlos_kalloc(sizeof(*t));
@@ -127,9 +142,10 @@ static jlos_task_t *spawn_kernel_task(jlos_mmu_t *mmu, void (*fn)(void), const c
     return t;
 }
 
-void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
+void multitask_test(void)
 {
-    s_mgr = task_manager_;
+    s_mgr = g_task_manager_ptr;
+    jlos_mmu_t *mmu = jlos_mmu_get_kernel();
 
     printk_info("=== multitask test start ===\n");
     printk_info("MAX_TASKS=%u KSTACK=%uB USTACK=%uKB MLFQ=%u lv\n",
@@ -184,11 +200,19 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
         }
     }
 
+    printk_info("[test 8] ring3 nanosleep test\n");
+    {
+        jlos_task_t *t = spawn_kernel_task(mmu, ring3_nanosleep_test_entry, "t8_nanosleep", &spawn_fails);
+        if (t) {
+            g_nanosleep_test_pid = t->pid;
+        }
+    }
+
     if (spawn_fails) {
-        printk_err("FAIL: spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
+        printk_err("spawn stage %d subtask(s) failed, aborting\n", spawn_fails);
         goto teardown;
     }
-    printk_info("OK: 7 seed tasks spawned, run schedule budget...\n");
+    printk_info("8 seed tasks spawned, run schedule budget...\n");
 
     uint32_t t0 = jlos_timek_get_ticks();
     const uint32_t TIMEOUT_TICKS = 5000;
@@ -225,9 +249,15 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
                 g_mmap_test_exited = 1;
             }
         }
+        if (g_nanosleep_test_pid && !g_nanosleep_test_exited) {
+            jlos_task_t *nt = jlos_task_manager_find_pid(s_mgr, g_nanosleep_test_pid);
+            if (nt && nt->status == JLOS_TASK_ZOMBIE && nt->exit_code == 42) {
+                g_nanosleep_test_exited = 1;
+            }
+        }
         int all = (g_alt_a >= 500 && g_alt_b >= 500) && (g_fork_test_exited >= 1)
             && (g_ring3_exited >= 1) && (g_file_test_exited >= 1) && (g_signal_test_exited >= 1)
-            && (g_mmap_test_exited >= 1);
+            && (g_mmap_test_exited >= 1) && (g_nanosleep_test_exited >= 1);
         if (all)
             break;
         if (now - t0 >= TIMEOUT_TICKS)
@@ -241,51 +271,58 @@ void multitask_test(jlos_mmu_t *mmu, jlos_task_manager_t *task_manager_)
     printk_info("subcase results:\n");
 
     if (g_alt_a >= 500 && g_alt_b >= 500)
-        printk_info("[1] alternation: A=%d B=%d -> PASS\n", g_alt_a, g_alt_b);
+        printk_info("[1] alternation: A=%d B=%d\n", g_alt_a, g_alt_b);
     else {
-        printk_err("[1] alternation: A=%d B=%d -> FAIL (both >= 500)\n", g_alt_a, g_alt_b);
+        printk_err("[1] alternation: A=%d B=%d (both >= 500)\n", g_alt_a, g_alt_b);
         fails++;
     }
 
     if (g_fork_test_exited >= 1)
-        printk_info("[2] fork+pressure: exited=%d -> PASS\n", g_fork_test_exited);
+        printk_info("[2] fork+pressure: exited=%d\n", g_fork_test_exited);
     else {
-        printk_err("[2] fork+pressure: exited=%d -> FAIL\n", g_fork_test_exited);
+        printk_err("[2] fork+pressure: exited=%d\n", g_fork_test_exited);
         fails++;
     }
 
     if (g_ring3_exited >= 1)
-        printk_info("[4] ring3 smoke: exited=%d -> PASS\n", g_ring3_exited);
+        printk_info("[4] ring3 smoke: exited=%d\n", g_ring3_exited);
     else {
-        printk_err("[4] ring3 smoke: exited=%d -> FAIL\n", g_ring3_exited);
+        printk_err("[4] ring3 smoke: exited=%d\n", g_ring3_exited);
         fails++;
     }
 
     if (g_file_test_exited >= 1)
-        printk_info("[5] file syscall: exited=%d -> PASS\n", g_file_test_exited);
+        printk_info("[5] file syscall: exited=%d\n", g_file_test_exited);
     else {
-        printk_err("[5] file syscall: exited=%d -> FAIL\n", g_file_test_exited);
+        printk_err("[5] file syscall: exited=%d\n", g_file_test_exited);
         fails++;
     }
 
     if (g_signal_test_exited >= 1)
-        printk_info("[6] signal: exited=%d -> PASS\n", g_signal_test_exited);
+        printk_info("[6] signal: exited=%d\n", g_signal_test_exited);
     else {
-        printk_err("[6] signal: exited=%d -> FAIL\n", g_signal_test_exited);
+        printk_err("[6] signal: exited=%d\n", g_signal_test_exited);
         fails++;
     }
 
     if (g_mmap_test_exited >= 1)
-        printk_info("[7] mmap: exited=%d -> PASS\n", g_mmap_test_exited);
+        printk_info("[7] mmap: exited=%d\n", g_mmap_test_exited);
     else {
-        printk_err("[7] mmap: exited=%d -> FAIL\n", g_mmap_test_exited);
+        printk_err("[7] mmap: exited=%d\n", g_mmap_test_exited);
+        fails++;
+    }
+
+    if (g_nanosleep_test_exited >= 1)
+        printk_info("[8] nanosleep: exited=%d\n", g_nanosleep_test_exited);
+    else {
+        printk_err("[8] nanosleep: exited=%d\n", g_nanosleep_test_exited);
         fails++;
     }
 
     if (!fails)
-        printk_info("multitask: ALL PASSED\n");
+        printk_info("multitask: all passed\n");
     else
-        printk_err("multitask: FAILS: %d, check above\n", fails);
+        printk_err("multitask: %d failures\n", fails);
 
 teardown:
     ;
@@ -299,3 +336,6 @@ teardown:
         jlos_task_free(s_mgr, t);
     }
 }
+#if KERNEL_CONFIG_ENABLE_TESTS
+JLOS_INITCALL(JLOS_INITCALL_TEST, multitask_test);
+#endif

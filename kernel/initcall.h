@@ -8,6 +8,7 @@ typedef void (*jlos_initcall_fn_t)(void);
 #define JLOS_INITCALL_DEVICE    2
 #define JLOS_INITCALL_LATE      3
 #define JLOS_INITCALL_POST      4
+#define JLOS_INITCALL_TEST      5
 
 #define __JLOS_INITCALL(level, fn) \
     static jlos_initcall_fn_t __initcall_##fn \

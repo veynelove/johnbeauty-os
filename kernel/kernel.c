@@ -9,16 +9,6 @@
 #include <kernel/device.h>
 #include <kernel/initcall.h>
 
-#if KERNEL_CONFIG_ENABLE_TESTS
-#include <tools/tests/memory_te.h>
-#include <tools/tests/multitask_te.h>
-#include <tools/tests/pfa_te.h>
-#include <tools/tests/paging_te.h>
-#include <tools/tests/hard_driver_te.h>
-#include <tools/tests/http_server_te.h>
-#include <tools/tests/udp_server_te.h>
-#endif
-
 #define JLOS_KERNEL_LOG_SUBSYS "boot"
 #include <kernel/printk.h>
 
@@ -38,17 +28,6 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     printk_info("paging initialized\n");
 
     jlos_do_initcalls();
-    
-#if KERNEL_CONFIG_ENABLE_TESTS
-    printk_info("=== running tests ===\n");
-    memory_manager_test(multiboot_structure);
-    pfa_test();
-    paging_test();
-    multitask_test(jlos_mmu_get_kernel(), g_task_manager_ptr);
-    hard_driver_test();
-    http_server_test();
-    udp_server_test();
-#endif
 
     for (;;) {
         jlos_hal_halt();

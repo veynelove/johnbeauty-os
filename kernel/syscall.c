@@ -570,6 +570,25 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
+static int32_t syscall_nanosleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+{
+    (void)arg2;
+    (void)arg3;
+    if (!arg1) {
+        return -SYSCALL_EFAULT;
+    }
+    uint32_t ts[2];
+    if (!jlos_copy_from_user(ts, (const void *)arg1, sizeof(ts))) {
+        return -SYSCALL_EFAULT;
+    }
+    if (ts[1] >= 1000000000) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint64_t ns = (uint64_t)ts[0] * 1000000000 + ts[1];
+    jlos_task_sleep_hrtimer(g_task_manager_ptr, ns);
+    return 0;
+}
+
 static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     if (!g_current_task_ptr) {
@@ -823,6 +842,7 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_CLOCK_GETTIME, syscall_clock_gettime);
     jlos_syscall_register(JLOS_SYSCALL_SETTIMEOFDAY, syscall_settimeofday);
     jlos_syscall_register(JLOS_SYSCALL_CLOCK_SETTIME, syscall_clock_settime);
+    jlos_syscall_register(JLOS_SYSCALL_NANOSLEEP, syscall_nanosleep);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
