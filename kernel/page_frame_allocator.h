@@ -19,6 +19,15 @@
 #define JLOS_PFA_PERCPU_HIGN            16
 #define JLOS_PFA_PERCPU_BATCH           8
 
+typedef enum {
+    JLOS_PAGE_FRAME_TYPE_FREE       = 0,
+    JLOS_PAGE_FRAME_TYPE_SLAB_OBJ   = 1,
+    JLOS_PAGE_FRAME_TYPE_KV_CONTIG  = 2,
+    JLOS_PAGE_FRAME_TYPE_KV_HEAP    = 3,
+    JLOS_PAGE_FRAME_TYPE_KERN_STACK = 4,
+    JLOS_PAGE_FRAME_TYPE_PAGE_TABLE = 5,
+} jlos_page_frame_type_t;
+
 typedef struct jlos_page_t {
 union {
     jlos_list_head_t free_list;
@@ -60,15 +69,6 @@ uint32_t jlos_page_frame_get_free(void);
 void jlos_page_frame_refcount_inc(uint32_t phys_addr);
 void jlos_page_frame_refcount_dec(uint32_t phys_addr);
 uint8_t jlos_page_frame_refcount_get(uint32_t phys_addr);
-
-typedef enum {
-    JLOS_PAGE_FRAME_TYPE_FREE       = 0,
-    JLOS_PAGE_FRAME_TYPE_SLAB_OBJ   = 1,
-    JLOS_PAGE_FRAME_TYPE_KV_CONTIG  = 2,
-    JLOS_PAGE_FRAME_TYPE_KV_HEAP    = 3,
-    JLOS_PAGE_FRAME_TYPE_KERN_STACK = 4,
-    JLOS_PAGE_FRAME_TYPE_PAGE_TABLE = 5,
-} jlos_page_frame_type_t;
 
 jlos_page_frame_type_t jlos_page_frame_get_type(uint32_t phys);
 void *jlos_page_frame_get_owner(uint32_t phys);

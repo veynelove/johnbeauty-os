@@ -297,14 +297,13 @@ static void buddy_free_nolock(uint32_t frame, uint32_t order)
     jlos_atomic_fetch_add(&s_free_frames, (int)freed_frames);
 }
 
-static void percpu_drain(uint32_t cpu)
+static void percpu_drain(jlos_pfa_percpu_t *pc)
 {
-    jlos_pfa_percpu_t *pc = &s_percpu[cpu];
     uint32_t drain_count = JLOS_PFA_PERCPU_BATCH;
     if (drain_count > pc->count) {
         drain_count = pc->count;
     }
-    uint32_t flags = jlos_spin_lock_irqsave(&s_buddy_lock);
+    jlos_spin_lock(&s_buddy_lock);
     for (uint32_t i = 0; i < drain_count; i++) {
         jlos_list_head_t *first = pc->free_list.next;
         jlos_list_del(first);
@@ -313,7 +312,31 @@ static void percpu_drain(uint32_t cpu)
         uint32_t frame = pg - s_pages;
         buddy_free_nolock(frame, 0);
     }
-    jlos_spin_unlock_irqrestore(&s_buddy_lock, flags);
+    jlos_spin_unlock(&s_buddy_lock);
+}
+
+static void percpu_refill(jlos_pfa_percpu_t *pc)
+{
+    jlos_spin_lock(&s_buddy_lock);
+    while (pc->count < JLOS_PFA_PERCPU_BATCH) {
+        if (!s_free_order_bitmap) {
+            break;
+        }
+        uint32_t order = __builtin_ctz(s_free_order_bitmap);
+        uint32_t frame = (uint32_t)(container_of(s_free_area[order].next, jlos_page_t, u.free_list) - s_pages);
+        buddy_remove(frame, order);
+        jlos_page_frame_order_split(frame, order, 0);
+        jlos_page_t *pg = &s_pages[frame];
+        pg->flags = 0;
+        pg->type = JLOS_PAGE_FRAME_TYPE_FREE;
+        pg->order = JLOS_PFA_BUDDY_ORDER_INVALID;
+        jlos_atomic_set(&pg->refcount, 0);
+        jlos_list_init(&pg->u.free_list);
+        jlos_list_add(&pg->u.free_list, &pc->free_list);
+        pc->count++;
+        jlos_atomic_fetch_sub(&s_free_frames, 1);
+    }
+    jlos_spin_unlock(&s_buddy_lock);
 }
 
 void *jlos_page_frame_malloc(void)
@@ -321,6 +344,10 @@ void *jlos_page_frame_malloc(void)
     uint32_t cpu = jlos_hal_get_cpu_id();
     jlos_pfa_percpu_t *pc = &s_percpu[cpu];
     uint32_t flags = jlos_hal_irq_save();
+    if (pc->count == 0) {
+        percpu_refill(pc);
+    }
+    void *ret = NULL;
     if (pc->count > 0) {
         jlos_list_head_t *first = pc->free_list.next;
         jlos_list_del(first);
@@ -329,11 +356,10 @@ void *jlos_page_frame_malloc(void)
         uint32_t frame = pg - s_pages;
         pg->flags |= JLOS_PFA_FLAG_OCCUPIED;
         jlos_atomic_set(&pg->refcount, 1);
-        jlos_hal_irq_restore(flags);
-        return (void *)PHYS_TO_VIRT(s_start_addr + frame * JLOS_PAGE_FRAME_SIZE);
+        ret = (void *)PHYS_TO_VIRT(s_start_addr + frame * JLOS_PAGE_FRAME_SIZE);
     }
     jlos_hal_irq_restore(flags);
-    return jlos_page_frame_alloc_n(1);
+    return ret;
 }
 
 static void buddy_free_range(uint32_t base_frame, uint32_t len)
@@ -482,7 +508,7 @@ void jlos_page_frame_refcount_dec(uint32_t phys_addr)
                 jlos_list_add(&pg->u.free_list, &pc->free_list);
                 pc->count++;
                 if (pc->count > JLOS_PFA_PERCPU_HIGN) {
-                    percpu_drain(cpu);
+                    percpu_drain(pc);
                 }
                 jlos_hal_irq_restore(flags);
             }

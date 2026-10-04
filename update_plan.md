@@ -213,7 +213,7 @@ graph TD
 | ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ |
 | 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     |
 | 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     |
-| 4.3  | MM: per-CPU freelist + batch drain to global                                       | memory\_manager.c          | 中     |
+| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     |
 | 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     |
 | 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/cpu.h                  | 低     |
 | 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     |
@@ -262,6 +262,23 @@ graph TD
 | ~~PAG-5~~ | ~~HAL 层加 `jlos_hal_paging_global_pages(enable)`（x86 CR4.PGE）+ `jlos_hal_paging_asid_alloc/free`（ARM/RISC-V 留占位，x86 返回 0）；内核页 PTE 统一加 `JLOS_PTE_GLOBAL` 标志~~ | **已实现**：`jlos_hal_paging_enable_global_pages()`（CR4.PGE 置位）+ `asid_alloc/free` 占位（arch/x86/paging.c:90-106）；`JLOS_PDE/PTE_GLOBAL` 已用于内核直接映射（paging.c:481-494）；CR3 切换保留 GLOBAL 位（paging.c:258-298） | hal/paging.h + arch/x86/paging.c | ✅ 已完成 |
 | ~~PFA-5~~ | ~~对外多帧 API：`jlos_page_frame_alloc_n(npages)`（合并 reserve_bulk + malloc）/ `jlos_page_frame_free_n(ptr, npages)`~~ | **已实现**：`jlos_page_frame_alloc_n/free_n` 统一多帧 API（page_frame_allocator.c:551/370），malloc/alloc_order/free_order 复用，mm/paging/测试全量切换 | page_frame_allocator.h / .c | ✅ 已完成 |
 | ~~MM-5~~ | ~~`memset`/`memcpy` SSE2 32B 宽写~~ | **已实现**：common/types.c 标 weak，arch/x86/lib/memset.s + memcpy.s strong 覆盖，SSE2 安全模式（保存 CR0→clts→保存 xmm0→操作→恢复） | common/types.c + arch/x86/lib/memset.s + memcpy.s | ✅ 已完成 |
+
+***
+
+## Phase 5.5: 四核心子系统深化 + 正确性修复（v3.6）✅ 已完成
+
+对 paging / memory_manager / multitask / page_frame_allocator 四子系统做第二轮经典化扫描后的成果：
+
+| ID | 任务 | 根因与影响 | 涉及文件 | 状态 |
+| --- | --- | --- | --- | --- |
+| SPIN-1 | spinlock 经典化：去 `recursion_depth`（非递归 ticket lock）+ 补非 irqsave `jlos_spin_lock/unlock`，`irqsave` 变 wrapper | `recursion_depth` 掩盖「持锁期间再抢同锁」的 bug，违背 Linux spinlock 不可重入语义 | hal/spinlock.h + arch/x86/spinlock.c | ✅ |
+| SPIN-2 | printk 锁分层：独立 `s_printk_lock`，内层 `jlos_console_putc/puts` 用 `s_console_lock` | printk 外层持 console 锁 + 内层 putc 再抢同锁 = 递归锁嵌套（去递归后死锁，即黑屏根因） | kernel/printk.c + kernel/console.c/h | ✅ |
+| PFA-7 | per-CPU cache 补 `percpu_refill`（原只有 drain 无 refill，malloc miss 走 `alloc_n` 每次持 buddy 锁）+ `s_free_frames` 对称记账 | refill 漏减 s_free_frames 致 free 计数虚高；malloc 热路径原持锁取 1 个 | kernel/page_frame_allocator.c | ✅ |
+| MT-9 | exit 孤儿 zombie 回收 + schedule skip-prev 防 UAF | 孤儿无父 wait 泄漏 PCB；schedule 在 context_switch 前 free 当前 task 栈 = UAF | kernel/multitask.c | ✅ |
+| PAG-8 | PT slab cache（pgtable_cache）评估 | 被 PFA per-CPU refill 替代（per-CPU 无锁快路径 > slab 全局锁），不再单独做 | paging.c | ✅ 结论 |
+| MM-6 | slab per-CPU freelist 无锁快路径 | 单核无锁竞争收益为负，归 Phase 4.3（SMP 阶段随 per-CPU runqueue 一起做） | memory_manager.c | ⏸ 归 SMP |
+
+验证：spinlock/pfa/multitask 全测试 ALL PASSED。
 
 ***
 

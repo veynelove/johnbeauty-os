@@ -243,16 +243,6 @@ uint32_t jlos_console_get_rows(void)
     return s_rows;
 }
 
-void jlos_console_lock(uint32_t *flags)
-{
-    *flags = jlos_spin_lock_irqsave(&s_console_lock);
-}
-
-void jlos_console_unlock(uint32_t flags)
-{
-    jlos_spin_unlock_irqrestore(&s_console_lock, flags);
-}
-
 static void display_device_init(void)
 {
     jlos_hal_arch_display_init_fb();

@@ -1,11 +1,13 @@
 #include <stdarg.h>
 #include <hal/serial.h>
 #include <hal/clock_event.h>
+#include <hal/spinlock.h>
 #include <kernel/printk.h>
 #include <kernel/console.h>
 #include <kernel/timek.h>
 
 static int g_printk_loglevel = JLOS_KERNEL_LOG_DEBUG;
+static jlos_spinlock_t s_printk_lock = JLOS_SPINLOCK_INIT;
 
 void jlos_printk_set_loglevel(int level)
 {
@@ -194,8 +196,7 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
     va_list ap;
     va_start(ap, fmt);
 
-    uint32_t flags;
-    jlos_console_lock(&flags);
+    uint32_t flags = jlos_spin_lock_irqsave(&s_printk_lock);
     uint32_t ticks = jlos_timek_get_ticks();
     int at_line_start = 1;
 
@@ -306,6 +307,6 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
             jlos_console_putc(fmt[i]);
         }
     }
-    jlos_console_unlock(flags);
+    jlos_spin_unlock_irqrestore(&s_printk_lock, flags);
     va_end(ap);
 }

@@ -499,6 +499,9 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
         jlos_list_head_t *pos, *n;
         jlos_list_for_each_safe(pos, n, &self->zombie_head) {
             jlos_task_t *z = container_of(pos, jlos_task_t, zombie_node);
+            if (z == prev) {
+                continue;
+            }
             jlos_list_del_init(pos);
             jlos_task_free(self, z);
         }
@@ -740,7 +743,13 @@ __attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exi
         goto halt;
     }
     JLOS_TASK_SET_ZOMBIE(task, exit_code);
-    jlos_sched_wake_waiter(g_task_manager_ptr, task->pid);
+    jlos_task_t *parent = jlos_task_manager_find_pid(g_task_manager_ptr, task->parent_pid);
+    if (parent && parent->status != JLOS_TASK_ZOMBIE) {
+        jlos_sched_wake_waiter(g_task_manager_ptr, task->pid);
+    } else {
+        jlos_list_add(&task->zombie_node, &g_task_manager_ptr->zombie_head);
+    }
+    
     g_task_manager_ptr->need_resched = true;
     jlos_task_manager_schedule(g_task_manager_ptr);
     printk_err("exit: BUG pid=%u returned from schedule!\n", task->pid);

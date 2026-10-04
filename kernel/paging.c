@@ -9,7 +9,7 @@
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
 #include <kernel/printk.h>
 
-extern jlos_task_t          *g_current_task_ptr;
+extern jlos_task_t *g_current_task_ptr;
 
 void jlos_paging_context_init(jlos_paging_context_t *self)
 {

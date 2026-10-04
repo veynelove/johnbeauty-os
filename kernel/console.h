@@ -26,8 +26,6 @@ void jlos_console_get_cursor(uint32_t *col, uint32_t *row);
 void jlos_console_set_cursor(uint32_t col, uint32_t row);
 uint32_t jlos_console_get_cols(void);
 uint32_t jlos_console_get_rows(void);
-void jlos_console_lock(uint32_t *flags);
-void jlos_console_unlock(uint32_t flags);
 
 void jlos_console_scroll_view(int32_t delta);
 void jlos_console_reset_view(void);
