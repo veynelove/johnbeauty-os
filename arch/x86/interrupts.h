@@ -7,10 +7,11 @@
 #include <kernel/multitask.h>
 
 #define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
+#define JLOS_IDT_ENTRIES 256
 
 struct jlos_irq_manager {
     uint16_t                hardware_interrupt_offset;
-    void                    *handles[256];
+    void                    *handles[JLOS_IDT_ENTRIES];
     jlos_task_manager_t     *task_manager;
     jlos_io8_slow_t         pic_master_command;
     jlos_io8_slow_t         pic_master_data;

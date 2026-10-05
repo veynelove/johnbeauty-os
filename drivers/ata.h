@@ -5,6 +5,8 @@
 #include <hal/io.h>
 #include <hal/block.h>
 
+#define JLOS_ATA_IDENTIFY_WORDS 256
+
 extern const uint16_t jlos_ata_primary_port_base;
 extern const uint16_t jlos_ata_secondary_port_base;
 

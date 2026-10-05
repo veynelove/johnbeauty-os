@@ -1,6 +1,6 @@
 #include <arch/x86/font_8x16.h>
 
-const uint8_t jlos_font_8x16[256][JLOS_FONT_GLYPH_HEIGHT] = {
+const uint8_t jlos_font_8x16[JLOS_FONT_GLYPH_COUNT][JLOS_FONT_GLYPH_HEIGHT] = {
     /* 0x00-0x1F 控制字符 */
     { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
     { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },

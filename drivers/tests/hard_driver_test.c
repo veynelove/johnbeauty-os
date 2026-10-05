@@ -1,7 +1,7 @@
 #include <drivers/tests/hard_driver_test.h>
 #include <drivers/ata.h>
 #include <hal/block.h>
-#include <filesystem/partition.h>
+#include <fs/partition.h>
 #include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "t_ata"

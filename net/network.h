@@ -10,6 +10,7 @@
 #include <net/dhcp.h>
 #include <net/dns.h>
 
+
 typedef struct {
     uint32_t ip;
     uint32_t gateway;

@@ -26,7 +26,7 @@ jlos_irq_manager_t              *jlos_active_irq_manager = &s_interrupt_manager;
 uint32_t                        jlos_syscall_ring3_ctx = 0;
 uint32_t                        jlos_syscall_ring3_kstack = 0;
 
-jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[256];
+jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[JLOS_IDT_ENTRIES];
 
 /* PIC IRQ 动态屏蔽：驱动注册 handler 时自动 unmask，避免无处理的 IRQ 导致 UNHANDLED */
 static uint8_t                  s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
@@ -126,7 +126,7 @@ void jlos_irq_manager_init(void)
     /* 初始化 TSS 基地址 (供汇编使用) */
     jlos_arch_tss_init_for_asm();
     
-    for (uint16_t i = 0; i < 256; i++) {
+    for (uint16_t i = 0; i < JLOS_IDT_ENTRIES; i++) {
         jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_irq_ignore_request, 0,
             IDT_INTERRUPT_GATE);
     }
@@ -202,7 +202,7 @@ void jlos_irq_manager_init(void)
     jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
 
     jlos_idt_pointer_t idt;
-    idt.size = 256 * sizeof(jlos_gate_descriptor_t) - 1;
+    idt.size = JLOS_IDT_ENTRIES * sizeof(jlos_gate_descriptor_t) - 1;
     idt.base = (uint32_t)jlos_interrupt_descriptor_table;
     __asm__ __volatile__("lidt %0" : : "m" (idt));
 }

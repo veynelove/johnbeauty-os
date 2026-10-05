@@ -1,5 +1,5 @@
-#ifndef _JLOS_FILESYSTEM_PARTITION_H
-#define _JLOS_FILESYSTEM_PARTITION_H
+#ifndef _JLOS_FS_PARTITION_H
+#define _JLOS_FS_PARTITION_H
 
 #include <hal/block.h>
 

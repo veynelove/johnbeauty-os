@@ -85,6 +85,20 @@ void jlos_hash_chain_remove(jlos_hash_chain_t *self, jlos_hash_node_t *node)
     jlos_spin_unlock_irqrestore(&self->lock, flags);
 }
 
+void jlos_hash_chain_for_each(jlos_hash_chain_t *self, jlos_hash_chain_visit_fn visit, void *arg)
+{
+    uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
+    for (uint32_t i = 0; i < self->bucket_count; i++) {
+        jlos_hash_node_t *node = self->buckets[i].first;
+        while (node) {
+            jlos_hash_node_t *next = node->next;
+            visit(node, arg);
+            node = next;
+        }
+    }
+    jlos_spin_unlock_irqrestore(&self->lock, fl);
+}
+
 void jlos_hash_chain_destroy(jlos_hash_chain_t *self)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&self->lock);

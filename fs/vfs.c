@@ -1,4 +1,5 @@
-#include <filesystem/vfs.h>
+#include <fs/vfs.h>
+#include <fs/buffer_cache.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <dsa/list_lru.h>
@@ -65,6 +66,7 @@ static void jlos_vfs_init(void)
     jlos_hash_chain_init(&s_inode_hash, JLOS_VFS_HASH_BUCKETS, inode_hash_fn, inode_cmp_fn);
     jlos_hash_chain_init(&s_dentry_hash, JLOS_VFS_HASH_BUCKETS, dentry_hash_fn, dentry_cmp_fn);
     jlos_list_lru_init(&s_dentry_lru);
+    jlos_buffer_cache_init();
 }
 
 int jlos_vfs_register_fs_type(jlos_vfs_fs_type_t *fs_type)

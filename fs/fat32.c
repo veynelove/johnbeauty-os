@@ -1,4 +1,5 @@
-#include <filesystem/fat32.h>
+#include <fs/fat32.h>
+#include <fs/buffer_cache.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <common/stypes.h>
@@ -28,11 +29,13 @@ static uint32_t fat32_get_next_cluster(jlos_vfs_super_block_t *sb, uint32_t clus
     uint32_t fat_sector = sbi->fat_start + fat_offset / sbi->bpb.bytes_per_sector;
     uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
     
-    uint8_t *buf = sbi->sec_buf;
-    if (jlos_hal_block_read(sb->block_dev, fat_sector, buf, 1) != 0) {
+    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
+    if (!bh) {
         return JLOS_FAT32_CLUSTER_EOC;
     }
+    uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
     uint32_t next = *(uint32_t *)(buf + entry_offset);
+    jlos_buffer_put(bh);
     return next & JLOS_FAT32_CLUSTER_MASK;
 }
 
@@ -40,7 +43,25 @@ static int fat32_read_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, uint
 {
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
     uint32_t sector = fat32_cluster_to_sector(sbi, cluster);
-    return jlos_hal_block_read(sb->block_dev, sector, buf, sbi->sectors_per_cluster);
+    uint32_t total = sbi->sectors_per_cluster;
+    uint32_t done = 0;
+    while (done < total) {
+        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sector));
+        if (!bh) {
+            return -1;
+        }
+        uint32_t off = jlos_buffer_offset(sector);
+        uint32_t in_buf = JLOS_BUFFER_SECTORS - (sector % JLOS_BUFFER_SECTORS);
+        uint32_t want = total - done;
+        if (in_buf > want) {
+            in_buf = want;
+        }
+        jlos_memcpy(buf + done * JLOS_BLOCK_SECTOR_SIZE, bh->data + off, in_buf * JLOS_BLOCK_SECTOR_SIZE);
+        jlos_buffer_put(bh);
+        sector += in_buf;
+        done += in_buf;
+    }
+    return 0;
 }
 
 static int fat32_fsinfo_read(jlos_vfs_super_block_t *sb, uint32_t *next_free)
@@ -49,30 +70,46 @@ static int fat32_fsinfo_read(jlos_vfs_super_block_t *sb, uint32_t *next_free)
     if (sbi->fsinfo_sector == 0) {
         return 1;
     }
-    if (jlos_hal_block_read(sb->block_dev, sbi->fsinfo_sector, sbi->sec_buf, 1) != 0) {
+    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sbi->fsinfo_sector));
+    if (!bh) {
         return -1;
     }
-    uint32_t lead = *(uint32_t *)(sbi->sec_buf + JLOS_FAT32_FSINFO_LEAD_OFF);
-    uint32_t stru_sig = *(uint32_t *)(sbi->sec_buf + JLOS_FAT32_FSINFO_STRUCT_OFF);
+    uint8_t *buf = bh->data + jlos_buffer_offset(sbi->fsinfo_sector);
+    uint32_t lead = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_LEAD_OFF);
+    uint32_t stru_sig = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_STRUCT_OFF);
     if (lead != JLOS_FAT32_FSINFO_LEAD_SIG || stru_sig != JLOS_FAT32_FSINFO_STRUCT_SIG) {
+        jlos_buffer_put(bh);
         return 1;
     }
     if (next_free) {
-        *next_free = *(uint32_t *)(sbi->sec_buf + JLOS_FAT32_FSINFO_FREE_OFF);
+        *next_free = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_FREE_OFF);
     }
+    jlos_buffer_put(bh);
     return 0;
 }
 
 static int fat32_fsinfo_update(jlos_vfs_super_block_t *sb, uint32_t next_free, int32_t free_delta)
 {
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    int ret = fat32_fsinfo_read(sb, NULL);
-    if (ret != 0) {
-        return (ret < 0) ? -1 : 0;
+    if (sbi->fsinfo_sector == 0) {
+        return 0;
     }
-    *(uint32_t *)(sbi->sec_buf + JLOS_FAT32_FSINFO_FREE_OFF) = next_free;
-    *(uint32_t *)(sbi->sec_buf + JLOS_FAT32_FSINFO_COUNT_OFF) += free_delta;
-    return jlos_hal_block_write(sb->block_dev, sbi->fsinfo_sector, sbi->sec_buf, 1);
+    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sbi->fsinfo_sector));
+    if (!bh) {
+        return -1;
+    }
+    uint8_t *buf = bh->data + jlos_buffer_offset(sbi->fsinfo_sector);
+    uint32_t lead = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_LEAD_OFF);
+    uint32_t stru_sig = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_STRUCT_OFF);
+    if (lead != JLOS_FAT32_FSINFO_LEAD_SIG || stru_sig != JLOS_FAT32_FSINFO_STRUCT_SIG) {
+        jlos_buffer_put(bh);
+        return 0;
+    }
+    *(uint32_t *)(buf + JLOS_FAT32_FSINFO_FREE_OFF) = next_free;
+    *(uint32_t *)(buf + JLOS_FAT32_FSINFO_COUNT_OFF) += free_delta;
+    jlos_buffer_dirty(bh);
+    jlos_buffer_put(bh);
+    return 0;
 }
 
 static int fat32_set_next_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, uint32_t next)
@@ -83,14 +120,15 @@ static int fat32_set_next_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, 
     uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
     for (uint32_t copy = 0; copy < sbi->fat_copies; copy++) {
         uint32_t fat_sector = sbi->fat_start + fat_sector_index + copy * sbi->bpb.table_size;
-        if (jlos_hal_block_read(sb->block_dev, fat_sector, sbi->sec_buf, 1) != 0) {
+        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
+        if (!bh) {
             return -1;
         }
-        uint32_t *entry = (uint32_t *)(sbi->sec_buf + entry_offset);
+        uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+        uint32_t *entry = (uint32_t *)(buf + entry_offset);
         *entry = (*entry & ~JLOS_FAT32_CLUSTER_MASK) | (next & JLOS_FAT32_CLUSTER_MASK);
-        if (jlos_hal_block_write(sb->block_dev, fat_sector, sbi->sec_buf, 1) != 0) {
-            return -1;
-        }
+        jlos_buffer_dirty(bh);
+        jlos_buffer_put(bh);
     }
     return 0;
 }
@@ -115,8 +153,11 @@ static int fat32_alloc_cluster(jlos_vfs_super_block_t *sb, uint32_t *out_cluster
         uint32_t fat_offset = hint * JLOS_FAT32_FAT_ENTRY_SIZE;
         uint32_t fat_sector = sbi->fat_start + fat_offset / sbi->bpb.bytes_per_sector;
         uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
-        if (jlos_hal_block_read(sb->block_dev, fat_sector, sbi->sec_buf, 1) == 0) {
-            uint32_t val = *(uint32_t *)(sbi->sec_buf + entry_offset) & JLOS_FAT32_CLUSTER_MASK;
+        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
+        if (bh) {
+            uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+            uint32_t val = *(uint32_t *)(buf + entry_offset) & JLOS_FAT32_CLUSTER_MASK;
+            jlos_buffer_put(bh);
             if (val == JLOS_FAT32_CLUSTER_FREE) {
                 return fat32_claim_cluster(sb, hint, out_cluster);
             }
@@ -124,20 +165,25 @@ static int fat32_alloc_cluster(jlos_vfs_super_block_t *sb, uint32_t *out_cluster
     }
     uint32_t entries_per_sector = JLOS_FAT32_BYTES_PER_SECTOR / JLOS_FAT32_FAT_ENTRY_SIZE;
     for (uint32_t sector_index = 0; sector_index * entries_per_sector < fat_entries; sector_index++) {
-        if (jlos_hal_block_read(sb->block_dev, sbi->fat_start + sector_index, sbi->sec_buf, 1) != 0) {
+        uint32_t fat_sector = sbi->fat_start + sector_index;
+        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
+        if (!bh) {
             return -1;
         }
+        uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
         uint32_t entry_count = entries_per_sector;
         if ((sector_index + 1) * entries_per_sector > fat_entries) {
             entry_count = fat_entries - sector_index * entries_per_sector;
         }
         for (uint32_t i = 0; i < entry_count; i++) {
-            uint32_t val = *(uint32_t *)(sbi->sec_buf + i * JLOS_FAT32_FAT_ENTRY_SIZE) & JLOS_FAT32_CLUSTER_MASK;
+            uint32_t val = *(uint32_t *)(buf + i * JLOS_FAT32_FAT_ENTRY_SIZE) & JLOS_FAT32_CLUSTER_MASK;
             if (val != JLOS_FAT32_CLUSTER_FREE) {
                 continue;
             }
+            jlos_buffer_put(bh);
             return fat32_claim_cluster(sb, sector_index * entries_per_sector + i, out_cluster);
         }
+        jlos_buffer_put(bh);
     }
     return -1;
 }
@@ -165,7 +211,26 @@ static int fat32_write_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, con
 {
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
     uint32_t sector = fat32_cluster_to_sector(sbi, cluster);
-    return jlos_hal_block_write(sb->block_dev, sector, buf, sbi->sectors_per_cluster);
+    uint32_t total = sbi->sectors_per_cluster;
+    uint32_t done = 0;
+    while (done < total) {
+        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sector));
+        if (!bh) {
+            return -1;
+        }
+        uint32_t off = jlos_buffer_offset(sector);
+        uint32_t in_buf = JLOS_BUFFER_SECTORS - (sector % JLOS_BUFFER_SECTORS);
+        uint32_t want = total - done;
+        if (in_buf > want) {
+            in_buf = want;
+        }
+        jlos_memcpy(bh->data + off, buf + done * JLOS_BLOCK_SECTOR_SIZE, in_buf * JLOS_BLOCK_SECTOR_SIZE);
+        jlos_buffer_dirty(bh);
+        jlos_buffer_put(bh);
+        sector += in_buf;
+        done += in_buf;
+    }
+    return 0;
 }
 
 static int fat32_cluster_advance(jlos_vfs_super_block_t *sb, uint32_t *cluster)
@@ -480,22 +545,27 @@ static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
 
 static int fat32_dirent_read(jlos_vfs_super_block_t *sb, uint32_t dir_sector, uint32_t dir_index, jlos_fat32_dirent_t *out)
 {
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    if (jlos_hal_block_read(sb->block_dev, dir_sector, sbi->sec_buf, 1) != 0) {
+    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(dir_sector));
+    if (!bh) {
         return -1;
     }
-    jlos_memcpy(out, sbi->sec_buf + dir_index * JLOS_FAT32_DIRENT_SIZE, sizeof(jlos_fat32_dirent_t));
+    uint8_t *buf = bh->data + jlos_buffer_offset(dir_sector);
+    jlos_memcpy(out, buf + dir_index * JLOS_FAT32_DIRENT_SIZE, sizeof(jlos_fat32_dirent_t));
+    jlos_buffer_put(bh);
     return 0;
 }
 
 static int fat32_dirent_write(jlos_vfs_super_block_t *sb, uint32_t dir_sector, uint32_t dir_index, const jlos_fat32_dirent_t *de)
 {
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    if (jlos_hal_block_read(sb->block_dev, dir_sector, sbi->sec_buf, 1) != 0) {
+    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(dir_sector));
+    if (!bh) {
         return -1;
     }
-    jlos_memcpy(sbi->sec_buf + dir_index * JLOS_FAT32_DIRENT_SIZE, de, sizeof(jlos_fat32_dirent_t));
-    return jlos_hal_block_write(sb->block_dev, dir_sector, sbi->sec_buf, 1);
+    uint8_t *buf = bh->data + jlos_buffer_offset(dir_sector);
+    jlos_memcpy(buf + dir_index * JLOS_FAT32_DIRENT_SIZE, de, sizeof(jlos_fat32_dirent_t));
+    jlos_buffer_dirty(bh);
+    jlos_buffer_put(bh);
+    return 0;
 }
 
 static fat32_scan_verdict_t fat32_match_name(const jlos_fat32_dirent_t *de, uint32_t entry_pos, const char *long_name, void *ctx)
@@ -1082,15 +1152,9 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     uint32_t total_sectors = bpb.total_sector_count ? bpb.total_sector_count : bpb.total_sectors;
     sbi->total_clusters = (total_sectors - sbi->data_start) / bpb.sector_per_cluster;
     sbi->fsinfo_sector = (bpb.fat_info < total_sectors) ? bpb.fat_info : 0;
-    sbi->sec_buf = (uint8_t *)jlos_kalloc(bpb.bytes_per_sector);
-    if (!sbi->sec_buf) {
-        jlos_kfree(sbi);
-        return NULL;
-    }
 
     jlos_vfs_super_block_t *sb = jlos_kalloc(sizeof(jlos_vfs_super_block_t));
     if (!sb) {
-        jlos_kfree(sbi->sec_buf);
         jlos_kfree(sbi);
         return NULL;
     }
@@ -1102,7 +1166,6 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
 
     jlos_vfs_inode_t *root_inode = jlos_vfs_inode_alloc(sb, sbi->root_cluster);
     if (!root_inode) {
-        jlos_kfree(sbi->sec_buf);
         jlos_kfree(sbi);
         jlos_kfree(sb);
         return NULL;
@@ -1116,7 +1179,6 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     jlos_vfs_dentry_t *root_dentry = jlos_vfs_dentry_alloc("/", root_inode);
     if (!root_dentry) {
         jlos_vfs_inode_put(root_inode);
-        jlos_kfree(sbi->sec_buf);
         jlos_kfree(sbi);
         jlos_kfree(sb);
         return NULL;
@@ -1136,10 +1198,6 @@ static int fat32_unmount(jlos_vfs_super_block_t *sb)
         jlos_vfs_dentry_put(sb->root_dentry);
     }
     if (sb->fs_private) {
-        jlos_fat32_sb_info_t *sbi = (jlos_fat32_sb_info_t *)sb->fs_private;
-        if (sbi->sec_buf) {
-            jlos_kfree(sbi->sec_buf);
-        }
         jlos_kfree(sb->fs_private);
     }
     jlos_kfree(sb);

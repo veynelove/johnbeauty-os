@@ -4,6 +4,8 @@
 #include <net/etherframe.h>
 #include <net/arp.h>
 
+#define JLOS_EPHEMERAL_PORT_START 1024
+
 typedef struct {
     uint8_t     version_ihl;
     uint8_t     tos;

@@ -1,4 +1,4 @@
-#include <filesystem/partition.h>
+#include <fs/partition.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "ptfs"
 #include <kernel/printk.h>

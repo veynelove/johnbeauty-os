@@ -12,8 +12,8 @@
 #include <kernel/initcall.h>
 #include <kernel/timek.h>
 #include <kernel/hrtimer.h>
-#include <filesystem/elf.h>
-#include <filesystem/vfs.h>
+#include <fs/elf.h>
+#include <fs/vfs.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "sched"
 #include <kernel/printk.h>

@@ -22,7 +22,7 @@ void jlos_ata_init(jlos_ata_t* self, uint16_t port_base, bool master)
     // Disable interrupts (nIEN bit in control register)
     jlos_io8_write(&self->control_port, 0x02);
 
-    self->bytes_per_sector = 512;
+    self->bytes_per_sector = JLOS_BLOCK_SECTOR_SIZE;
     self->master = master;
 }
 
@@ -58,8 +58,8 @@ void jlos_ata_identify(jlos_ata_t* self)
     if ((status & 0x08) != 0x08) {
         return;
     }
-    uint16_t id[256];
-    for (int i = 0; i < 256; i++) {
+    uint16_t id[JLOS_ATA_IDENTIFY_WORDS];
+    for (int i = 0; i < JLOS_ATA_IDENTIFY_WORDS; i++) {
         id[i] = jlos_io16_read(&self->data_port);
     }
 

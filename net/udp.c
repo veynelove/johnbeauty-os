@@ -83,7 +83,7 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
     self->base_handler.on_internet_protocol_received =
         (bool (*)(jlos_internet_protocol_handler_t*, uint32_t, uint32_t, uint8_t*, uint32_t))jlos_udp_provider_on_internet_protocol_received;
     self->num_sockets = 0;
-    self->free_port = 1024;
+    self->free_port = JLOS_EPHEMERAL_PORT_START;
     jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, udp_hash_ip_port, udp_cmp_ip_port);
     printk_info("initialized\n");
 }

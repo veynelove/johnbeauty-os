@@ -91,7 +91,7 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self, uint16_t port_b
         return;
     }
     self->dev_type = JLOS_HAL_BLOCK_DEV_ATA_PIO28;
-    self->bytes_per_sector = 512;
+    self->bytes_per_sector = JLOS_BLOCK_SECTOR_SIZE;
     self->total_sectors = 0;
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;

@@ -134,6 +134,7 @@ void jlos_cond_wait(jlos_cond_t *cond, jlos_mutex_t *mutex)
     jlos_spin_unlock_irqrestore(&cond->lock, flags);
     jlos_mutex_unlock(mutex);
     jlos_task_manager_schedule(g_task_manager_ptr);
+    jlos_mutex_lock(mutex);
 }
 
 void jlos_cond_signal(jlos_cond_t *cond)

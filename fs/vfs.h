@@ -1,5 +1,5 @@
-#ifndef _JLOS_FILESYSTEM_VFS_H
-#define _JLOS_FILESYSTEM_VFS_H
+#ifndef _JLOS_FS_VFS_H
+#define _JLOS_FS_VFS_H
 
 #include <hal/block.h>
 #include <hal/atomic.h>

@@ -25,6 +25,7 @@ typedef struct {
 } jlos_hash_chain_t;
 
 typedef int (*jlos_hash_chain_match_t)(jlos_hash_node_t *node, void *args);
+typedef void (*jlos_hash_chain_visit_fn)(jlos_hash_node_t *node, void *arg);
 
 void jlos_hash_chain_init(jlos_hash_chain_t *self, uint32_t bucket_count,
     uint32_t (*hash)(const void *key), int (*cmp)(const void *key, const void *node));
@@ -36,6 +37,7 @@ jlos_hash_node_t *jlos_hash_chain_see(jlos_hash_chain_t *self, const void *key);
 jlos_hash_node_t *jlos_hash_chain_find(jlos_hash_chain_t *self, const void *key, jlos_hash_chain_match_t match, void *arg);
 
 void jlos_hash_chain_remove(jlos_hash_chain_t *self, jlos_hash_node_t *node);
+void jlos_hash_chain_for_each(jlos_hash_chain_t *self, jlos_hash_chain_visit_fn visit, void *arg);
 
 uint32_t jlos_hash_uint16(const void *key);
 uint32_t jlos_hash_uint32(const void *key);

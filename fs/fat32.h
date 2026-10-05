@@ -1,7 +1,7 @@
-#ifndef _JLOS_FILESYSTEM_FAT32_H
-#define _JLOS_FILESYSTEM_FAT32_H
+#ifndef _JLOS_FS_FAT32_H
+#define _JLOS_FS_FAT32_H
 
-#include <filesystem/vfs.h>
+#include <fs/vfs.h>
 #include <hal/block.h>
 
 #define JLOS_FAT32_ATTR_READ_ONLY   0x01
@@ -118,7 +118,6 @@ typedef struct {
     uint32_t            fat_copies;
     uint32_t            total_clusters;
     uint32_t            fsinfo_sector;
-    uint8_t             *sec_buf;
 } jlos_fat32_sb_info_t;
 
 typedef struct {

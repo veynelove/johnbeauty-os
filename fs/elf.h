@@ -1,8 +1,8 @@
-#ifndef _JLOS_FILESYSTEM_ELF_H
-#define _JLOS_FILESYSTEM_ELF_H
+#ifndef _JLOS_FS_ELF_H
+#define _JLOS_FS_ELF_H
 
 #include <common/types.h>
-#include <filesystem/vfs.h>
+#include <fs/vfs.h>
 #include <kernel/vma.h>
 
 #define JLOS_ELF_MAGIC0     0x7F

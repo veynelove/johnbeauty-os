@@ -1,5 +1,5 @@
-#include <filesystem/vfs.h>
-#include <filesystem/partition.h>
+#include <fs/vfs.h>
+#include <fs/partition.h>
 #include <drivers/ata.h>
 #include <kernel/initcall.h>
 

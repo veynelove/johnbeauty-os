@@ -3,6 +3,7 @@
 
 #include <net/ipv4.h>
 #include <dsa/hash_chain.h>
+#include <kernel/sync.h>
 
 typedef enum {
     JLOS_TCP_CLOSED = 0,
@@ -15,6 +16,7 @@ typedef enum {
     JLOS_TCP_CLOSING,
     JLOS_TCP_TIME_WAIT,
     JLOS_TCP_CLOSE_WAIT,
+    JLOS_TCP_LAST_ACK,
 } jlos_tcp_socket_state_t;
 
 typedef enum {
@@ -75,6 +77,8 @@ struct jlos_tcp_socket {
     jlos_tcp_provider_t     *backend;
     jlos_tcp_handler_t      *handler;
     jlos_tcp_socket_state_t state;
+    jlos_cond_t             state_cond;
+    jlos_mutex_t            state_mutex;
     jlos_hash_node_t        hash_node;
     bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*send)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);

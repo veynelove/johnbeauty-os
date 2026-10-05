@@ -198,7 +198,7 @@ static bool unmap_locked(jlos_paging_context_t *ctx, uint32_t va)
         uint32_t region_base = pd_idx << 22;
         if (region_base < KERNEL_VIRTUAL_BASE) {
             uint32_t phys_base = *pde & JLOS_PDE_4MB_ADDR_MASK;
-            jlos_page_frame_free_n((void *)PHYS_TO_VIRT(phys_base), 1024);
+            jlos_page_frame_free_n((void *)PHYS_TO_VIRT(phys_base), JLOS_PDE_4MB_SIZE / JLOS_PAGE_SIZE);
         }
         *pde = 0;
         return true;

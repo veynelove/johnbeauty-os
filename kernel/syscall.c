@@ -1,7 +1,7 @@
 #include <hal/kernel_syscall.h>
 #include <hal/paging.h>
 #include <hal/signal.h>
-#include <filesystem/vfs.h>
+#include <fs/vfs.h>
 #include <kernel/syscall.h>
 #include <kernel/paging.h>
 #include <kernel/memory_manager.h>
