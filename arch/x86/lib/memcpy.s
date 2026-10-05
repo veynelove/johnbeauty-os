@@ -11,6 +11,8 @@ jlos_memcpy:
     movl 8(%ebp), %edi        # dst
     movl 12(%ebp), %esi       # src
     movl 16(%ebp), %edx       # size
+    testl %edx, %edx
+    jz .Lmemcpy_ret
 
     cmpl $64, %edx
     jb .Lmemcpy_byte

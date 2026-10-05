@@ -18,7 +18,6 @@ struct jlos_icmp {
 
 void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend);
 void jlos_icmp_destroy(jlos_icmp_t* self);
-bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
 void jlos_icmp_request_echo_reply(jlos_icmp_t* self, uint32_t ip_be);
 
 #endif

@@ -5,6 +5,12 @@
 #define JLOS_KERNEL_LOG_SUBSYS "eth"
 #include <kernel/printk.h>
 
+static void jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, jlos_net_sk_buff_t *skb)
+{
+    (void)self;
+    jlos_net_skb_free(skb);
+}
+
 void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend)
 {
     self->backend = backend;
@@ -16,14 +22,6 @@ void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t
 void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self)
 {
     jlos_amd_am79c973_set_handler(self->backend, NULL);
-}
-
-bool jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
-{
-    (void)self;
-    (void)buffer;
-    (void)size;
-    return false;
 }
 
 void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
@@ -317,8 +315,10 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
             }
             uint8_t *buffer = (uint8_t *)PHYS_TO_VIRT(self->recv_buffer_descr[idx].address);
             if (self->handler) {
-                if (self->handler->on_raw_data_received(self->handler, buffer, size)) {
-                    jlos_amd_am79c973_send(self, buffer, size);
+                jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(size);
+                if (skb) {
+                    jlos_memcpy(jlos_net_skb_put(skb, size), buffer, size);
+                    self->handler->on_raw_data_received(self->handler, skb);
                 }
             }
         }

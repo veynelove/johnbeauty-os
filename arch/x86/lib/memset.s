@@ -10,6 +10,8 @@ jlos_memset:
     movl 8(%ebp), %esi        # ptr
     movzbl 12(%ebp), %eax     # value
     movl 16(%ebp), %edx       # size
+    testl %edx, %edx
+    jz .Lmemset_ret
 
     cmpl $64, %edx
     jb .Lmemset_byte

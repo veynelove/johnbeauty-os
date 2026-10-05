@@ -1,4 +1,5 @@
 #include <net/network.h>
+#include <net/skbuff.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <include/config.h>
@@ -18,6 +19,7 @@ void network_init(void)
         return;
     }
 
+    jlos_net_skb_init();
     jlos_amd_am79c973_t *eth0 = NULL;
     for (int i = 0; i < g_driver_manager_ptr->num_drivers; i++) {
         jlos_driver_t *drv = g_driver_manager_ptr->drivers[i];

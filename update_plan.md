@@ -442,6 +442,27 @@ multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf
 
 ***
 
+## Phase 8.9: net 子系统 sk_buff 统一网络缓冲区 ✅ 已完成（2026-10-05，阶段 1-4）
+
+将 net 子系统从各层 `kalloc+memcpy` 裸指针传递统一为 Linux 经典 sk_buff 缓冲区，发送/接收路径零拷贝（各层只移动指针）。
+
+### 实施结果
+
+| 项目 | 状态 | 说明 |
+| ---- | ---- | ---- |
+| sk_buff 结构 + 操作 | ✅ | `net/skbuff.h/c`：四指针 head/data/tail/end + reserve/push/pull/put + 引用计数（refcount + get/free）+ 数据分档分配（≤2048 kalloc，>2048 page_frame_alloc_n） |
+| 发送路径改造 | ✅ | ether/ipv4/udp/tcp/icmp/arp send 改用 skb：alloc_skb + skb_put 载荷 + 各层 skb_push 填头部 + NIC DMA + skb_free |
+| 接收路径改造 | ✅ | NIC 收帧 alloc_skb+memcpy → 各层 on_received 改 skb + skb_pull 跳过头部 + send_back in-place 回送 |
+| csum_partial + csum_fold | ✅ | 替换 check_sum：csum_partial 分段累加 + csum_fold 折叠取反；TCP 用栈上 pseudo header + 分段累加，零临时 kalloc |
+| skb_push bug 修复 | ✅ | 删除错误的 `tail -= len`，push 只动 data 不动 tail（否则 skb_len 不随 push 增加，NIC 发包缺头部） |
+| TCP 崩溃修复 | ✅ | `arch/x86/lib/memcpy.s` + `memset.s` 入口加 size=0 早期返回（原汇编版无检查，jlos_memcpy(dst,NULL,0) 解引用 NULL → triple fault） |
+| 阶段 5 推迟 | ⏸ | 队列（backlog/发送）+ clone 在当前架构无消费者（无 softirq/packet socket，NIC 同步发送），推迟至需求出现时 |
+| 验证 | ✅ | DHCP/ARP/ICMP/UDP/TCP 全通：三次握手 + HTTP GET/响应 + 四次挥手；所有内核测试全绿 |
+
+详见 history_update.md 2026-10-05 v3.7 开发日志。
+
+***
+
 ## Phase 7: HAL 层架构合规重构 ✅ 已完成
 
 ### 7.1 分层模式判定
@@ -647,7 +668,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | --- | --- | --- | --- | --- |
 | ~~高~~ | ~~hrtimer~~ | ~~高精度定时器（红黑树 + oneshot 模式）~~ | ~~无~~ | **已完成**：4 批次落地（PIT oneshot + 核心结构 + 中断集成 + nanosleep sleeper），详见 history_update.md v3.5 |
 | ~~高~~ | ~~FS 缓存~~ | ~~buffer cache + page cache~~ | ~~无~~ | **已完成**：Phase 8.8 page cache 统一（per-inode address_space + get_block + readpage/writepage），删 buffer_cache，dirent 走 dir->address_space；详见 history_update.md 2026-10-05 |
-| 高 | sk_buff | 统一网络缓冲区管理 | 无 | 当前每层 kalloc+memcpy，零拷贝不可能 |
+| ~~高~~ | ~~sk_buff~~ | ~~统一网络缓冲区管理~~ | ~~无~~ | **已完成（阶段 1-4）**：sk_buff 统一缓冲区 + 发送/接收路径改造 + csum_partial 重构 + skb_push 修复 + TCP 崩溃修复（memcpy.s size=0）；阶段 5（队列+clone）推迟至 softirq/packet socket 需求时；详见 history_update.md 2026-10-05 v3.7 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |

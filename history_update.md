@@ -5,6 +5,56 @@
 
 ***
 
+## 2026-10-05（v3.7）net 子系统 sk_buff 统一网络缓冲区（Phase 8.9，阶段 1-4）
+
+### 背景
+
+net 子系统各层用 `uint8_t *data + size` 裸指针传递，一次 UDP 发送经 4 层每层 `kalloc + memcpy` 拼头（3 次分配 + 3 次拷贝），无法零拷贝。统一为 Linux 经典 sk_buff 缓冲区。
+
+### 阶段 1：sk_buff 结构 + 操作函数
+
+- **`net/skbuff.h/c`**：`jlos_net_sk_buff_t`（四指针 head/data/tail/end + 元数据 src/dst ip/port/protocol + list + refcount）+ 操作函数 alloc/free/get/reserve/push/pull/put。
+- **数据分档分配**：≤2048B 走 `jlos_kalloc`（slab），>2048B 走 `jlos_page_frame_alloc_n`（页对齐）。描述符用专用 slab cache `skbuff_head_cache`。
+- **引用计数**：`refcount` + `skb_get`（inc）+ `skb_free`（dec + 释放）。
+
+### 阶段 2：发送路径改造
+
+- **ether/ipv4 send**：接口改 skb，`skb_push` 填头部，ether 层 `nic_send + skb_free`。
+- **udp/tcp/icmp/arp send**：内部 `alloc_skb` + `skb_reserve` 预留头部 + `skb_put` 写载荷 + `skb_push` 填头部。
+- **TCP 校验和**：栈上 pseudo header + `csum_partial` 分段累加，零临时 kalloc。
+
+### 阶段 3：接收路径改造
+
+- **NIC 收帧**：`alloc_skb + memcpy` 封装 skb → `on_raw_data_received(skb)`。
+- **各层 on_received**：改 skb + `skb_pull` 跳过头部 + 填 skb 元数据。
+- **send_back**：ICMP echo/ARP request in-place 修改 skb->data + return true，ether 层 `skb_push` 回头部 + `nic_send + skb_free`。
+
+### csum_partial + csum_fold 重构
+
+- 替换 `check_sum`：`csum_partial(data, len, init_csum)` 分段累加 + `csum_fold(csum)` 折叠取反。
+- IP/ICMP/TCP 校验和调用点全部改用新接口（含接收路径 IP/ICMP 校验）。
+
+### skb_push bug 修复
+
+- **根因**：`skb_push` 错误地 `tail -= len`，导致 `skb_len = tail - data` 不随 push 增加。NIC 发送的包缺少所有协议头，server 收到无效包不响应。
+- **修复**：删除 `tail -= len`，push 只动 data 不动 tail。
+
+### TCP 崩溃修复
+
+- **现象**：外部 `curl -v http://192.168.159.133:1234` 触发 SYN-ACK 发送时 triple fault。
+- **根因**：`arch/x86/lib/memcpy.s` 汇编版缺少 size=0 早期返回。size=0 时直接进入 byte loop，`movb (%esi), %al` 解引用 src=NULL → 页错误 → triple fault；`decl %edx` 让 0 下溢成 0xFFFFFFFF，循环 4G 次越界写。汇编版覆盖 weak C 版本，C 版本的 size=0 检查不生效。
+- **修复**：memcpy.s + memset.s 入口加 `testl %edx, %edx; jz .Lret`。同时补上 `tcp_provider_send` 漏掉的 `ip_handler_send` 调用。
+
+### 阶段 5 推迟
+
+队列（接收 backlog + 发送队列）+ clone 在当前架构无消费者：JLOS 无 softirq/bh 子系统（NIC 硬中断里直接走完整协议栈）、无 packet socket/bridge、NIC 同步发送。引用计数已随阶段 1 落地。阶段 5 推迟至 softirq/packet socket 需求出现时。
+
+### 验证
+
+vmplayer 全绿：DHCP DISC → OFFER → REQ → ACK 绑定 192.168.159.133；ARP/ICMP/UDP 正常；TCP 三次握手 + HTTP GET/响应 + 四次挥手完整通过；所有内核测试（memory/timek/hrtimer/multitask/pfa/paging/ata/rbtree）全绿。
+
+***
+
 ## 2026-10-05（v3.6）FS 缓存统一 page cache（Phase 8.8）
 
 ### 背景

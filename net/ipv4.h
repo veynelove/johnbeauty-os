@@ -32,7 +32,7 @@ typedef struct jlos_internet_protocol_provider jlos_internet_protocol_provider_t
 typedef struct jlos_internet_protocol_handler {
     jlos_internet_protocol_provider_t   *backend;
     uint8_t                             ip_protocol;
-    bool (*on_internet_protocol_received)(struct jlos_internet_protocol_handler* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
+    bool (*on_internet_protocol_received)(struct jlos_internet_protocol_handler* self, jlos_net_sk_buff_t *skb);
 } jlos_internet_protocol_handler_t;
 
 struct jlos_internet_protocol_provider {
@@ -45,14 +45,14 @@ struct jlos_internet_protocol_provider {
 
 void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self, jlos_internet_protocol_provider_t *backend, uint8_t protocol);
 void jlos_internet_protocol_handler_destroy(jlos_internet_protocol_handler_t* self);
-bool jlos_internet_protocol_handler_on_internet_protocol_received(jlos_internet_protocol_handler_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
-void jlos_internet_protocol_handler_send(jlos_internet_protocol_handler_t* self, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
+bool jlos_internet_protocol_handler_on_internet_protocol_received(jlos_internet_protocol_handler_t* self, jlos_net_sk_buff_t *skb);
+void jlos_internet_protocol_handler_send(jlos_internet_protocol_handler_t* self, uint32_t dstIP_BE, jlos_net_sk_buff_t *skb);
 
 void jlos_internet_protocol_provider_init(jlos_internet_protocol_provider_t* self, jlos_ether_frame_provider_t *backend, jlos_arp_t *arp, uint32_t gateway_ip, uint32_t subnet_mask);
 void jlos_internet_protocol_provider_destroy(jlos_internet_protocol_provider_t* self);
-bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_protocol_provider_t* self, uint8_t *etherframe_payload, uint32_t size);
-void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* self, uint32_t dstIP_BE, uint8_t protocol, uint8_t *data, uint32_t size);
-uint16_t jlos_internet_protocol_provider_check_sum(uint16_t *data, uint32_t length_in_bytes);
+void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* self, uint32_t dstIP_BE, uint8_t protocol, jlos_net_sk_buff_t *skb);
+uint32_t jlos_internet_protocol_provider_csum_partial(const void *data, uint32_t length_in_bytes, uint32_t init_csum);
+uint16_t jlos_internet_protocol_provider_csum_fold(uint32_t csum);
 uint32_t jlos_internet_protocol_provider_get_ip_address(jlos_internet_protocol_provider_t* self);
 
 #endif
