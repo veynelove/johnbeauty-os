@@ -1,5 +1,5 @@
 #include <fs/vfs.h>
-#include <fs/buffer_cache.h>
+
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <dsa/list_lru.h>
@@ -66,7 +66,8 @@ static void jlos_vfs_init(void)
     jlos_hash_chain_init(&s_inode_hash, JLOS_VFS_HASH_BUCKETS, inode_hash_fn, inode_cmp_fn);
     jlos_hash_chain_init(&s_dentry_hash, JLOS_VFS_HASH_BUCKETS, dentry_hash_fn, dentry_cmp_fn);
     jlos_list_lru_init(&s_dentry_lru);
-    jlos_buffer_cache_init();
+
+    jlos_fs_page_cache_init();
 }
 
 int jlos_vfs_register_fs_type(jlos_vfs_fs_type_t *fs_type)
@@ -157,6 +158,7 @@ jlos_vfs_mount_t *jlos_vfs_mount(const char *fs_type_name, jlos_hal_block_dev_t 
         return NULL;
     }
     sb->fs_type = ft;
+    jlos_fs_address_space_init(&sb->block_mapping, sb->block_dev, sb->block_dev);
     jlos_vfs_mount_t *mnt = jlos_kalloc(sizeof(jlos_vfs_mount_t));
     if (!mnt) {
         return NULL;
@@ -500,6 +502,7 @@ jlos_vfs_inode_t *jlos_vfs_inode_alloc(jlos_vfs_super_block_t *sb, uint32_t ino)
     inode->ino = ino;
     inode->sb = sb;
     jlos_atomic_set(&inode->ref_count, 1);
+    jlos_fs_address_space_init(&inode->address_space, inode, sb->block_dev);
     vfs_inode_key_t key = {.sb = sb, .ino = ino};
     jlos_hash_chain_insert(&s_inode_hash, &key, &inode->hash_node);
     return inode;

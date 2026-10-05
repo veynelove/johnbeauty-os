@@ -5,6 +5,42 @@
 
 ***
 
+## 2026-10-05（v3.6）FS 缓存统一 page cache（Phase 8.8）
+
+### 背景
+
+FAT32 每次读 FAT 扇区走裸 IO，无缓存，重大性能短板。旧实现用 buffer cache（按物理 sector）缓存元数据，文件数据无缓存。
+
+### 阶段 1-3：page cache 基础设施 + 按扇区元数据 I/O
+
+- **page_cache 重写**：`fs/page_cache.h/c`，`jlos_fs_address_space_t`（host + bdev + page_tree 红黑树 + lock + readpage/writepage 回调）+ `jlos_fs_buffer_head_t`（blocknr + state）+ generic helper `jlos_fs_block_read/write_full_page`（逐 sector 调 get_block + 读盘 + bh 管理）。
+- **PFA 复用**：page cache 复用 PFA 的 `jlos_page_t`（struct page），不另建描述符。`jlos_page_t` 扩展 type 枚举 FILE_PAGE + union file 分支（lru/node/page_state/bufs）。
+- **vfs 集成**：inode 加 `address_space`，super_block 加 `block_mapping`。FAT32 按扇区元数据 I/O（FAT/FSINFO/dire2ent）走 `sb->block_mapping`。
+- **删 buffer_cache**：`fs/buffer_cache.c/h` 删除，全量切 page cache。
+
+### 阶段 4.2：per-inode page cache（文件数据走 inode->address_space）
+
+- **fat32_get_block**：文件内逻辑 sector → 物理 sector（遍历 FAT 链），iblock 转 uint32_t 避免 libgcc。
+- **fat32_readpage/writepage**：调 generic helper，设为 inode->address_space 回调。
+- **read_inner/write_inner 重构**：逐 page 操作（消除 cluster_buf 中转，一次 memcpy）。
+- **dir_scan/find_free_slots 重写**：逐 page 遍历目录，hit 用 dirent_offset（文件内字节偏移）。
+
+### 双 page cache bug 修复
+
+- **根因**：`dirent_read/write` 走 `sb->block_mapping`（元数据缓存），`dir_scan` 走 `dir->address_space`（文件数据缓存）。create 写前者但 lookup 读后者的旧缓存，找不到新 dirent。
+- **修复**：dirent 读写统一走 `dir->address_space` + dirent_offset（经典 Linux aop：目录是文件，dirent 走目录 inode 的 page cache）。
+- `fi->dir_sector/dir_index` → `fi->dir_offset` + `fi->parent`（父目录 inode 引用，destroy_inode 时 put）。
+- `dirent_to_inode` 接收 dir + dirent_offset，设 fi->parent/dir_offset；`sync_inode` 用它们回写。
+- `find_free_slots` 返回 dirent_offset；create/unlink 用 dirent_offset。
+- 删 `fat32_dirent_locate` + `fat32_dirent_advance`（dirent 用 offset 定位，不需要物理位置）。
+- `sb->block_mapping` 只缓存真正元数据（FAT 表/FSINFO/boot sector），不缓存 dirent。
+
+### 验证
+
+vmplayer 全绿：file_test ALL PASSED（create + write/read + lseek + unlink + mmap），multitask 8 项 + memory/timek/hrtimer/signal/mmap/paging/ata/rbtree 全通过，网络栈 DHCP/ARP/ICMP 正常。
+
+***
+
 ## 2026-09-29（v3.5）hrtimer 高精度定时器 + nanosleep + 测试体系改造
 
 ### hrtimer 批次 1：PIT oneshot + clock_event oneshot 接口

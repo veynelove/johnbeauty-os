@@ -5,6 +5,7 @@
 #include <kernel/paging.h>
 #include <hal/atomic.h>
 #include <dsa/list.h>
+#include <dsa/rbtree.h>
 
 #define JLOS_PAGE_FRAME_SIZE            JLOS_PAGE_SIZE
 #define JLOS_PAGE_FRAME_REFCOUNT_MAX    255
@@ -26,18 +27,28 @@ typedef enum {
     JLOS_PAGE_FRAME_TYPE_KV_HEAP    = 3,
     JLOS_PAGE_FRAME_TYPE_KERN_STACK = 4,
     JLOS_PAGE_FRAME_TYPE_PAGE_TABLE = 5,
+    JLOS_PAGE_FRAME_TYPE_FILE_PAGE  = 6,
 } jlos_page_frame_type_t;
 
 typedef struct jlos_page_t {
 union {
-    jlos_list_head_t free_list;
-    void             *owner;
-}                 u;
-    uint8_t       flags;
-    uint8_t       type;
-    uint8_t       order;
-    uint8_t       pt_present_count;
-    jlos_atomic_t refcount;
+jlos_list_head_t free_list;
+struct {
+    void *mapping;
+    uint64_t index;
+} file;
+void *owner;
+}                       u;
+    jlos_list_head_t    lru;
+    jlos_rbtree_node_t  node;
+    uint8_t             flags;
+    uint8_t             type;
+    uint8_t             order;
+    uint8_t             pt_present_count;
+    uint8_t             page_state;
+    uint8_t             _pad[3];
+    jlos_atomic_t       refcount;
+    void                *bufs;
 } jlos_page_t;
 
 typedef struct {
@@ -74,6 +85,9 @@ jlos_page_frame_type_t jlos_page_frame_get_type(uint32_t phys);
 void *jlos_page_frame_get_owner(uint32_t phys);
 void jlos_page_frame_set_owner_type(uint32_t phys, void *owner, jlos_page_frame_type_t type);
 void jlos_page_frame_clear_owner_type(uint32_t phys);
+
+jlos_page_t *jlos_page_frame_to_page(void *addr);
+void *jlos_page_frame_page_addr(jlos_page_t *page);
 
 void jlos_page_frame_print_buddy(void);
 

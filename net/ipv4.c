@@ -54,7 +54,6 @@ void jlos_internet_protocol_provider_destroy(jlos_internet_protocol_provider_t* 
 
 bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_protocol_provider_t* self, uint8_t *etherframe_payload, uint32_t size)
 {
-    printk_debug("received IPv4 packet, size=%x%x\n", size & 0xFF, (size >> 8) & 0xFF);
     if (size < sizeof(jlos_ipv4_message_t)) {
         printk_debug("packet too small\n");
         return false;
@@ -62,7 +61,6 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
     jlos_ipv4_message_t *ip_message = (jlos_ipv4_message_t *)etherframe_payload;
     bool send_back = false;
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
-    printk_debug("protocol=%x\n", ip_message->protocol);
     if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend) || ip_message->dst_ip == JLOS_IPV4_BROADCAST) {
         printk_debug("packet is for us\n");
         int length = JLOS_SWAP_ENDIAN_16(ip_message->total_length);
@@ -78,9 +76,6 @@ bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_internet_proto
         else {
             printk_debug("no handler for this protocol\n");
         }
-    }
-    else {
-        printk_debug("packet not for us\n");
     }
     if (send_back) {
         uint32_t temp = ip_message->dst_ip;

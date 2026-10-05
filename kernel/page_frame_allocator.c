@@ -575,6 +575,28 @@ void jlos_page_frame_clear_owner_type(uint32_t phys)
     jlos_page_frame_set_owner_type(phys, NULL, JLOS_PAGE_FRAME_TYPE_FREE);
 }
 
+jlos_page_t *jlos_page_frame_to_page(void *addr)
+{
+    uint32_t phys = (uint32_t)VIRT_TO_PHYS(addr);
+    if (phys < s_start_addr) {
+        return NULL;
+    }
+    uint32_t frame = pfa_phys_to_frame(phys);
+    if (frame >= s_total_frames) {
+        return NULL;
+    }
+    return &s_pages[frame];
+}
+
+void *jlos_page_frame_page_addr(jlos_page_t *page)
+{
+    uint32_t frame = (uint32_t)(page - s_pages);
+    if (frame >= s_total_frames) {
+        return NULL;
+    }
+    return (void *)PHYS_TO_VIRT(s_start_addr + frame * JLOS_PAGE_FRAME_SIZE);
+}
+
 void *jlos_page_frame_alloc_n(uint32_t num_frames)
 {
     if (!num_frames || num_frames > s_total_frames) return NULL;

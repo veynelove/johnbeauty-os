@@ -122,8 +122,8 @@ typedef struct {
 
 typedef struct {
     uint32_t first_cluster;
-    uint32_t dir_sector;
-    uint32_t dir_index;
+    uint32_t dir_offset;
+    jlos_vfs_inode_t *parent;
 } jlos_fat32_inode_info_t;
 
 extern jlos_vfs_fs_type_t g_fat32_fs_type;
@@ -136,8 +136,7 @@ typedef enum {
 
 typedef struct {
     jlos_fat32_dirent_t de;
-    uint32_t            cluster;
-    uint32_t            entry_index;
+    uint32_t            dirent_offset;
     char                long_name[JLOS_VFS_NAME_MAX + 1];
     bool                has_lfn;
 } fat32_dirent_hit_t;

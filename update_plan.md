@@ -21,6 +21,8 @@
 7. **命名遵循 JLOS 规范（`jlos_<subsystem>_<action>`），日志只写错误类型 tag，不重复时间戳/子系统/函数名（由框架自动封装）。**
 8. **生产级内核, vmplayer测试，目标运行在硬件上**
 9. **魔法字面量用语义宏命名**：裸数值（如 512/256/1024）用有语义的宏替代（如 `JLOS_BLOCK_SECTOR_SIZE`、`JLOS_IDT_ENTRIES`）；KB/MB 等计算机科学定义好的单位换算（如 `1024` KB→字节、`4*1024*1024` 4MB 对齐）不需定义宏。
+10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
+11. **给方案/设计前必须先核查相关子系统的实际代码**：设计涉及哪个子系统（PFA/paging/mm/fs 等），先读它的实际头文件与实现，确认已有结构、接口、命名与完成度；已存在的成熟结构（如 PFA 的 struct page `jlos_page_t` + `s_pages[]` mem_map）必须直接复用，不得凭印象假设其不存在、另起炉灶。
 
 ***
 
@@ -415,9 +417,28 @@ multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf
 
 | # | 问题 | 说明 | 优先级 |
 | --- | --- | --- | --- |
-| FS-1 | FAT32 只读挂载 | 写操作（create/write/delete）未实现 | 中 |
-| FS-2 | open/close/read/write syscall 未实现 | 当前只有 execve，无通用文件 syscall | 高 |
-| FS-3 | VFS dentry cache 未做 LRU 淘汰 | 当前 hash 缓存无上限 | 低 |
+| ~~FS-1~~ | ~~FAT32 只读挂载~~ | **已实现**：批次 1 完成 create/write/unlink（fat32.c） | — |
+| ~~FS-2~~ | ~~open/close/read/write syscall~~ | **已实现**：批次 1 完成 open/close/read/write/lseek/unlink syscall | — |
+| ~~FS-3~~ | ~~VFS dentry cache LRU 淘汰~~ | **已实现**：批次 4 完成 DCACHE_MAX=256 + dentry_shrink | — |
+
+***
+
+## Phase 8.8: FS 缓存统一 page cache ✅ 已完成（2026-10-05）
+
+将 FS 缓存从裸 sector IO + buffer cache 统一为 Linux 2.4 风格 per-inode page cache。
+
+### 实施结果
+
+| 项目 | 状态 | 说明 |
+| ---- | ---- | ---- |
+| per-inode address_space | ✅ | `inode->address_space`（文件数据，key=page index）+ `sb->block_mapping`（元数据 FAT/FSINFO） |
+| get_block + readpage/writepage | ✅ | `fat32_get_block`（文件内 sector→物理 sector 遍历 FAT 链）+ generic helper（逐 sector 映射 + 读盘 + bh 管理） |
+| dirent 走 dir->address_space | ✅ | `dirent_read/write` 用文件内偏移，不走 block_mapping；消除双 page cache 不一致 |
+| fi->dir_offset + fi->parent | ✅ | 替代 dir_sector/dir_index；`sync_inode` 用 parent->address_space 回写 |
+| 删 buffer_cache | ✅ | `fs/buffer_cache.c/h` 已删，全量切 page cache |
+| 验证 | ✅ | file_test ALL PASSED（create/write/read/lseek/unlink/mmap） |
+
+详见 history_update.md 2026-10-05 开发日志。
 
 ***
 
@@ -625,7 +646,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
 | ~~高~~ | ~~hrtimer~~ | ~~高精度定时器（红黑树 + oneshot 模式）~~ | ~~无~~ | **已完成**：4 批次落地（PIT oneshot + 核心结构 + 中断集成 + nanosleep sleeper），详见 history_update.md v3.5 |
-| 高 | FS 缓存 | buffer cache + page cache | 无 | FAT32 每次读 FAT 扇区走裸 IO，重大性能短板 |
+| ~~高~~ | ~~FS 缓存~~ | ~~buffer cache + page cache~~ | ~~无~~ | **已完成**：Phase 8.8 page cache 统一（per-inode address_space + get_block + readpage/writepage），删 buffer_cache，dirent 走 dir->address_space；详见 history_update.md 2026-10-05 |
 | 高 | sk_buff | 统一网络缓冲区管理 | 无 | 当前每层 kalloc+memcpy，零拷贝不可能 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |

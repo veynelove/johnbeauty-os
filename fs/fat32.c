@@ -1,5 +1,5 @@
 #include <fs/fat32.h>
-#include <fs/buffer_cache.h>
+#include <fs/page_cache.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <common/stypes.h>
@@ -29,40 +29,55 @@ static uint32_t fat32_get_next_cluster(jlos_vfs_super_block_t *sb, uint32_t clus
     uint32_t fat_sector = sbi->fat_start + fat_offset / sbi->bpb.bytes_per_sector;
     uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
     
-    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
-    if (!bh) {
+    jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(fat_sector));
+    if (!page) {
         return JLOS_FAT32_CLUSTER_EOC;
     }
-    uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+    uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(fat_sector) * JLOS_BLOCK_SECTOR_SIZE;
     uint32_t next = *(uint32_t *)(buf + entry_offset);
-    jlos_buffer_put(bh);
+    jlos_fs_page_put(page);
     return next & JLOS_FAT32_CLUSTER_MASK;
 }
 
-static int fat32_read_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, uint8_t *buf)
+static int fat32_get_block(jlos_fs_address_space_t *mapping, uint64_t iblock, uint64_t *phys, int create)
 {
+    (void)create;
+    jlos_vfs_inode_t *inode = (jlos_vfs_inode_t *)mapping->host;
+    jlos_vfs_super_block_t *sb = inode->sb;
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    uint32_t sector = fat32_cluster_to_sector(sbi, cluster);
-    uint32_t total = sbi->sectors_per_cluster;
-    uint32_t done = 0;
-    while (done < total) {
-        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sector));
-        if (!bh) {
+    uint32_t cluster = fat32_ii(inode)->first_cluster;
+    if (cluster < JLOS_FAT32_FIRST_DATA_CLUSTER) {
+        return -1;
+    }
+    uint32_t iblk = (uint32_t)iblock;
+    uint32_t target_cluster_idx = iblk / sbi->sectors_per_cluster;
+    for (uint32_t i = 0; i < target_cluster_idx; i++) {
+        cluster = fat32_get_next_cluster(sb, cluster);
+        if (cluster >= JLOS_FAT32_CLUSTER_EOC) {
             return -1;
         }
-        uint32_t off = jlos_buffer_offset(sector);
-        uint32_t in_buf = JLOS_BUFFER_SECTORS - (sector % JLOS_BUFFER_SECTORS);
-        uint32_t want = total - done;
-        if (in_buf > want) {
-            in_buf = want;
-        }
-        jlos_memcpy(buf + done * JLOS_BLOCK_SECTOR_SIZE, bh->data + off, in_buf * JLOS_BLOCK_SECTOR_SIZE);
-        jlos_buffer_put(bh);
-        sector += in_buf;
-        done += in_buf;
     }
+    uint32_t sector_in_cluster = iblk % sbi->sectors_per_cluster;
+    *phys = fat32_cluster_to_sector(sbi, cluster) + sector_in_cluster;
     return 0;
 }
+
+static int fat32_readpage(jlos_fs_address_space_t *mapping, jlos_page_t *page)
+{
+    return jlos_fs_block_read_full_page(mapping, page, fat32_get_block);
+}
+
+static int fat32_writepage(jlos_fs_address_space_t *mapping, jlos_page_t *page)
+{
+    return jlos_fs_block_write_full_page(mapping, page, fat32_get_block);
+}
+
+static void fat32_setup_aops(jlos_vfs_inode_t *inode)
+{
+    inode->address_space.readpage = fat32_readpage;
+    inode->address_space.writepage = fat32_writepage;
+}
+
 
 static int fat32_fsinfo_read(jlos_vfs_super_block_t *sb, uint32_t *next_free)
 {
@@ -70,21 +85,21 @@ static int fat32_fsinfo_read(jlos_vfs_super_block_t *sb, uint32_t *next_free)
     if (sbi->fsinfo_sector == 0) {
         return 1;
     }
-    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sbi->fsinfo_sector));
-    if (!bh) {
+    jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(sbi->fsinfo_sector));
+    if (!page) {
         return -1;
     }
-    uint8_t *buf = bh->data + jlos_buffer_offset(sbi->fsinfo_sector);
+    uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(sbi->fsinfo_sector) * JLOS_BLOCK_SECTOR_SIZE;
     uint32_t lead = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_LEAD_OFF);
     uint32_t stru_sig = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_STRUCT_OFF);
     if (lead != JLOS_FAT32_FSINFO_LEAD_SIG || stru_sig != JLOS_FAT32_FSINFO_STRUCT_SIG) {
-        jlos_buffer_put(bh);
+        jlos_fs_page_put(page);
         return 1;
     }
     if (next_free) {
         *next_free = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_FREE_OFF);
     }
-    jlos_buffer_put(bh);
+    jlos_fs_page_put(page);
     return 0;
 }
 
@@ -94,21 +109,21 @@ static int fat32_fsinfo_update(jlos_vfs_super_block_t *sb, uint32_t next_free, i
     if (sbi->fsinfo_sector == 0) {
         return 0;
     }
-    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sbi->fsinfo_sector));
-    if (!bh) {
+    jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(sbi->fsinfo_sector));
+    if (!page) {
         return -1;
     }
-    uint8_t *buf = bh->data + jlos_buffer_offset(sbi->fsinfo_sector);
+    uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(sbi->fsinfo_sector) * JLOS_BLOCK_SECTOR_SIZE;
     uint32_t lead = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_LEAD_OFF);
     uint32_t stru_sig = *(uint32_t *)(buf + JLOS_FAT32_FSINFO_STRUCT_OFF);
     if (lead != JLOS_FAT32_FSINFO_LEAD_SIG || stru_sig != JLOS_FAT32_FSINFO_STRUCT_SIG) {
-        jlos_buffer_put(bh);
+        jlos_fs_page_put(page);
         return 0;
     }
     *(uint32_t *)(buf + JLOS_FAT32_FSINFO_FREE_OFF) = next_free;
     *(uint32_t *)(buf + JLOS_FAT32_FSINFO_COUNT_OFF) += free_delta;
-    jlos_buffer_dirty(bh);
-    jlos_buffer_put(bh);
+    jlos_fs_page_bh_dirty(page, jlos_fs_sector_idx(sbi->fsinfo_sector));
+    jlos_fs_page_put(page);
     return 0;
 }
 
@@ -120,15 +135,15 @@ static int fat32_set_next_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, 
     uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
     for (uint32_t copy = 0; copy < sbi->fat_copies; copy++) {
         uint32_t fat_sector = sbi->fat_start + fat_sector_index + copy * sbi->bpb.table_size;
-        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
-        if (!bh) {
+        jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(fat_sector));
+        if (!page) {
             return -1;
         }
-        uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+        uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(fat_sector) * JLOS_BLOCK_SECTOR_SIZE;
         uint32_t *entry = (uint32_t *)(buf + entry_offset);
         *entry = (*entry & ~JLOS_FAT32_CLUSTER_MASK) | (next & JLOS_FAT32_CLUSTER_MASK);
-        jlos_buffer_dirty(bh);
-        jlos_buffer_put(bh);
+        jlos_fs_page_bh_dirty(page, jlos_fs_sector_idx(fat_sector));
+        jlos_fs_page_put(page);
     }
     return 0;
 }
@@ -153,11 +168,11 @@ static int fat32_alloc_cluster(jlos_vfs_super_block_t *sb, uint32_t *out_cluster
         uint32_t fat_offset = hint * JLOS_FAT32_FAT_ENTRY_SIZE;
         uint32_t fat_sector = sbi->fat_start + fat_offset / sbi->bpb.bytes_per_sector;
         uint32_t entry_offset = fat_offset % sbi->bpb.bytes_per_sector;
-        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
-        if (bh) {
-            uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+        jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(fat_sector));
+        if (page) {
+            uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(fat_sector) * JLOS_BLOCK_SECTOR_SIZE;
             uint32_t val = *(uint32_t *)(buf + entry_offset) & JLOS_FAT32_CLUSTER_MASK;
-            jlos_buffer_put(bh);
+            jlos_fs_page_put(page);
             if (val == JLOS_FAT32_CLUSTER_FREE) {
                 return fat32_claim_cluster(sb, hint, out_cluster);
             }
@@ -166,11 +181,11 @@ static int fat32_alloc_cluster(jlos_vfs_super_block_t *sb, uint32_t *out_cluster
     uint32_t entries_per_sector = JLOS_FAT32_BYTES_PER_SECTOR / JLOS_FAT32_FAT_ENTRY_SIZE;
     for (uint32_t sector_index = 0; sector_index * entries_per_sector < fat_entries; sector_index++) {
         uint32_t fat_sector = sbi->fat_start + sector_index;
-        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(fat_sector));
-        if (!bh) {
+        jlos_page_t *page = jlos_fs_page_get(&sb->block_mapping, jlos_fs_blocknr(fat_sector));
+        if (!page) {
             return -1;
         }
-        uint8_t *buf = bh->data + jlos_buffer_offset(fat_sector);
+        uint8_t *buf = (uint8_t *)jlos_page_frame_page_addr(page) + jlos_fs_sector_idx(fat_sector) * JLOS_BLOCK_SECTOR_SIZE;
         uint32_t entry_count = entries_per_sector;
         if ((sector_index + 1) * entries_per_sector > fat_entries) {
             entry_count = fat_entries - sector_index * entries_per_sector;
@@ -180,10 +195,10 @@ static int fat32_alloc_cluster(jlos_vfs_super_block_t *sb, uint32_t *out_cluster
             if (val != JLOS_FAT32_CLUSTER_FREE) {
                 continue;
             }
-            jlos_buffer_put(bh);
+            jlos_fs_page_put(page);
             return fat32_claim_cluster(sb, sector_index * entries_per_sector + i, out_cluster);
         }
-        jlos_buffer_put(bh);
+        jlos_fs_page_put(page);
     }
     return -1;
 }
@@ -207,31 +222,6 @@ static int fat32_free_cluster_chain(jlos_vfs_super_block_t *sb, uint32_t head)
     return 0;
 }
 
-static int fat32_write_cluster(jlos_vfs_super_block_t *sb, uint32_t cluster, const uint8_t *buf)
-{
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    uint32_t sector = fat32_cluster_to_sector(sbi, cluster);
-    uint32_t total = sbi->sectors_per_cluster;
-    uint32_t done = 0;
-    while (done < total) {
-        jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(sector));
-        if (!bh) {
-            return -1;
-        }
-        uint32_t off = jlos_buffer_offset(sector);
-        uint32_t in_buf = JLOS_BUFFER_SECTORS - (sector % JLOS_BUFFER_SECTORS);
-        uint32_t want = total - done;
-        if (in_buf > want) {
-            in_buf = want;
-        }
-        jlos_memcpy(bh->data + off, buf + done * JLOS_BLOCK_SECTOR_SIZE, in_buf * JLOS_BLOCK_SECTOR_SIZE);
-        jlos_buffer_dirty(bh);
-        jlos_buffer_put(bh);
-        sector += in_buf;
-        done += in_buf;
-    }
-    return 0;
-}
 
 static int fat32_cluster_advance(jlos_vfs_super_block_t *sb, uint32_t *cluster)
 {
@@ -468,22 +458,6 @@ static uint32_t fat32_lfn_build(const char *name, uint8_t checksum, jlos_fat32_d
     return num;
 }
 
-static void fat32_dirent_locate(jlos_fat32_sb_info_t *sbi, uint32_t cluster, uint32_t entry_index, uint32_t *out_sector, uint32_t *out_index)
-{
-    uint32_t offset = entry_index * JLOS_FAT32_DIRENT_SIZE;
-    *out_sector = fat32_cluster_to_sector(sbi, cluster) + (offset / JLOS_FAT32_BYTES_PER_SECTOR);
-    *out_index = (offset % JLOS_FAT32_BYTES_PER_SECTOR) / JLOS_FAT32_DIRENT_SIZE;
-}
-
-static void fat32_dirent_advance(uint32_t sector, uint32_t index, uint32_t n, uint32_t *out_sector, uint32_t *out_index)
-{
-    uint32_t entries_per_sector = JLOS_FAT32_BYTES_PER_SECTOR / JLOS_FAT32_DIRENT_SIZE;
-    uint32_t offset = index + n;
-    *out_sector = sector + offset / entries_per_sector;
-    *out_index = offset % entries_per_sector;
-}
-
-
 static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
 {
     const char *dot = NULL;
@@ -543,28 +517,30 @@ static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
     return 0;
 }
 
-static int fat32_dirent_read(jlos_vfs_super_block_t *sb, uint32_t dir_sector, uint32_t dir_index, jlos_fat32_dirent_t *out)
+static int fat32_dirent_read(jlos_vfs_inode_t *dir, uint32_t dirent_offset, jlos_fat32_dirent_t *out)
 {
-    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(dir_sector));
-    if (!bh) {
+    uint64_t page_index = dirent_offset / JLOS_FS_PAGE_SIZE;
+    uint32_t page_off = dirent_offset % JLOS_FS_PAGE_SIZE;
+    jlos_page_t *page = jlos_fs_page_get(&dir->address_space, page_index);
+    if (!page) {
         return -1;
     }
-    uint8_t *buf = bh->data + jlos_buffer_offset(dir_sector);
-    jlos_memcpy(out, buf + dir_index * JLOS_FAT32_DIRENT_SIZE, sizeof(jlos_fat32_dirent_t));
-    jlos_buffer_put(bh);
+    jlos_memcpy(out, (uint8_t *)jlos_page_frame_page_addr(page) + page_off, sizeof(jlos_fat32_dirent_t));
+    jlos_fs_page_put(page);
     return 0;
 }
 
-static int fat32_dirent_write(jlos_vfs_super_block_t *sb, uint32_t dir_sector, uint32_t dir_index, const jlos_fat32_dirent_t *de)
+static int fat32_dirent_write(jlos_vfs_inode_t *dir, uint32_t dirent_offset, const jlos_fat32_dirent_t *de)
 {
-    jlos_buffer_head_t *bh = jlos_buffer_read(sb->block_dev, jlos_buffer_blocknr(dir_sector));
-    if (!bh) {
+    uint64_t page_index = dirent_offset / JLOS_FS_PAGE_SIZE;
+    uint32_t page_off = dirent_offset % JLOS_FS_PAGE_SIZE;
+    jlos_page_t *page = jlos_fs_page_get(&dir->address_space, page_index);
+    if (!page) {
         return -1;
     }
-    uint8_t *buf = bh->data + jlos_buffer_offset(dir_sector);
-    jlos_memcpy(buf + dir_index * JLOS_FAT32_DIRENT_SIZE, de, sizeof(jlos_fat32_dirent_t));
-    jlos_buffer_dirty(bh);
-    jlos_buffer_put(bh);
+    jlos_memcpy((uint8_t *)jlos_page_frame_page_addr(page) + page_off, de, sizeof(jlos_fat32_dirent_t));
+    jlos_fs_page_dirty(page);
+    jlos_fs_page_put(page);
     return 0;
 }
 
@@ -608,26 +584,20 @@ static fat32_scan_verdict_t fat32_match_entry_at(const jlos_fat32_dirent_t *de, 
 
 static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_match_fn match, void *ctx, fat32_dirent_hit_t *hit)
 {
-    jlos_vfs_super_block_t *sb = dir->sb;
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    uint32_t cluster = fat32_ii(dir)->first_cluster;
-    uint32_t entry_pos = 0;
-    hit->cluster = cluster;
     hit->has_lfn = false;
-    uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
-    if (!cluster_buf) {
-        return FAT32_SCAN_MISS;
-    }
     char lfn_buf[JLOS_VFS_NAME_MAX + 1];
     bool lfn_valid = false;
-    while (cluster < JLOS_FAT32_CLUSTER_EOC) {
-        if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
-            jlos_kfree(cluster_buf);
-            return FAT32_SCAN_MISS;
+    uint32_t entry_pos = 0;
+    uint64_t page_index = 0;
+    while (1) {
+        jlos_page_t *page = jlos_fs_page_get(&dir->address_space, page_index);
+        if (!page) {
+            break;
         }
-        uint32_t entries_per_cluster = sbi->bytes_per_cluster / JLOS_FAT32_DIRENT_SIZE;
-        jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)cluster_buf;
-        for (uint32_t i = 0; i < entries_per_cluster; i++, entry_pos++) {
+        uint32_t entries_per_page = JLOS_FS_PAGE_SIZE / JLOS_FAT32_DIRENT_SIZE;
+        jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)jlos_page_frame_page_addr(page);
+        fat32_scan_verdict_t result = FAT32_SCAN_MISS;
+        for (uint32_t i = 0; i < entries_per_page; i++, entry_pos++) {
             jlos_fat32_dirent_t *de = &entries[i];
             if ((de->attributes & JLOS_FAT32_ATTR_LFN) == JLOS_FAT32_ATTR_LFN
             && de->name[0] != JLOS_FAT32_DIRENT_DELETED) {
@@ -644,8 +614,7 @@ static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_matc
             if (v == FAT32_SCAN_MISS) {
                 continue;
             }
-            hit->cluster = cluster;
-            hit->entry_index = i;
+            hit->dirent_offset = entry_pos * JLOS_FAT32_DIRENT_SIZE;
             jlos_memcpy(&hit->de, de, sizeof(jlos_fat32_dirent_t));
             if (long_name) {
                 jlos_strlcpy(hit->long_name, long_name, sizeof(hit->long_name));
@@ -653,84 +622,116 @@ static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_matc
             } else {
                 hit->has_lfn = false;
             }
-            jlos_kfree(cluster_buf);
-            return v;
+            result = v;
+            break;
         }
-        hit->cluster = cluster;
-        cluster = fat32_get_next_cluster(sb, cluster);
+        jlos_fs_page_put(page);
+        page_index++;
+        if (result != FAT32_SCAN_MISS) {
+            return result;
+        }
     }
-    jlos_kfree(cluster_buf);
     return FAT32_SCAN_MISS;
 }
 
 static int fat32_sync_inode(jlos_vfs_inode_t *inode)
 {
     jlos_fat32_inode_info_t *fi = fat32_ii(inode);
-    jlos_fat32_dirent_t de;
-    if (fi->dir_sector == 0) {
+    if (!fi->parent) {
         return -1;
     }
-    if (fat32_dirent_read(inode->sb, fi->dir_sector, fi->dir_index, &de) != 0) {
+    jlos_fat32_dirent_t de;
+    if (fat32_dirent_read(fi->parent, fi->dir_offset, &de) != 0) {
         return -1;
     }
     de.size = inode->size;
     de.first_cluster_low = fi->first_cluster & JLOS_FAT32_CLUSTER_LOW_MASK;
     de.first_cluster_hi = fi->first_cluster >> 16;
-    return fat32_dirent_write(inode->sb, fi->dir_sector, fi->dir_index, &de);
+    return fat32_dirent_write(fi->parent, fi->dir_offset, &de);
 }
 
 static int fat32_find_free_slots(jlos_vfs_inode_t *dir, uint32_t need,
-                                 uint32_t *out_sector, uint32_t *out_index)
+                                 uint32_t *out_offset)
 {
     jlos_vfs_super_block_t *sb = dir->sb;
     jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    uint32_t cluster = fat32_ii(dir)->first_cluster;
-    uint32_t last_cluster = cluster;
-    uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
-    if (!cluster_buf) {
-        return -1;
-    }
-    while (cluster < JLOS_FAT32_CLUSTER_EOC) {
-        last_cluster = cluster;
-        if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
-            jlos_kfree(cluster_buf);
-            return -1;
+    uint32_t entry_pos = 0;
+    uint64_t page_index = 0;
+    while (1) {
+        jlos_page_t *page = jlos_fs_page_get(&dir->address_space, page_index);
+        if (!page) {
+            break;
         }
-        uint32_t entries_per_cluster = sbi->bytes_per_cluster / JLOS_FAT32_DIRENT_SIZE;
-        jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)cluster_buf;
+        uint32_t entries_per_page = JLOS_FS_PAGE_SIZE / JLOS_FAT32_DIRENT_SIZE;
+        jlos_fat32_dirent_t *entries = (jlos_fat32_dirent_t *)jlos_page_frame_page_addr(page);
         uint32_t run_start = 0;
         uint32_t run_len = 0;
-        for (uint32_t i = 0; i < entries_per_cluster; i++) {
+        bool found = false;
+        for (uint32_t i = 0; i < entries_per_page; i++, entry_pos++) {
             uint8_t first = entries[i].name[0];
             bool is_free = (first == JLOS_FAT32_DIRENT_END || first == JLOS_FAT32_DIRENT_DELETED);
             if (is_free) {
                 if (run_len == 0) {
-                    run_start = i;
+                    run_start = entry_pos;
                 }
                 run_len++;
                 if (run_len >= need) {
-                    fat32_dirent_locate(sbi, cluster, run_start, out_sector, out_index);
-                    jlos_kfree(cluster_buf);
-                    return 0;
+                    found = true;
+                    break;
                 }
             } else {
                 run_len = 0;
             }
         }
-        cluster = fat32_get_next_cluster(sb, cluster);
+        jlos_fs_page_put(page);
+        if (found) {
+            *out_offset = run_start * JLOS_FAT32_DIRENT_SIZE;
+            return 0;
+        }
+        page_index++;
     }
-    uint32_t tail = last_cluster;
-    if (fat32_cluster_advance(sb, &tail) != 0) {
-        jlos_kfree(cluster_buf);
-        return -1;
+    uint32_t tail = fat32_ii(dir)->first_cluster;
+    uint32_t new_cluster_idx = 0;
+    if (tail < JLOS_FAT32_FIRST_DATA_CLUSTER) {
+        if (fat32_alloc_cluster(sb, &tail) != 0) {
+            return -1;
+        }
+        fat32_ii(dir)->first_cluster = tail;
+    } else {
+        while (1) {
+            uint32_t next = fat32_get_next_cluster(sb, tail);
+            if (next >= JLOS_FAT32_CLUSTER_EOC) {
+                break;
+            }
+            tail = next;
+            new_cluster_idx++;
+        }
+        if (fat32_cluster_advance(sb, &tail) != 0) {
+            return -1;
+        }
+        new_cluster_idx++;
     }
-    jlos_memset(cluster_buf, 0, sbi->bytes_per_cluster);
-    if (fat32_write_cluster(sb, tail, cluster_buf) != 0) {
-        jlos_kfree(cluster_buf);
-        return -1;
+    uint32_t offset = new_cluster_idx * sbi->bytes_per_cluster;
+    uint32_t total = sbi->bytes_per_cluster;
+    uint32_t done = 0;
+    while (done < total) {
+        uint32_t off = offset + done;
+        uint32_t pidx = off / JLOS_FS_PAGE_SIZE;
+        uint32_t page_off = off % JLOS_FS_PAGE_SIZE;
+        uint32_t chunk = JLOS_FS_PAGE_SIZE - page_off;
+        if (chunk > total - done) {
+            chunk = total - done;
+        }
+        jlos_page_t *page = jlos_fs_page_get(&dir->address_space, pidx);
+        if (!page) {
+            return -1;
+        }
+        jlos_memset((uint8_t *)jlos_page_frame_page_addr(page) + page_off, 0, chunk);
+        jlos_fs_page_dirty(page);
+        jlos_fs_page_put(page);
+        done += chunk;
     }
-    jlos_kfree(cluster_buf);
-    fat32_dirent_locate(sbi, tail, 0, out_sector, out_index);
+    *out_offset = offset;
     return 0;
 }
 
@@ -755,6 +756,10 @@ static jlos_vfs_inode_t *fat32_alloc_inode(jlos_vfs_super_block_t *sb)
 static void fat32_destroy_inode(jlos_vfs_inode_t *inode)
 {
     if (inode->fs_private) {
+        jlos_fat32_inode_info_t *fi = fat32_ii(inode);
+        if (fi->parent) {
+            jlos_vfs_inode_put(fi->parent);
+        }
         jlos_kfree(inode->fs_private);
     }
     jlos_kfree(inode);
@@ -763,9 +768,10 @@ static void fat32_destroy_inode(jlos_vfs_inode_t *inode)
 static const jlos_vfs_inode_ops_t s_fat32_inode_ops;
 static const jlos_vfs_file_ops_t  s_fat32_file_ops;
 
-static jlos_vfs_inode_t *fat32_dirent_to_inode(jlos_vfs_super_block_t *sb, const jlos_fat32_dirent_t *de)
+static jlos_vfs_inode_t *fat32_dirent_to_inode(jlos_vfs_inode_t *dir, uint32_t dirent_offset, const jlos_fat32_dirent_t *de)
 {
     uint32_t first_cluster = ((uint32_t)de->first_cluster_hi << 16) | de->first_cluster_low;
+    jlos_vfs_super_block_t *sb = dir->sb;
     jlos_vfs_inode_t *inode = jlos_vfs_inode_alloc(sb, first_cluster);
     if (!inode) {
         return NULL;
@@ -774,23 +780,26 @@ static jlos_vfs_inode_t *fat32_dirent_to_inode(jlos_vfs_super_block_t *sb, const
     inode->size = de->size;
     inode->i_ops = &s_fat32_inode_ops;
     inode->f_ops = &s_fat32_file_ops;
-    fat32_ii(inode)->first_cluster = first_cluster;
+    jlos_fat32_inode_info_t *fi = fat32_ii(inode);
+    fi->first_cluster = first_cluster;
+    fi->dir_offset = dirent_offset;
+    fi->parent = dir;
+    jlos_vfs_inode_get(dir);
+    fat32_setup_aops(inode);
     return inode;
 }
 
 static jlos_vfs_dentry_t *fat32_lookup_inner(jlos_vfs_inode_t *dir, const char *name)
 {
-    jlos_vfs_super_block_t *sb = dir->sb;
+
     fat32_dirent_hit_t hit;
     if (fat32_dir_scan(dir, fat32_match_name, (void *)name, &hit) != FAT32_SCAN_HIT) {
         return NULL;
     }
-    jlos_vfs_inode_t *inode = fat32_dirent_to_inode(sb, &hit.de);
+    jlos_vfs_inode_t *inode = fat32_dirent_to_inode(dir, hit.dirent_offset, &hit.de);
     if (!inode) {
         return NULL;
     }
-    jlos_fat32_inode_info_t *ii = fat32_ii(inode);
-    fat32_dirent_locate(fat32_sbi(sb), hit.cluster, hit.entry_index, &ii->dir_sector, &ii->dir_index);
     return jlos_vfs_dentry_alloc(name, inode);
 }
 
@@ -808,47 +817,27 @@ static int fat32_read_inner(jlos_vfs_file_t *file, uint8_t *buf, uint32_t count)
         return 0;
     }
     jlos_vfs_inode_t *inode = file->inode;
-    jlos_vfs_super_block_t *sb = inode->sb;
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(sb);
-    jlos_fat32_inode_info_t *fi = fat32_ii(inode);
-    
     if (file->pos + count > inode->size) {
         count = inode->size - file->pos;
     }
-    uint32_t cluster = fi->first_cluster;
-    uint32_t cluster_index = file->pos / sbi->bytes_per_cluster;
-    uint32_t cluster_offset = file->pos % sbi->bytes_per_cluster;
-
-    for (uint32_t i = 0; i < cluster_index; i++) {
-        cluster = fat32_get_next_cluster(sb, cluster);
-        if (cluster >= JLOS_FAT32_CLUSTER_EOC) {
-            return 0;
-        }
-    }
-    uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
-    if (!cluster_buf) {
-        return -1;
-    }
     uint32_t bytes_read = 0;
     while (bytes_read < count) {
-        if (cluster >= JLOS_FAT32_CLUSTER_EOC) {
+        uint64_t file_pos = file->pos + bytes_read;
+        uint64_t page_index = file_pos / JLOS_FS_PAGE_SIZE;
+        uint32_t page_off = (uint32_t)(file_pos % JLOS_FS_PAGE_SIZE);
+        jlos_page_t *page = jlos_fs_page_get(&inode->address_space, page_index);
+        if (!page) {
             break;
         }
-        if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
-            jlos_kfree(cluster_buf);
-            return -1;
-        }
-        uint32_t to_copy = sbi->bytes_per_cluster - cluster_offset;
+        uint32_t to_copy = JLOS_FS_PAGE_SIZE - page_off;
         if (to_copy > count - bytes_read) {
             to_copy = count - bytes_read;
         }
-        jlos_memcpy(buf + bytes_read, cluster_buf + cluster_offset, to_copy);
+        jlos_memcpy(buf + bytes_read, (uint8_t *)jlos_page_frame_page_addr(page) + page_off, to_copy);
+        jlos_fs_page_put(page);
         bytes_read += to_copy;
-        cluster_offset = 0;
-        cluster = fat32_get_next_cluster(sb, cluster);
     }
     file->pos += bytes_read;
-    jlos_kfree(cluster_buf);
     return (int)bytes_read;
 }
 
@@ -874,12 +863,10 @@ static int fat32_readdir_inner(jlos_vfs_file_t *file, jlos_vfs_dentry_t *dirent)
         fat32_name_to_str(&hit.de, dirent->name, JLOS_VFS_NAME_MAX + 1);
     }
     dirent->name_len = (uint32_t)jlos_strlen(dirent->name);
-    jlos_vfs_inode_t *child = fat32_dirent_to_inode(inode->sb, &hit.de);
+    jlos_vfs_inode_t *child = fat32_dirent_to_inode(inode, hit.dirent_offset, &hit.de);
     if (!child) {
         return -1;
     }
-    jlos_fat32_inode_info_t *ii = fat32_ii(child);
-    fat32_dirent_locate(fat32_sbi(inode->sb), hit.cluster, hit.entry_index, &ii->dir_sector, &ii->dir_index);
     dirent->inode = child;
     file->pos++;
     return 0;
@@ -904,49 +891,38 @@ static int fat32_write_inner(jlos_vfs_file_t *file, const uint8_t *buf, uint32_t
     if (end < file->pos) {
         return -1;
     }
-    uint32_t cluster;
     if (fi->first_cluster == 0) {
+        uint32_t cluster;
         if (fat32_alloc_cluster(sb, &cluster) != 0) {
             return -1;
         }
         fi->first_cluster = cluster;
-    } else {
-        cluster = fi->first_cluster;
     }
-    uint32_t cluster_index = file->pos / sbi->bytes_per_cluster;
-    for (uint32_t i = 0; i < cluster_index; i++) {
+    uint32_t need_clusters = (end + sbi->bytes_per_cluster - 1) / sbi->bytes_per_cluster;
+    uint32_t cluster = fi->first_cluster;
+    for (uint32_t c = 1; c < need_clusters; c++) {
         if (fat32_cluster_advance(sb, &cluster) != 0) {
             return -1;
         }
     }
-    uint8_t *cluster_buf = jlos_kalloc(sbi->bytes_per_cluster);
-    if (!cluster_buf) {
-        return -1;
-    }
     uint32_t written = 0;
-    uint32_t cluster_offset = file->pos % sbi->bytes_per_cluster;
     while (written < count) {
-        uint32_t to_write = sbi->bytes_per_cluster - cluster_offset;
+        uint64_t file_pos = file->pos + written;
+        uint64_t page_index = file_pos / JLOS_FS_PAGE_SIZE;
+        uint32_t page_off = (uint32_t)(file_pos % JLOS_FS_PAGE_SIZE);
+        jlos_page_t *page = jlos_fs_page_get(&inode->address_space, page_index);
+        if (!page) {
+            return -1;
+        }
+        uint32_t to_write = JLOS_FS_PAGE_SIZE - page_off;
         if (to_write > count - written) {
             to_write = count - written;
         }
-        if (fat32_read_cluster(sb, cluster, cluster_buf) != 0) {
-            jlos_kfree(cluster_buf);
-            return -1;
-        }
-        jlos_memcpy(cluster_buf + cluster_offset, buf + written, to_write);
-        if (fat32_write_cluster(sb, cluster, cluster_buf) != 0) {
-            jlos_kfree(cluster_buf);
-            return -1;
-        }
+        jlos_memcpy((uint8_t *)jlos_page_frame_page_addr(page) + page_off, buf + written, to_write);
+        jlos_fs_page_dirty(page);
+        jlos_fs_page_put(page);
         written += to_write;
-        cluster_offset = 0;
-        if (written < count && fat32_cluster_advance(sb, &cluster) != 0) {
-            jlos_kfree(cluster_buf);
-            return -1;
-        }
     }
-    jlos_kfree(cluster_buf);
     file->pos += written;
     if (file->pos > inode->size) {
         inode->size = file->pos;
@@ -1016,11 +992,11 @@ static int fat32_create_inner(jlos_vfs_inode_t *dir, const char *name, uint32_t 
         if (fat32_name_to_83(name, &de) != 0) {
             return -1;
         }
-        uint32_t dir_sector, dir_index;
-        if (fat32_find_free_slots(dir, 1, &dir_sector, &dir_index) != 0) {
+        uint32_t dir_offset;
+        if (fat32_find_free_slots(dir, 1, &dir_offset) != 0) {
             return -1;
         }
-        return fat32_dirent_write(dir->sb, dir_sector, dir_index, &de);
+        return fat32_dirent_write(dir, dir_offset, &de);
     }
 
     fat32_generate_short_name(name, &de);
@@ -1029,20 +1005,16 @@ static int fat32_create_inner(jlos_vfs_inode_t *dir, const char *name, uint32_t 
     uint32_t lfn_count = fat32_lfn_build(name, checksum, lfn_entries);
     uint32_t total = lfn_count + 1;
 
-    uint32_t base_sector, base_index;
-    if (fat32_find_free_slots(dir, total, &base_sector, &base_index) != 0) {
+    uint32_t base_offset;
+    if (fat32_find_free_slots(dir, total, &base_offset) != 0) {
         return -1;
     }
     for (uint32_t n = 0; n < lfn_count; n++) {
-        uint32_t sec, idx;
-        fat32_dirent_advance(base_sector, base_index, n, &sec, &idx);
-        if (fat32_dirent_write(dir->sb, sec, idx, &lfn_entries[lfn_count - 1 - n]) != 0) {
+        if (fat32_dirent_write(dir, base_offset + n * JLOS_FAT32_DIRENT_SIZE, &lfn_entries[lfn_count - 1 - n]) != 0) {
             return -1;
         }
     }
-    uint32_t sfn_sec, sfn_idx;
-    fat32_dirent_advance(base_sector, base_index, lfn_count, &sfn_sec, &sfn_idx);
-    return fat32_dirent_write(dir->sb, sfn_sec, sfn_idx, &de);
+    return fat32_dirent_write(dir, base_offset + lfn_count * JLOS_FAT32_DIRENT_SIZE, &de);
 }
 
 static int fat32_create(jlos_vfs_inode_t *dir, const char *name, uint32_t mode)
@@ -1067,20 +1039,14 @@ static int fat32_unlink_inner(jlos_vfs_inode_t *dir, const char *name)
         return -1;
     }
     hit.de.name[0] = JLOS_FAT32_DIRENT_DELETED;
-    uint32_t dir_sector, dir_index;
-    fat32_dirent_locate(fat32_sbi(dir->sb), hit.cluster, hit.entry_index, &dir_sector, &dir_index);
-    if (fat32_dirent_write(dir->sb, dir_sector, dir_index, &hit.de) != 0) {
+    if (fat32_dirent_write(dir, hit.dirent_offset, &hit.de) != 0) {
         return -1;
     }
-    jlos_fat32_sb_info_t *sbi = fat32_sbi(dir->sb);
-    uint32_t cluster = hit.cluster;
-    uint32_t index = hit.entry_index;
-    while (index > 0) {
-        index--;
+    uint32_t offset = hit.dirent_offset;
+    while (offset >= JLOS_FAT32_DIRENT_SIZE) {
+        offset -= JLOS_FAT32_DIRENT_SIZE;
         jlos_fat32_dirent_t de;
-        uint32_t sec, idx;
-        fat32_dirent_locate(sbi, cluster, index, &sec, &idx);
-        if (fat32_dirent_read(dir->sb, sec, idx, &de) != 0) {
+        if (fat32_dirent_read(dir, offset, &de) != 0) {
             break;
         }
         if ((de.attributes & JLOS_FAT32_ATTR_LFN) != JLOS_FAT32_ATTR_LFN) {
@@ -1090,7 +1056,7 @@ static int fat32_unlink_inner(jlos_vfs_inode_t *dir, const char *name)
             break;
         }
         de.name[0] = JLOS_FAT32_DIRENT_DELETED;
-        if (fat32_dirent_write(dir->sb, sec, idx, &de) != 0) {
+        if (fat32_dirent_write(dir, offset, &de) != 0) {
             break;
         }
     }
@@ -1149,6 +1115,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     sbi->sectors_per_cluster = bpb.sector_per_cluster;
     sbi->fat_copies = bpb.fat_copies;
 
+
     uint32_t total_sectors = bpb.total_sector_count ? bpb.total_sector_count : bpb.total_sectors;
     sbi->total_clusters = (total_sectors - sbi->data_start) / bpb.sector_per_cluster;
     sbi->fsinfo_sector = (bpb.fat_info < total_sectors) ? bpb.fat_info : 0;
@@ -1175,6 +1142,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     root_inode->i_ops = &s_fat32_inode_ops;
     root_inode->f_ops = &s_fat32_file_ops;
     fat32_ii(root_inode)->first_cluster = sbi->root_cluster;
+    fat32_setup_aops(root_inode);
 
     jlos_vfs_dentry_t *root_dentry = jlos_vfs_dentry_alloc("/", root_inode);
     if (!root_dentry) {

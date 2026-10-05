@@ -7,6 +7,7 @@
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
 #include <common/types.h>
+#include <fs/page_cache.h>
 
 #define JLOS_VFS_NAME_MAX       255
 #define JLOS_VFS_PATH_MAX       1024
@@ -78,6 +79,7 @@ typedef struct jlos_vfs_inode {
     const jlos_vfs_inode_ops_t  *i_ops;
     const jlos_vfs_file_ops_t   *f_ops;
     void                        *fs_private;
+    jlos_fs_address_space_t     address_space;
     jlos_hash_node_t            hash_node;
 } jlos_vfs_inode_t;
 
@@ -91,6 +93,7 @@ typedef struct jlos_vfs_super_ops {
 typedef struct jlos_vfs_super_block {
     jlos_vfs_fs_type_t          *fs_type;
     jlos_hal_block_dev_t        *block_dev;
+    jlos_fs_address_space_t     block_mapping;
     jlos_vfs_dentry_t            *root_dentry;
     const jlos_vfs_super_ops_t  *ops;
     void                        *fs_private;
