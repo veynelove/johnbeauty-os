@@ -1,7 +1,6 @@
-#include <net/tests/http_server_test.h>
+#include <kernel/test.h>
 #include <kernel/memory_manager.h>
 #include <net/network.h>
-#include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "t_http"
 #include <kernel/printk.h>
@@ -10,7 +9,7 @@ typedef struct {
     jlos_tcp_handler_t base;
 } http_tcp_handler_t;
 
-static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size)
+static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t *self, jlos_tcp_socket_t *socket, uint8_t *data, uint16_t size)
 {
     (void)self;
     printk_debug("tcp received: %u bytes\n", size);
@@ -51,18 +50,14 @@ static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_t
     return true;
 }
 
-void http_server_test(void)
+JLOS_TEST(http, server_listen)
 {
     jlos_tcp_provider_t *tcp = &g_network_stack->tcp;
     http_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(http_tcp_handler_t));
+    JLOS_ASSERT_NOT_NULL(tcphandler);
     jlos_tcp_handler_init(&tcphandler->base);
     tcphandler->base.handle_tcp_message = http_tcp_handler_handle_tcp_message;
-
     jlos_tcp_socket_t *tcpsocket = jlos_tcp_provider_listen(tcp, 1234);
+    JLOS_TEST_NOT_NULL(tcpsocket);
     jlos_tcp_provider_bind(tcp, tcpsocket, &tcphandler->base);
-    printk_info("tcp server listening on port 1234\n");
 }
-
-#if KERNEL_CONFIG_ENABLE_TESTS
-JLOS_INITCALL(JLOS_INITCALL_TEST, http_server_test);
-#endif

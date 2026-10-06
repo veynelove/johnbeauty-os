@@ -1,7 +1,6 @@
-#include <kernel/tests/pfa_test.h>
+#include <kernel/test.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "t_pfa"
 #include <kernel/printk.h>
@@ -9,220 +8,108 @@
 static void fill_frames(void *va, uint32_t bytes, uint8_t seed)
 {
     uint8_t *p = (uint8_t *)va;
-    for (uint32_t i = 0; i < bytes; i++)
+    for (uint32_t i = 0; i < bytes; i++) {
         p[i] = (uint8_t)(i ^ seed ^ (i >> 8));
+    }
 }
 
-static int check_frames(const void *va, uint32_t bytes, uint8_t seed)
+static bool check_frames(const void *va, uint32_t bytes, uint8_t seed)
 {
     const uint8_t *p = (const uint8_t *)va;
     for (uint32_t i = 0; i < bytes; i++) {
         uint8_t expect = (uint8_t)(i ^ seed ^ (i >> 8));
-        if (p[i] != expect)
-            return 1;
+        if (p[i] != expect) {
+            return false;
+        }
     }
-    return 0;
+    return true;
 }
 
-static int test_single_frame_roundtrip(void)
+JLOS_TEST(pfa, single_frame_roundtrip)
 {
     const uint32_t N = 64;
     void *frames[N];
-    int fail = 0;
-
-    printk_info("[test 1] single frame roundtrip x %u\n", N);
     for (uint32_t i = 0; i < N; i++) {
         frames[i] = jlos_page_frame_malloc();
-        if (!frames[i]) {
-            printk_err("malloc #%u NULL\n", i);
-            fail++;
-            continue;
-        }
+        JLOS_ASSERT_NOT_NULL(frames[i]);
         fill_frames(frames[i], JLOS_PAGE_FRAME_SIZE, (uint8_t)(i & 0xFF));
     }
     for (uint32_t i = 0; i < N; i++) {
-        if (!frames[i])
-            continue;
-        if (check_frames(frames[i], JLOS_PAGE_FRAME_SIZE, (uint8_t)(i & 0xFF))) {
-            printk_err("frame #%u corrupted\n", i);
-            fail++;
-        }
+        JLOS_TEST_TRUE(check_frames(frames[i], JLOS_PAGE_FRAME_SIZE, (uint8_t)(i & 0xFF)));
         jlos_page_frame_free(frames[i]);
     }
-    if (!fail)
-        printk_info("%u frames alloc/write/verify/free\n", N);
-    return fail;
 }
 
-static int test_order_alloc(void)
+JLOS_TEST(pfa, order_alloc)
 {
-    int fail = 0;
-
-    printk_info("[test 2] order alloc/free\n");
     for (uint32_t order = 0; order <= 3; order++) {
         uint32_t nframes = 1U << order;
         void *va = jlos_page_frame_alloc_order(order);
-        if (!va) {
-            printk_err("alloc_order(%u) NULL\n", order);
-            fail++;
-            continue;
-        }
+        JLOS_ASSERT_NOT_NULL(va);
         fill_frames(va, nframes * JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x40 + order));
-        if (check_frames(va, nframes * JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x40 + order))) {
-            printk_err("order(%u) head corrupted\n", order);
-            fail++;
-        }
+        JLOS_TEST_TRUE(check_frames(va, nframes * JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x40 + order)));
         jlos_page_frame_free_order(va, order);
-        printk_info("order %u (%u frames)\n", order, nframes);
     }
-    return fail;
 }
 
-static int test_alloc_n(void)
+JLOS_TEST(pfa, alloc_n)
 {
     const uint32_t sizes[] = {2, 8, 32};
-    int fail = 0;
-
-    printk_info("[test 3] alloc/free n\n");
     for (uint32_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
         uint32_t n = sizes[i];
         void *va = jlos_page_frame_alloc_n(n);
-        if (!va) {
-            printk_err("alloc_n (%u) NULL\n", n);
-            fail++;
-            continue;
-        }
+        JLOS_ASSERT_NOT_NULL(va);
         uint32_t phys = VIRT_TO_PHYS(va);
-        for (uint32_t j = 0; j < n; j++)
+        for (uint32_t j = 0; j < n; j++) {
             fill_frames((void *)PHYS_TO_VIRT(phys + j * JLOS_PAGE_FRAME_SIZE),
                         JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x80 + i));
+        }
         for (uint32_t j = 0; j < n; j++) {
-            if (check_frames((void *)PHYS_TO_VIRT(phys + j * JLOS_PAGE_FRAME_SIZE),
-                             JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x80 + i))) {
-                printk_err("n page %u corrupted\n", j);
-                fail++;
-            }
+            JLOS_TEST_TRUE(check_frames((void *)PHYS_TO_VIRT(phys + j * JLOS_PAGE_FRAME_SIZE),
+                                        JLOS_PAGE_FRAME_SIZE, (uint8_t)(0x80 + i)));
         }
         jlos_page_frame_free_n(va, n);
-        printk_info("n %u frames\n", n);
     }
-    return fail;
 }
 
-static int test_refcount(void)
+JLOS_TEST(pfa, refcount)
 {
-    int fail = 0;
-
-    printk_info("[test 4] refcount semantics\n");
     void *va = jlos_page_frame_malloc();
-    if (!va) {
-        printk_err("malloc NULL\n");
-        return 1;
-    }
+    JLOS_ASSERT_NOT_NULL(va);
     uint32_t phys = VIRT_TO_PHYS(va);
-    if (jlos_page_frame_refcount_get(phys) != 1) {
-        printk_err("initial refcount != 1\n");
-        fail++;
-    }
+    JLOS_TEST_EQ(jlos_page_frame_refcount_get(phys), 1);
     jlos_page_frame_refcount_inc(phys);
-    if (jlos_page_frame_refcount_get(phys) != 2) {
-        printk_err("refcount after inc != 2\n");
-        fail++;
-    }
+    JLOS_TEST_EQ(jlos_page_frame_refcount_get(phys), 2);
     jlos_page_frame_refcount_dec(phys);
-    if (jlos_page_frame_refcount_get(phys) != 1) {
-        printk_err("refcount after dec != 1\n");
-        fail++;
-    }
+    JLOS_TEST_EQ(jlos_page_frame_refcount_get(phys), 1);
     jlos_page_frame_free(va);
-    if (!fail)
-        printk_info("inc/dec/get consistent\n");
-    return fail;
 }
 
-static int test_owner_type(void)
+JLOS_TEST(pfa, owner_type)
 {
-    int fail = 0;
-
-    printk_info("[test 5] owner type mark\n");
     void *va = jlos_page_frame_malloc();
-    if (!va) {
-        printk_err("malloc NULL\n");
-        return 1;
-    }
+    JLOS_ASSERT_NOT_NULL(va);
     uint32_t phys = VIRT_TO_PHYS(va);
     uint32_t marker = 0xDEADBEEF;
     jlos_page_frame_set_owner_type(phys, (void *)marker, JLOS_PAGE_FRAME_TYPE_KERN_STACK);
-    if (jlos_page_frame_get_type(phys) != JLOS_PAGE_FRAME_TYPE_KERN_STACK) {
-        printk_err("type != KERN_STACK\n");
-        fail++;
-    }
-    if (jlos_page_frame_get_owner(phys) != (void *)marker) {
-        printk_err("owner != marker\n");
-        fail++;
-    }
+    JLOS_TEST_EQ(jlos_page_frame_get_type(phys), JLOS_PAGE_FRAME_TYPE_KERN_STACK);
+    JLOS_TEST_PTR_EQ(jlos_page_frame_get_owner(phys), (void *)marker);
     jlos_page_frame_clear_owner_type(phys);
-    if (jlos_page_frame_get_type(phys) != JLOS_PAGE_FRAME_TYPE_FREE) {
-        printk_err("type after clear != FREE\n");
-        fail++;
-    }
+    JLOS_TEST_EQ(jlos_page_frame_get_type(phys), JLOS_PAGE_FRAME_TYPE_FREE);
     jlos_page_frame_free(va);
-    if (!fail)
-        printk_info("set/get/clear owner\n");
-    return fail;
 }
 
-static int test_pressure_and_accounting(void)
+JLOS_TEST(pfa, pressure_and_accounting)
 {
     const uint32_t N = 512;
     void *frames[N];
-    int fail = 0;
-
-    printk_info("[test 6] pressure x %u + free accounting\n", N);
     uint32_t base_free = jlos_page_frame_get_free();
     for (uint32_t i = 0; i < N; i++) {
         frames[i] = jlos_page_frame_malloc();
-        if (!frames[i]) {
-            printk_err("malloc #%u NULL\n", i);
-            fail++;
-            break;
-        }
+        JLOS_ASSERT_NOT_NULL(frames[i]);
     }
-    uint32_t mid_free = jlos_page_frame_get_free();
     for (uint32_t i = 0; i < N; i++) {
-        if (frames[i])
-            jlos_page_frame_free(frames[i]);
+        jlos_page_frame_free(frames[i]);
     }
-    uint32_t end_free = jlos_page_frame_get_free();
-    printk_info("free: base=%u mid=%u end=%u\n", base_free, mid_free, end_free);
-    if (end_free != base_free) {
-        printk_err("free not restored (%u -> %u)\n", base_free, end_free);
-        fail++;
-    }
-    if (!fail)
-        printk_info("free accounting restored\n");
-    return fail;
+    JLOS_TEST_EQ(jlos_page_frame_get_free(), base_free);
 }
-
-void pfa_test(void)
-{
-    printk_info("=== pfa test start ===\n");
-    printk_info("total=%u frames free=%u\n",
-           jlos_page_frame_get_total(), jlos_page_frame_get_free());
-
-    int fails = 0;
-    fails += test_single_frame_roundtrip();
-    fails += test_order_alloc();
-    fails += test_alloc_n();
-    fails += test_refcount();
-    fails += test_owner_type();
-    fails += test_pressure_and_accounting();
-
-    if (!fails)
-        printk_info("pfa: all passed\n");
-    else
-        printk_err("pfa: %d failures\n", fails);
-}
-#if KERNEL_CONFIG_ENABLE_TESTS
-JLOS_INITCALL(JLOS_INITCALL_TEST, pfa_test);
-#endif

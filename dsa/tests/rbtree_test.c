@@ -1,7 +1,6 @@
-#include <dsa/tests/rbtree_test.h>
+#include <kernel/test.h>
 #include <dsa/rbtree.h>
 #include <kernel/memory_manager.h>
-#include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "t_rbtree"
 #include <kernel/printk.h>
@@ -17,28 +16,28 @@ static int test_compare(const jlos_rbtree_node_t *a, const jlos_rbtree_node_t *b
 {
     test_entry_t *ea = jlos_rbtree_entry(a, test_entry_t, node);
     test_entry_t *eb = jlos_rbtree_entry(b, test_entry_t, node);
-    if (ea->key < eb->key)
+    if (ea->key < eb->key) {
         return -1;
-    if (ea->key > eb->key)
+    }
+    if (ea->key > eb->key) {
         return 1;
+    }
     return 0;
 }
 
 static bool rbtree_verify_properties(const jlos_rbtree_t *tree)
 {
-    if (tree->root == &tree->nil)
+    if (tree->root == &tree->nil) {
         return true;
+    }
     if (tree->root->red) {
-        printk_err("root is red\n");
         return false;
     }
     return true;
 }
 
-static int test_insert_and_find(void)
+JLOS_TEST(rbtree, insert_and_find)
 {
-    int fail = 0;
-    printk_info("[test 1] insert and find\n");
     jlos_rbtree_t tree;
     jlos_rbtree_init(&tree);
     test_entry_t entries[16];
@@ -47,39 +46,24 @@ static int test_insert_and_find(void)
         entries[i].key = keys[i];
         jlos_rbtree_insert(&tree, &entries[i].node, test_compare);
     }
-    if (!rbtree_verify_properties(&tree)) {
-        fail++;
-    }
+    JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
     for (int i = 0; i < 16; i++) {
         test_entry_t key_entry;
         key_entry.key = keys[i];
         jlos_rbtree_node_t *found = jlos_rbtree_find(&tree, &key_entry.node, test_compare);
-        if (!found) {
-            printk_err("find key=%u returned NULL\n", keys[i]);
-            fail++;
-        } else {
+        JLOS_TEST_NOT_NULL(found);
+        if (found) {
             test_entry_t *e = jlos_rbtree_entry(found, test_entry_t, node);
-            if (e->key != keys[i]) {
-                printk_err("find key=%u found key=%u\n", keys[i], e->key);
-                fail++;
-            }
+            JLOS_TEST_EQ(e->key, keys[i]);
         }
     }
     test_entry_t missing;
     missing.key = 100;
-    if (jlos_rbtree_find(&tree, &missing.node, test_compare) != NULL) {
-        printk_err("find missing key returned non-NULL\n");
-        fail++;
-    }
-    if (!fail)
-        printk_info("insert and find (16 entries)\n");
-    return fail;
+    JLOS_TEST_NULL(jlos_rbtree_find(&tree, &missing.node, test_compare));
 }
 
-static int test_order_traversal(void)
+JLOS_TEST(rbtree, ordered_traversal)
 {
-    int fail = 0;
-    printk_info("[test 2] ordered traversal\n");
     jlos_rbtree_t tree;
     jlos_rbtree_init(&tree);
     test_entry_t entries[32];
@@ -91,34 +75,20 @@ static int test_order_traversal(void)
     jlos_rbtree_node_t *node;
     for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
         test_entry_t *e = jlos_rbtree_entry(node, test_entry_t, node);
-        if (e->key != expected) {
-            printk_err("expected %u got %u\n", expected, e->key);
-            fail++;
-        }
+        JLOS_TEST_EQ(e->key, expected);
         expected++;
     }
-    if (expected != 32) {
-        printk_err("traversed %u expected 32\n", expected);
-        fail++;
-    }
+    JLOS_TEST_EQ(expected, 32);
     expected = 31;
     for (node = jlos_rbtree_last(&tree); node != NULL; node = jlos_rbtree_prev(&tree, node)) {
         test_entry_t *e = jlos_rbtree_entry(node, test_entry_t, node);
-        if (e->key != expected) {
-            printk_err("reverse expected %u got %u\n", expected, e->key);
-            fail++;
-        }
+        JLOS_TEST_EQ(e->key, expected);
         expected--;
     }
-    if (!fail)
-        printk_info("ordered traversal (32 entries)\n");
-    return fail;
 }
 
-static int test_remove(void)
+JLOS_TEST(rbtree, remove)
 {
-    int fail = 0;
-    printk_info("[test 3] remove\n");
     jlos_rbtree_t tree;
     jlos_rbtree_init(&tree);
     test_entry_t entries[64];
@@ -129,36 +99,21 @@ static int test_remove(void)
     for (int i = 0; i < 64; i += 2) {
         jlos_rbtree_remove(&tree, &entries[i].node);
     }
-    if (!rbtree_verify_properties(&tree)) {
-        fail++;
-    }
+    JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
     for (int i = 1; i < 64; i += 2) {
         test_entry_t key_entry;
         key_entry.key = (uint32_t)i;
-        jlos_rbtree_node_t *found = jlos_rbtree_find(&tree, &key_entry.node, test_compare);
-        if (!found) {
-            printk_err("odd key=%u not found after removing evens\n", i);
-            fail++;
-        }
+        JLOS_TEST_NOT_NULL(jlos_rbtree_find(&tree, &key_entry.node, test_compare));
     }
     for (int i = 0; i < 64; i += 2) {
         test_entry_t key_entry;
         key_entry.key = (uint32_t)i;
-        jlos_rbtree_node_t *found = jlos_rbtree_find(&tree, &key_entry.node, test_compare);
-        if (found) {
-            printk_err("even key=%u still found after remove\n", i);
-            fail++;
-        }
+        JLOS_TEST_NULL(jlos_rbtree_find(&tree, &key_entry.node, test_compare));
     }
-    if (!fail)
-        printk_info("remove (64 entries, removed evens)\n");
-    return fail;
 }
 
-static int test_find_le(void)
+JLOS_TEST(rbtree, find_le)
 {
-    int fail = 0;
-    printk_info("[test 4] find_le\n");
     jlos_rbtree_t tree;
     jlos_rbtree_init(&tree);
     test_entry_t entries[8];
@@ -170,117 +125,60 @@ static int test_find_le(void)
     test_entry_t query;
     query.key = 35;
     jlos_rbtree_node_t *found = jlos_rbtree_find_le(&tree, &query.node, test_compare);
-    if (!found) {
-        printk_err("find_le(35) returned NULL\n");
-        fail++;
-    } else {
+    JLOS_TEST_NOT_NULL(found);
+    if (found) {
         test_entry_t *e = jlos_rbtree_entry(found, test_entry_t, node);
-        if (e->key != 30) {
-            printk_err("find_le(35) expected 30 got %u\n", e->key);
-            fail++;
-        }
+        JLOS_TEST_EQ(e->key, 30);
     }
     query.key = 10;
     found = jlos_rbtree_find_le(&tree, &query.node, test_compare);
-    if (!found) {
-        printk_err("find_le(10) returned NULL\n");
-        fail++;
-    } else {
+    JLOS_TEST_NOT_NULL(found);
+    if (found) {
         test_entry_t *e = jlos_rbtree_entry(found, test_entry_t, node);
-        if (e->key != 10) {
-            printk_err("find_le(10) expected 10 got %u\n", e->key);
-            fail++;
-        }
+        JLOS_TEST_EQ(e->key, 10);
     }
     query.key = 5;
-    found = jlos_rbtree_find_le(&tree, &query.node, test_compare);
-    if (found) {
-        printk_err("find_le(5) expected NULL\n");
-        fail++;
-    }
+    JLOS_TEST_NULL(jlos_rbtree_find_le(&tree, &query.node, test_compare));
     query.key = 100;
     found = jlos_rbtree_find_le(&tree, &query.node, test_compare);
-    if (!found) {
-        printk_err("find_le(100) returned NULL\n");
-        fail++;
-    } else {
+    JLOS_TEST_NOT_NULL(found);
+    if (found) {
         test_entry_t *e = jlos_rbtree_entry(found, test_entry_t, node);
-        if (e->key != 80) {
-            printk_err("find_le(100) expected 80 got %u\n", e->key);
-            fail++;
-        }
+        JLOS_TEST_EQ(e->key, 80);
     }
-    if (!fail)
-        printk_info("find_le (4 queries)\n");
-    return fail;
 }
 
-static int test_random_insert_remove(void)
+JLOS_TEST(rbtree, random_insert_remove)
 {
-    int fail = 0;
-    printk_info("[test 5] random insert/remove %u entries\n", RBTREE_TEST_COUNT);
     jlos_rbtree_t tree;
     jlos_rbtree_init(&tree);
     test_entry_t *entries = (test_entry_t *)jlos_kalloc(sizeof(test_entry_t) * RBTREE_TEST_COUNT);
-    if (!entries) {
-        printk_err("kalloc for test entries\n");
-        return 1;
-    }
+    JLOS_ASSERT_NOT_NULL(entries);
     uint32_t seed = 12345;
     for (int i = 0; i < RBTREE_TEST_COUNT; i++) {
         seed = seed * 1103515245u + 12345u;
         entries[i].key = seed % 10000;
     }
-    for (int i = 0; i < RBTREE_TEST_COUNT; i++)
+    for (int i = 0; i < RBTREE_TEST_COUNT; i++) {
         jlos_rbtree_insert(&tree, &entries[i].node, test_compare);
-    if (!rbtree_verify_properties(&tree)) {
-        fail++;
     }
-    int count_after_insert = 0;
+    JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
+    uint32_t count = 0;
     jlos_rbtree_node_t *node;
-    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node))
-        count_after_insert++;
-    if (count_after_insert != RBTREE_TEST_COUNT) {
-        printk_err("count after insert %d expected %d\n", count_after_insert, RBTREE_TEST_COUNT);
-        fail++;
+    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
+        count++;
     }
-    int removed = 0;
+    JLOS_TEST_EQ(count, RBTREE_TEST_COUNT);
+    uint32_t removed = 0;
     for (int i = 0; i < RBTREE_TEST_COUNT; i += 3) {
         jlos_rbtree_remove(&tree, &entries[i].node);
         removed++;
     }
-    if (!rbtree_verify_properties(&tree)) {
-        fail++;
+    JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
+    count = 0;
+    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
+        count++;
     }
-    int count_after_remove = 0;
-    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node))
-        count_after_remove++;
-    int expected_remaining = RBTREE_TEST_COUNT - removed;
-    if (count_after_remove != expected_remaining) {
-        printk_err("count after remove %d expected %d\n", count_after_remove, expected_remaining);
-        fail++;
-    }
+    JLOS_TEST_EQ(count, RBTREE_TEST_COUNT - removed);
     jlos_kfree(entries);
-    if (!fail)
-        printk_info("random insert/remove (%u entries)\n", RBTREE_TEST_COUNT);
-    return fail;
 }
-
-void rbtree_test(void)
-{
-    int fail = 0;
-    printk_info("=== rbtree test start ===\n");
-    fail += test_insert_and_find();
-    fail += test_order_traversal();
-    fail += test_remove();
-    fail += test_find_le();
-    fail += test_random_insert_remove();
-    if (fail)
-        printk_err("rbtree: %d failures\n", fail);
-    else
-        printk_info("rbtree: all passed\n");
-}
-
-#if KERNEL_CONFIG_ENABLE_TESTS
-JLOS_INITCALL(JLOS_INITCALL_TEST, rbtree_test);
-#endif

@@ -1,11 +1,19 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.5 | 日期: 2026-09-29 | 作者: JohnLove
+版本: v3.7 | 日期: 2026-10-05 | 作者: JohnLove
+
+> v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构），详见 history_update.md。
+
+> v3.6 变更：FS 缓存统一 page cache（per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space），详见 history_update.md。
 
 > v3.5 变更：hrtimer 高精度定时器（红黑树 + PIT oneshot + 周期性 tick + sleeper/nanosleep syscall）+ 测试体系改造（initcall TEST 级别自注册 + 测试文件迁移到各子系统 tests/ + tag 规范化 + config.h 移到 include/ + tools/ 目录删除）。
+
 > v3.4 变更：Console 历史回看（F14 日志环形缓冲 + Shift+PgUp/PgDn）+ F15 串口输出宏开关 + framebuffer 列数适配（128×48）。
+
 > v3.3 变更：网络栈 DHCP/DNS 完善（IPv4 广播收发 + 网络配置结构去硬编码 + DHCP 状态机 + DNS 解析器）。
+
 > v3.2 变更：时间子系统升级（clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象）；NTP 同步方案重新设计为用户空间守护进程路线。
+
 > v3.1 变更：与代码逐项核对后修正 5 处过时状态（MM-2 / MT-1 / MT-2 / MT-4 / PAG-5 / F13）；「实施优先级」重写为批次升级路线；开发日志与 v2.3 以前历史档案迁至 history_update.md。
 
 ***
@@ -23,6 +31,7 @@
 9. **魔法字面量用语义宏命名**：裸数值（如 512/256/1024）用有语义的宏替代（如 `JLOS_BLOCK_SECTOR_SIZE`、`JLOS_IDT_ENTRIES`）；KB/MB 等计算机科学定义好的单位换算（如 `1024` KB→字节、`4*1024*1024` 4MB 对齐）不需定义宏。
 10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
 11. **给方案/设计前必须先核查相关子系统的实际代码**：设计涉及哪个子系统（PFA/paging/mm/fs 等），先读它的实际头文件与实现，确认已有结构、接口、命名与完成度；已存在的成熟结构（如 PFA 的 struct page `jlos_page_t` + `s_pages[]` mem_map）必须直接复用，不得凭印象假设其不存在、另起炉灶。
+12. **不以收益或工作量作为取舍依据**：经典结构 + 性能优先是唯一准绳；即使当前负载小、短期收益不明显、改动较大，只要经典结构正确、性能更优就照做，不做收益/工作量导向的折中或过渡方案。
 
 ***
 
@@ -61,6 +70,12 @@
 | F15 串口宏开关 | `JLOS_SERIAL_ECHO` 编译期宏 + \b 不输出串口（日志 append-only）                                  | 串口日志无 BS 字样                    |
 | hrtimer 高精度定时器 | 红黑树 + PIT oneshot + 周期性 tick hrtimer + sleeper/nanosleep syscall（REL + monotonic） | 编译通过，IRQ0 精简为 hrtimer+tick_and_schedule |
 | 测试体系改造 | initcall TEST 级别自注册 + 测试迁移到各子系统 tests/ + tag 规范化(t_xxx) + config.h→include/ | 编译通过，kernel.c 删硬编码调用列表    |
+| 文件系统缓存 | 统一 page cache：per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space | file_test ALL PASSED |
+| 网络缓冲区 | sk_buff 统一缓冲区（head/data/tail/end 四指针 + refcount + 分档分配）+ 发送/接收路径零拷贝 + csum_partial/csum_fold | DHCP/ARP/ICMP/UDP/TCP/HTTP 全通，全测试 ALL PASSED |
+| 文件 I/O 系统调用 | open/close/read/write/lseek/unlink syscall + FAT32 create/write/unlink | file_test ALL PASSED |
+| 信号机制 | signal/kill/sigreturn syscall + signal_pending / signal_handlers 数组 | signal_test ALL PASSED |
+| 线程支持 | clone 共享地址空间 + fork COW（ret_from_fork） | fork/clone 压测通过 |
+| DHCP/DNS | DHCP 状态机（DISCOVER/OFFER/REQUEST/ACK）+ DNS 解析器（option 6 取服务器） | BOUND 绑定 IP，ping/curl 通过 |
 
 ***
 
@@ -113,13 +128,6 @@ graph TD
 | spinlock 保护                                    | ✅    | s\_pfa\_lock                                            |
 | 验证                                             | ✅    | 256MB 全流程通过: ring3 + fork COW + 网络 + 多任务 |
 
-### 已知遗留
-
-| #      | 问题                       | 说明                                          | 优先级 |
-| ------ | -------------------------- | --------------------------------------------- | ------ |
-| ~~PFA-R1~~ | ~~全局单 spinlock → 多核瓶颈~~ | **已解决**：5.1 拆为 buddy+refcount+owner 三套锁 + 批次 5 per-CPU frame cache | — |
-| ~~PFA-R2~~ | ~~boot\_alloc 用完不释放指针~~ | **核验无影响**：`s_boot_heap_ptr` 为 4 字节 static 标量，init 后不再被引用；boot_alloc 区域已 `mark_reserve`，无数据结构需释放 | — |
-
 ***
 
 ## Phase 1: Paging 子系统修复与优化 ✅ 已完成
@@ -146,12 +154,6 @@ graph TD
 | PAG-D8 | paging 架构分层：页表原语下沉 arch/x86（pgtable.h + paging_table.c），通用算法留 kernel/paging.c，权限位抽象 `JLOS_PG_*`，ctx 用不透明 `root` 指针（multi-arch 就位） | ✅ | hal/paging.h + arch/x86/paging_table.c |
 | PAG-D9 | unmap 用 `jlos_page_frame_refcount_dec` 替代 `free`，对齐 COW refcount 语义（防 fork 后 munmap 共享页误释放） | ✅ | arch/x86/paging_table.c |
 
-### 已知遗留（低优先级）
-
-| #     | 问题                     | 说明         | 优先级 |
-| ----- | ------------------------ | ------------ | ------ |
-| PAG-7 | 无 page table slab cache | 预分配 PT 池 | 低     |
-
 ***
 
 ## Phase 2: Memory Manager 升级 ✅ 已完成
@@ -164,12 +166,6 @@ graph TD
 | MM-Bug2 | **next 合并后 self->tail 未更新**：tail 指向被吸收的 chunk → 野指针             | ✅    | memory\_manager.c free() |
 | MM-2    | expand\_heap 从逐页 malloc 改为 reserve\_bulk + 批量 map                        | ✅    | memory\_manager.c        |
 | MM-2b   | expand\_heap 分配后与 tail 空闲 chunk 合并（减少碎片）                          | ✅    | memory\_manager.c        |
-
-### 已知遗留（Phase 4 SMP 范畴）
-
-| #    | 问题                                     | 说明                            | 优先级 |
-| ---- | ---------------------------------------- | ------------------------------- | ------ |
-| MM-3 | 无 per-type cache（task / fd / pipe 走通用 class） | kmem\_cache 专用精确尺寸 cache | 低     |
 
 ***
 
@@ -197,14 +193,6 @@ graph TD
 | 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 NULL，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
 | task struct 仅加 1 个字段 (`next_hash`)      | 不加 `parent`/`children_head`/`next_sibling`/`prev_sibling`，将来加信号系统时再补           |
 | 保持 swap-with-last O(1) 删除                | 倒序遍历 + swap 不会跳过元素（已确认正确）                                                  |
-
-### 已知遗留（低优先级）
-
-| #    | 问题                           | 说明                             | 优先级 |
-| ---- | ------------------------------ | -------------------------------- | ------ |
-| ~~MT-3~~ | ~~O(n) 调度选择（4 层 × n 任务）~~ | **已解决**：`rq[]` 已是 per-level 链表数组 + `rq_nonempty` bitmap ctz 选层（multitask.h:117-121），选择路径 O(1) | 已解决 |
-| ~~MT-4~~ | ~~静态 256 task 数组~~ | **已解决**：tasks 动态数组 + add_task 倍增扩容（见 5.3）；fork 入口残留 256 硬上限，见批次 4 | 已解决 |
-| ~~MT-6~~ | ~~单全局 runqueue~~ | **已解决**：批次 5 per-CPU runqueue（`rq[JLOS_MAX_CPUS]` + `rq_nonempty[JLOS_MAX_CPUS]`，multitask.h/c） | — |
 
 ***
 
@@ -256,7 +244,7 @@ graph TD
 | ID | 任务 | 根因与影响 | 涉及文件 | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | ~~PFA-4~~ | ~~引入 `struct jlos_page` 数组~~ | **已实现**：`s_pages[]` 已是 `jlos_page_t` 数组，含 flags/refcount/order/type/u(free_list|owner)，物理帧数据 100% 留给用户 | page_frame_allocator.h / .c | — | ✅ 已完成 |
-| ~~MT-4~~ | ~~`tasks[256]` 静态数组动态化~~ | **已实现**：`tasks` 为 kalloc 动态指针数组 + `max_tasks` 字段，`jlos_task_manager_add_task` 满员倍增扩容（multitask.c:439-450）。**残留**：fork 入口仍检查 `JLOS_TASK_MAX_NUM` 硬上限（multitask.c:565），fork 路径并发任务数仍限 256，见批次 4 | multitask.h / multitask.c | — | ✅ 大部分完成 |
+| ~~MT-4~~ | ~~`tasks[256]` 静态数组动态化~~ | **已实现**：`tasks` 为 kalloc 动态指针数组 + `max_tasks` 字段，`jlos_task_manager_add_task` 满员倍增扩容（multitask.c:439-450）。**残留**：fork 入口仍检查 `JLOS_TASK_DEFAULT_MAX_NUM` 硬上限（multitask.c:565），fork 路径并发任务数仍限 256，见批次 4 | multitask.h / multitask.c | — | ✅ 大部分完成 |
 
 ### 5.4 SMP / 多架构预留接口
 
@@ -345,8 +333,6 @@ graph TD
 
 | # | 问题 | 说明 | 优先级 |
 | --- | --- | --- | --- |
-| ~~CON-1~~ | ~~日志环形缓冲 + Shift+PgUp/PgDn 历史查看~~ | **已实现**：F14 环形缓冲 + render_view + 键盘 PgUp/PgDn | — |
-| ~~CON-2~~ | ~~串口宏开关 `JLOS_SERIAL_ECHO`~~ | **已实现**：F15 编译期宏 + \b 不输出串口 | — |
 | CON-3 | PCI 总线枚举从 HAL 拆到 `drivers/pci/` | arch 无关总线枚举逻辑可上提 drivers 层 | 低 |
 
 ***
@@ -412,14 +398,6 @@ pfa:       ALL PASSED
 paging:    ALL PASSED
 multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf)
 ```
-
-### 8.7 已知遗留
-
-| # | 问题 | 说明 | 优先级 |
-| --- | --- | --- | --- |
-| ~~FS-1~~ | ~~FAT32 只读挂载~~ | **已实现**：批次 1 完成 create/write/unlink（fat32.c） | — |
-| ~~FS-2~~ | ~~open/close/read/write syscall~~ | **已实现**：批次 1 完成 open/close/read/write/lseek/unlink syscall | — |
-| ~~FS-3~~ | ~~VFS dentry cache LRU 淘汰~~ | **已实现**：批次 4 完成 DCACHE_MAX=256 + dentry_shrink | — |
 
 ***
 
@@ -666,15 +644,12 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
-| ~~高~~ | ~~hrtimer~~ | ~~高精度定时器（红黑树 + oneshot 模式）~~ | ~~无~~ | **已完成**：4 批次落地（PIT oneshot + 核心结构 + 中断集成 + nanosleep sleeper），详见 history_update.md v3.5 |
-| ~~高~~ | ~~FS 缓存~~ | ~~buffer cache + page cache~~ | ~~无~~ | **已完成**：Phase 8.8 page cache 统一（per-inode address_space + get_block + readpage/writepage），删 buffer_cache，dirent 走 dir->address_space；详见 history_update.md 2026-10-05 |
-| ~~高~~ | ~~sk_buff~~ | ~~统一网络缓冲区管理~~ | ~~无~~ | **已完成（阶段 1-4）**：sk_buff 统一缓冲区 + 发送/接收路径改造 + csum_partial 重构 + skb_push 修复 + TCP 崩溃修复（memcpy.s size=0）；阶段 5（队列+clone）推迟至 softirq/packet socket 需求时；详见 history_update.md 2026-10-05 v3.7 |
+| 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 中 | SMP 实现 | APIC+IPI+per-CPU 激活、锁粒度细化 | — | 架构性升级，Phase 4 预留接口已就位 |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| ~~低~~ | ~~nanosleep~~ | ~~nanosleep syscall~~ | ~~hrtimer~~ | **已完成**：hrtimer 批次 4（REL + monotonic + sleeper 栈上构造） |
 | 低 | 中断现代化 | 8259→APIC、软中断/tasklet | SMP | |
 
 ### 实施优先级（历史，已被批次规划取代）
@@ -698,25 +673,27 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 
 ***
 
-## 待实现功能（按经典路线图）
+## 已解决遗留项归档
 
-| 编号 | 功能                                                     | 模块                              | 依赖               |
-| ---- | -------------------------------------------------------- | --------------------------------- | ------------------ |
-| F1   | 按需分页 (demand paging, 已实现 brk + stack)             | paging.c                          | 无                 |
-| F2   | COW 写时复制 (已实现)                                    | paging.c + multitask.c            | —                  |
-| F3   | 用户态 malloc/free                                       | user                              | 依赖 brk（已完成） |
-| ~~F4~~ | ~~FAT32 完善 (mount/open/close/read/write/seek/readdir)~~ | **已实现**：VFS + FAT32 + MBR + ELF 加载器 | — |
-| F5   | open/close/read/write 系统调用                            | syscall.c                         | **已实现**         |
-| ~~F6~~ | ~~ELF 用户态程序加载~~                                   | **已实现**：jlcy/ + crt0.S + execve | —            |
-| F7   | signal/kill 信号机制                                     | syscall.c + multitask.c           | 无                 |
-| F8   | 线程支持（共享地址空间）                                 | multitask.c                       | **已实现**（fork/clone + COW） |
-| ~~F9~~ | ~~DHCP 自动获取 IP~~                                         | **已实现**：`net/dhcp.h/c` 状态机 + POST 级 initcall 触发 | — |
-| ~~F10~~ | ~~DNS 域名解析~~                                             | **已实现**：`net/dns.h/c` 同步 resolve + DHCP option 6 获取 DNS 服务器 | — |
-| F11  | mmap 内存映射                                            | paging.c + syscall.c              | 依赖 F4（已完成，VMA/按需分页就绪） |
-| ~~F12~~ | ~~FPU/SSE 上下文切换（CR0.TS + lazy save/restore）~~   | **已实现**：arch/x86/fpu.c + hal/ext\_state.h | — |
-| ~~F13~~ | ~~O(1) 调度选择（per-level runqueue + bitmap）~~         | **已实现**：rq[] per-level 链表 + rq\_nonempty bitmap ctz 选层（multitask.h:117-121） | —                  |
-| ~~F14~~ | ~~日志环形缓冲 + Shift+PgUp/PgDn 历史查看~~                  | **已实现**：`kernel/console.c` 环形缓冲 + render_view + 键盘 PgUp/PgDn | —  |
-| ~~F15~~ | ~~串口输出宏开关 `JLOS_SERIAL_ECHO`~~                        | **已实现**：`include/config.h` + console.c `#if` 包裹 + \b 不输出串口 | —   |
+> 下列遗留项已在后续阶段解决或决定不做，从各「已知遗留」表移出，统一归档于此：
+
+| 编号 | 问题 | 处理 |
+| --- | --- | --- |
+| PFA-R1 | 全局单 spinlock 多核瓶颈 | 5.1 拆为 buddy+refcount+owner 三套锁 + 批次 5 per-CPU frame cache |
+| PFA-R2 | boot_alloc 用完不释放指针 | 核验无影响：s_boot_heap_ptr 为 static 标量，init 后不再引用，区域已 mark_reserve |
+| PAG-7 | 无 page table slab cache | 决定不做：被 PFA per-CPU refill 替代（5.5 PAG-8） |
+| MM-3 | 无 per-type cache | 决定不做：通用 size class 已覆盖，收益太小 |
+| MT-3 | O(n) 调度选择（4 层 × n 任务） | rq[] per-level 链表 + rq_nonempty bitmap ctz 选层，O(1) |
+| MT-4 | 静态 256 task 数组 | tasks 动态指针数组 + add_task 倍增扩容 |
+| MT-6 | 单全局 runqueue | 批次 5 per-CPU runqueue（rq[JLOS_MAX_CPUS] + rq_nonempty） |
+| CON-1 | 日志无环形缓冲 + 历史查看 | F14 环形缓冲 + render_view + PgUp/PgDn |
+| CON-2 | 串口无宏开关 | F15 JLOS_SERIAL_ECHO 编译期宏 + \b 不输出串口 |
+| FS-1 | FAT32 只读挂载 | 批次 1 create/write/unlink |
+| FS-2 | 无 open/close/read/write syscall | 批次 1 完成 open/close/read/write/lseek/unlink |
+| FS-3 | dentry 无 LRU 淘汰 | 批次 4 DCACHE_MAX=256 + dentry_shrink |
+| A1 | 用户态代码与内核混编 | jlcy 独立子项目 + ELF 加载器 + execve |
+| A2 | 0~1MB 恒等映射残留 | 核验无残留，切换 CR3 后 boot 恒等映射即失效 |
+| A3 | boot_page_dir 内存未释放 | PFA init 末尾 free_boot_tables + refcount_dec 回收 |
 
 ***
 
@@ -724,9 +701,6 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 
 | #   | 问题                       | 说明                                                                               |
 | --- | -------------------------- | ---------------------------------------------------------------------------------- |
-| ~~A1~~ | ~~用户态代码与内核混编~~ | **已解决**：jlcy/ 独立子项目 + ELF 加载器 + execve，用户态 ELF 独立链接 0x08048000 |
-| ~~A2~~  | ~~0\~1MB 恒等映射残留~~        | **核验无残留**：内核页表不含 0~1MB 恒等映射，切换 CR3 后 boot 恒等映射即失效                                                  |
-| ~~A3~~  | ~~boot\_page\_dir 内存未释放~~ | **已解决**：PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，`jlos_page_frame_refcount_dec` 将 boot_page_dir 页面 refcount 从 1 减到 0，进入 per-CPU freelist 可被复用 |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
 
 ***

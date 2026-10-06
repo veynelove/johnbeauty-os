@@ -9,6 +9,7 @@
 #include <hal/smp.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
+#include <dsa/timer_wheel.h>
 #include <kernel/vma.h>
 
 #define JLOS_TASK_READY             0
@@ -26,7 +27,7 @@
 #define JLOS_TASK_MLFQ_AGING_TICKS  200
 
 #define JLOS_TASK_FDS_NUM           16
-#define JLOS_TASK_MAX_NUM           256
+#define JLOS_TASK_DEFAULT_MAX_NUM   256
 
 #define JLOS_TASK_FD_READ_ONLY      1
 #define JLOS_TASK_FD_WRITE_ONLY     2
@@ -95,7 +96,6 @@ typedef struct jlos_task {
     jlos_task_exit_code     exit_code;
     bool                    is_user_process;
     jlos_mm_t               *mm;
-    uint32_t                wake_tick;
     bool                    sleeping;
     bool                    yield;
     int32_t                 errno;
@@ -107,6 +107,7 @@ typedef struct jlos_task {
     jlos_task_fd_t          *fds;
     jlos_list_head_t        wait_node;
     jlos_hash_node_t        pid_hash_node;
+    jlos_timer_wheel_node_t sleep_node;
     jlos_list_head_t        zombie_node;
     jlos_list_head_t        rq_node;
     int32_t                 slot_idx;
@@ -132,7 +133,7 @@ typedef struct {
     uint32_t                num_tasks;
     int                     current_task;
     jlos_list_head_t        zombie_head;
-    jlos_list_head_t        sleep_queue;
+    jlos_timer_wheel_t      sleep_wheel;
     jlos_task_runqueue_t    rq[JLOS_MAX_CPUS];
     jlos_task_t             *idle_task;
     bool                    need_resched;
