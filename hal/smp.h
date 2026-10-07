@@ -25,5 +25,6 @@ uint32_t jlos_hal_num_cpus(void);
 uint32_t jlos_smp_per_cpu_offset(uint32_t cpu);
 
 void jlos_smp_init(void);
+void jlos_hal_smp_boot_aps(void);
 
 #endif

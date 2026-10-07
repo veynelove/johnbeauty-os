@@ -82,9 +82,15 @@ uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self)
     return result;
 }
 
-void jlos_mmu_init()
+void jlos_mmu_init(void)
 {
-    jlos_mmu_t *gdt = &jlos_cpu_gdt;
+    jlos_arch_cpu_gdt_init(0);
+}
+
+void jlos_arch_cpu_gdt_init(uint32_t cpu)
+{
+    jlos_mmu_t *gdt = (jlos_mmu_t *)((uint8_t *)&jlos_cpu_gdt + jlos_smp_per_cpu_offset(cpu));
+
     jlos_gdt_segment_descriptor_init(&gdt->null_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->unused_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 0xFFFFFFFF, 0x9A);
@@ -94,7 +100,7 @@ void jlos_mmu_init()
     jlos_gdt_segment_descriptor_init(&gdt->user_data_segment_selector, 0, 0xFFFFFFFF, 0xF2);
     jlos_gdt_segment_descriptor_init(&gdt->tss_segment_selector, 0, 0, 0x89);
 
-    jlos_gdt_segment_descriptor_init(&gdt->per_cpu_segment_selector, jlos_smp_per_cpu_offset(0), 0xFFFFFFFF, 0x92);
+    jlos_gdt_segment_descriptor_init(&gdt->per_cpu_segment_selector, jlos_smp_per_cpu_offset(cpu), 0xFFFFFFFF, 0x92);
     uint32_t i[2];
     i[1] = (uint32_t)gdt;
     i[0] = sizeof(jlos_mmu_t) << 16;

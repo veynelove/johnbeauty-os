@@ -206,12 +206,16 @@ void jlos_irq_manager_init(void)
     jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
 
+    jlos_arch_irq_load_idt();
+}
+
+void jlos_arch_irq_load_idt(void)
+{
     jlos_idt_pointer_t idt;
     idt.size = JLOS_IDT_ENTRIES * sizeof(jlos_gate_descriptor_t) - 1;
     idt.base = (uint32_t)jlos_interrupt_descriptor_table;
     __asm__ __volatile__("lidt %0" : : "m" (idt));
 }
-
 
 void jlos_irq_manager_activate(void)
 {

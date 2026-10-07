@@ -38,6 +38,7 @@ SECTIONS
     {
         _text_start = .;
         *(.text*)
+        KEEP(*(.trampoline))
         . = ALIGN(4K);
         _text_end = .;
     } :code

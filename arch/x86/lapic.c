@@ -55,4 +55,10 @@ void jlos_arch_lapic_eoi(void)
     jlos_arch_lapic_mmio_write(JLOS_ARCH_APIC_EOI_OFFSET, 0);
 }
 
+void jlos_arch_lapic_send_ipi(uint32_t apic_id, uint32_t icr_low)
+{
+    jlos_arch_lapic_mmio_write(JLOS_ARCH_APIC_ICR_HIGH_OFFSET, apic_id << 24);
+    jlos_arch_lapic_mmio_write(JLOS_ARCH_APIC_ICR_LOW_OFFSET, icr_low);
+}
+
 JLOS_INITCALL(JLOS_INITCALL_CORE, jlos_arch_lapic_init);

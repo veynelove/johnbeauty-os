@@ -34,8 +34,19 @@ DECLARE_PER_CPU(bool,           jlos_cpu_online);
 #define this_cpu_ptr(var) \
     ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(jlos_hal_get_cpu_id())))
 
+#define per_cpu_ptr_cpu(var, cpu) \
+    ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(cpu)))
+
+#define per_cpu_read_cpu(var, cpu) \
+    (*per_cpu_ptr_cpu(var, cpu))
+
+#define per_cpu_write_cpu(var, cpu, val) \
+    do { *per_cpu_ptr_cpu(var, cpu) = (val); } while (0)
+
 void jlos_arch_smp_set_num_cpus(uint32_t n);
 void jlos_arch_smp_set_cpu_apic_id(uint32_t cpu, uint32_t apic_id);
 uint32_t jlos_arch_smp_cpu_apic_id(uint32_t cpu);
+
+void jlos_smp_alloc_percpu_areas(void);
 
 #endif

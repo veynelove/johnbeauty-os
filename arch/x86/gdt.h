@@ -36,6 +36,7 @@ typedef struct jlos_mmu {
 } __attribute__((packed)) jlos_mmu_t;
 
 void jlos_mmu_init(void);
+void jlos_arch_cpu_gdt_init(uint32_t cpu);
 
 uint16_t jlos_mmu_code_selector(jlos_mmu_t* self);
 uint16_t jlos_mmu_data_selector(jlos_mmu_t* self);
