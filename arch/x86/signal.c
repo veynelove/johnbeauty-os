@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/signal.h>
 #include <hal/syscall_abi.h>
 #include <arch/x86/cpu_state.h>

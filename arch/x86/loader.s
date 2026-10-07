@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 .include "arch/x86/multiboot.inc"
 
 .set MAGIC, MULTIBOOT_HEADER_MAGIC

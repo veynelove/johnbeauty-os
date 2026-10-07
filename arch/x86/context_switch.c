@@ -1,6 +1,12 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/tss.h>
 #include <arch/x86/cpu_state.h>
 #include <arch/x86/gdt.h>
+#include <arch/x86/smp.h>
 #include <hal/context.h>
 #include <hal/cpu_state.h>
 #include <hal/hal.h>
@@ -13,11 +19,6 @@
 
 jlos_task_t *g_current_task_ptr = NULL;
 uint32_t jlos_arch_tss_base_addr = 0;
-
-static jlos_x86_tss_t s_tss;
-
-extern uint8_t kernel_stack_bottom[];
-extern uint8_t kernel_stack[];
 
 __attribute__((noreturn)) void jlos_task_do_exit(void)
 {
@@ -131,26 +132,27 @@ void jlos_arch_task_init_arch_user(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, 
 void jlos_arch_tss_init(void)
 {
     jlos_mmu_t *gdt = jlos_mmu_get_kernel();
+    jlos_x86_tss_t *tss = this_cpu_ptr(jlos_cpu_tss);
     uint16_t tss_sel = jlos_gdt_tss_selector(gdt);
-    jlos_gdt_set_tss(gdt, (uint32_t)&s_tss, sizeof(jlos_x86_tss_t) - 1);
-    jlos_x86_tss_init(&s_tss, (uint32_t)kernel_stack, jlos_mmu_data_selector(gdt));
+    jlos_gdt_set_tss(gdt, (uint32_t)tss, sizeof(jlos_x86_tss_t) - 1);
+    jlos_x86_tss_init(tss, (uint32_t)this_cpu_read(jlos_cpu_kernel_stack), jlos_mmu_data_selector(gdt));
     jlos_x86_tss_load(tss_sel);
 }
 
 void jlos_arch_tss_set_ctx(uint32_t ctx)
 {
-    s_tss.esp0 = ctx;
+    this_cpu_ptr(jlos_cpu_tss)->esp0 = ctx;
 }
 
 void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size)
 {
-    *base = kernel_stack_bottom;
-    *size = (uint32_t)(kernel_stack - kernel_stack_bottom);
+    *base = this_cpu_read(jlos_cpu_kernel_stack_bottom);
+    *size = this_cpu_read(jlos_cpu_kernel_stack_size);
 }
 
 void jlos_arch_tss_init_for_asm(void)
 {
-    jlos_arch_tss_base_addr = (uint32_t)&s_tss;
+    jlos_arch_tss_base_addr = (uint32_t)this_cpu_ptr(jlos_cpu_tss);
 }
 
 void jlos_arch_task_copy_thread(jlos_task_t *child, const jlos_cpu_state_t *parent_trapframe,

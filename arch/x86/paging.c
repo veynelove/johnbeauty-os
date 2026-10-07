@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/paging.h>
 #include <hal/hal.h>
 #include <hal/mmu.h>
@@ -28,6 +33,9 @@ static uint32_t pte_prot(uint32_t prot)
     }
     if (prot & JLOS_PG_GLOBAL) {
         p |= JLOS_PTE_GLOBAL;
+    }
+    if (prot & JLOS_PG_NOCACHE) {
+        p |= JLOS_PTE_CACHE_DISABLE;
     }
     return p;
 }

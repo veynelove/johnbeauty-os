@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/display.h>
 
 const jlos_hal_display_ops_t *jlos_hal_display_ops = NULL;

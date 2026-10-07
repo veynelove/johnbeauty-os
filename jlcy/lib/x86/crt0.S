@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #define __ASSEMBLY__
 #include <include/syscall_abi.h>
 

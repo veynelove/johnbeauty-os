@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/kernel_syscall.h>
 #include <hal/paging.h>
 #include <hal/signal.h>

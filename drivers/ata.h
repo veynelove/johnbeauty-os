@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS__DRIVERS_ATA_H
 #define _JLOS__DRIVERS_ATA_H
 

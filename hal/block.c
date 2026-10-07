@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/block.h>
 #include <hal/diag.h>
 #include <drivers/ata.h>

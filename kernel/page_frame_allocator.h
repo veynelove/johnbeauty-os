@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
 #define _JLOS_KERNEL_PAGE_FRAME_ALLOCATOR_H
 

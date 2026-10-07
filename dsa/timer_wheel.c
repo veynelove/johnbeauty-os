@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/timer_wheel.h>
 
 static jlos_list_head_t *timer_wheel_slot(jlos_timer_wheel_t *w, uint32_t expires, uint32_t jiffies)

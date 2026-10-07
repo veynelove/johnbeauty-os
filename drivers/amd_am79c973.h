@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_DRIVERS_AMD_AM79C973_H
 #define _JLOS_DRIVERS_AMD_AM79C973_H
 

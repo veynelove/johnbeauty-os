@@ -1,6 +1,10 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.7 | 日期: 2026-10-05 | 作者: JohnLove
+版本: v3.9 | 日期: 2026-10-07 | 作者: JohnLove
+
+> v3.9 变更：SMP 升级 Step 1（per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` section + GS 段访问）与 Step 2（LAPIC 驱动 + fixmap/MMIO/MSR/cache 属性抽象）落地；修复 `jlos_page_frame_get_free` 漏计 per-CPU cache 的记账 bug；确立 SMP 8 步实施计划。详见 history_update.md。
+
+> v3.8 变更：内部测试框架（section-based 自注册 + 12 套件 54 用例全 PASS）+ 修复 jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched 两个内核 bug + printk 宽度修饰支持（flags/width 解析）+ 升级优先级纠正（SMP P0 → 64位 P1 → 多架构 P2），详见 history_update.md。
 
 > v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构），详见 history_update.md。
 
@@ -30,7 +34,6 @@
 8. **生产级内核, vmplayer测试，目标运行在硬件上**
 9. **魔法字面量用语义宏命名**：裸数值（如 512/256/1024）用有语义的宏替代（如 `JLOS_BLOCK_SECTOR_SIZE`、`JLOS_IDT_ENTRIES`）；KB/MB 等计算机科学定义好的单位换算（如 `1024` KB→字节、`4*1024*1024` 4MB 对齐）不需定义宏。
 10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
-11. **给方案/设计前必须先核查相关子系统的实际代码**：设计涉及哪个子系统（PFA/paging/mm/fs 等），先读它的实际头文件与实现，确认已有结构、接口、命名与完成度；已存在的成熟结构（如 PFA 的 struct page `jlos_page_t` + `s_pages[]` mem_map）必须直接复用，不得凭印象假设其不存在、另起炉灶。
 12. **不以收益或工作量作为取舍依据**：经典结构 + 性能优先是唯一准绳；即使当前负载小、短期收益不明显、改动较大，只要经典结构正确、性能更优就照做，不做收益/工作量导向的折中或过渡方案。
 
 ***
@@ -76,6 +79,9 @@
 | 信号机制 | signal/kill/sigreturn syscall + signal_pending / signal_handlers 数组 | signal_test ALL PASSED |
 | 线程支持 | clone 共享地址空间 + fork COW（ret_from_fork） | fork/clone 压测通过 |
 | DHCP/DNS | DHCP 状态机（DISCOVER/OFFER/REQUEST/ACK）+ DNS 解析器（option 6 取服务器） | BOUND 绑定 IP，ping/curl 通过 |
+| 内部测试框架 | section-based 自注册（JLOS_TEST 宏 + .jlos_test 段）+ 12 套件 54 用例 + 汇总表格 | 54 passed 0 failed |
+| 内核 bug 修复 | jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched | 测试驱动发现并修复 |
+| printk 宽度修饰 | flags(-/0) + width 解析 + printk_fmt_uint/int + emit_padded | 汇总表格列对齐 |
 
 ***
 
@@ -87,7 +93,7 @@ graph TD
     P1["Phase 1: Paging 修复 ✅"]
     P2["Phase 2: Memory Manager ✅"]
     P3["Phase 3: Multitask ✅"]
-    P4["Phase 4: SMP 预留"]
+    P4["Phase 4: SMP 预留 ✅"]
     P6["Phase 6: Console/Display + Initcall ✅"]
     P7["Phase 7: HAL 架构重构 ✅"]
     P8["Phase 8: 文件系统 + ELF + execve ✅"]
@@ -200,14 +206,33 @@ graph TD
 
 本阶段不实现 SMP，而是为 SMP 预留清晰的扩展点。当前单核实现中就把架构搭好，避免未来重写。
 
-| 序号 | 任务                                                                               | 涉及文件                   | 复杂度 |
-| ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ |
-| 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     |
-| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     |
-| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     |
-| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     |
-| 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/cpu.h                  | 低     |
-| 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     |
+| 序号 | 任务                                                                               | 涉及文件                   | 复杂度 | 状态 |
+| ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ | ---- |
+| 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     | ✅   |
+| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     | ✅ 接口已声明，实现空 stub 归 SMP |
+| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     | ⏸ 结构就位，锁未无锁化，归 SMP |
+| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     | ✅ rq+cpu 已完成，cpumask 待 SMP |
+| 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/smp.h                  | 低     | ✅ section-based per-CPU 实现 |
+| 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     | ✅   |
+
+***
+
+## SMP 逐步实施（Step 1-8，2026-10-07）
+
+多核支持按 8 步推进（对齐 Linux section-based per-CPU + fixmap/LAPIC/ACPI 最终形态）：
+
+| 步骤    | 内容                                                                 | 状态 |
+| ------- | -------------------------------------------------------------------- | ---- |
+| Step 1  | per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` + GS 段访问     | ✅   |
+| Step 2  | LAPIC 驱动 + 抽象（fixmap / MMIO 读写 / MSR / cache PCD 属性）       | ✅   |
+| Step 3  | ACPI MADT 解析（RSDP→XSDT→MADT 提取 CPU/IOAPIC）+ AP 启动            | ⏳   |
+| Step 4  | per-CPU GDT/TSS + 中断改造（切 APIC 模式）                           | ⏳   |
+| Step 5  | IPI + TLB shootdown                                                  | ⏳   |
+| Step 6  | 调度器 SMP 化                                                        | ⏳   |
+| Step 7  | 锁粒度优化                                                           | ⏳   |
+| Step 8  | IOAPIC                                                               | ⏳   |
+
+测试策略教训（Step 2 暴露）：记账类接口语义须对齐「系统总量」（`get_free` = buddy + Σper-CPU cache）；测试断言优先用恒等式/不变量（`free + occupied == total`）而非前后差值守恒，避免缺陷藏在不变量里被初始稳态掩盖。
 
 ***
 
@@ -644,13 +669,13 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
+| **高** | SMP 实现 | APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化 | — | P0 架构性升级，Phase 4 预留接口已就位；详见 Phase 9 |
 | 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
-| 中 | SMP 实现 | APIC+IPI+per-CPU 激活、锁粒度细化 | — | 架构性升级，Phase 4 预留接口已就位 |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| 低 | 中断现代化 | 8259→APIC、软中断/tasklet | SMP | |
+| 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP | |
 
 ### 实施优先级（历史，已被批次规划取代）
 

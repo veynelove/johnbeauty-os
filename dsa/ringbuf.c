@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/ringbuf.h>
 
 void jlos_ringbuf_init(jlos_ringbuf_t *rf, void *buffer, uint32_t size)

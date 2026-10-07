@@ -1,8 +1,14 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <common/multiboot.h>
 #include <hal/mmu.h>
 #include <hal/context.h>
 #include <hal/hal_arch.h>
 #include <hal/paging.h>
+#include <hal/smp.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
@@ -18,6 +24,7 @@ void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kern
     jlos_printk_init();
     printk_info("princess yihan is safe and happy!\n");
 
+    jlos_smp_init();
     jlos_mmu_init();
     jlos_arch_tss_init();
 

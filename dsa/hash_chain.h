@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_DSA_HASH_CHAIN_H
 #define _JLOS_DSA_HASH_CHAIN_H
 

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _GDT_H
 #define _GDT_H
 
@@ -5,6 +10,7 @@
 
 #define JLOS_X86_USER_CS        0x23
 #define JLOS_X86_USER_DS        0x2B
+#define JLOS_X86_PERCPU_SEL     0x38
 
 #define JLOS_X86_ASM_STR(x)     #x
 #define JLOS_X86_ASM_XSTR(x)    JLOS_X86_ASM_STR(x)
@@ -26,6 +32,7 @@ typedef struct jlos_mmu {
     jlos_gdt_segment_descriptor_t user_code_segment_selector;
     jlos_gdt_segment_descriptor_t user_data_segment_selector;
     jlos_gdt_segment_descriptor_t tss_segment_selector;
+    jlos_gdt_segment_descriptor_t per_cpu_segment_selector;
 } __attribute__((packed)) jlos_mmu_t;
 
 void jlos_mmu_init(void);

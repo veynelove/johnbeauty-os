@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/ata.h>
 
 const uint16_t jlos_ata_primary_port_base   = 0x1F0;

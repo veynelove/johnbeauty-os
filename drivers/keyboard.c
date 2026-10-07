@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/keyboard.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "kbd"

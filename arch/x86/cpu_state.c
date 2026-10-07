@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/cpu_state.h>
 #include <arch/x86/gdt.h>
 #include <hal/cpu_state.h>

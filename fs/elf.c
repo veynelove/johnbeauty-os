@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <fs/elf.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>

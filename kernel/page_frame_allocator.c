@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/page_frame_allocator.h>
 #include <kernel/memory_manager.h>
 #include <kernel/device.h>
@@ -682,7 +687,11 @@ uint32_t jlos_page_frame_get_total(void)
 
 uint32_t jlos_page_frame_get_free(void)
 {
-    return (uint32_t)jlos_atomic_read(&s_free_frames);
+    uint32_t free = (uint32_t)jlos_atomic_read(&s_free_frames);
+    for (uint32_t c = 0; c < jlos_hal_num_cpus(); c++) {
+        free += s_percpu[c].count;
+    }
+    return free;
 }
 
 void jlos_page_frame_print_buddy(void)

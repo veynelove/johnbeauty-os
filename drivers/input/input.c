@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <kernel/memory_manager.h>

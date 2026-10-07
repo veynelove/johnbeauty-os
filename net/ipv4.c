@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <net/ipv4.h>
 #include <kernel/memory_manager.h>
 #include <include/config.h>

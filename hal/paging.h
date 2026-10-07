@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_PAGING_H
 #define _JLOS_HAL_PAGING_H
 
@@ -9,6 +14,7 @@
 #define JLOS_PG_EXEC       0x4
 #define JLOS_PG_USER       0x8
 #define JLOS_PG_GLOBAL     0x10
+#define JLOS_PG_NOCACHE    0x20
 
 #define JLOS_PG_KERNEL_RO  (JLOS_PG_READ)
 #define JLOS_PG_KERNEL_RW  (JLOS_PG_READ | JLOS_PG_WRITE)

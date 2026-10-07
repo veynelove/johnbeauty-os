@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/spinlock.h>
 
 void jlos_spinlock_init(jlos_spinlock_t *lock)

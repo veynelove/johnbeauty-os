@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/timek.h>
 #include <kernel/initcall.h>
 #include <kernel/hrtimer.h>

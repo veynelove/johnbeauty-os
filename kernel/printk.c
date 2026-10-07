@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <stdarg.h>
 #include <hal/serial.h>
 #include <hal/clock_event.h>

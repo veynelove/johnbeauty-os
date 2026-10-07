@@ -1,3 +1,6 @@
+# Copyright 2026 veyne.
+# SPDX-License-Identifier: Apache-2.0
+
 # ==================john_kernel=================
 JLOS := johnkernel
 ARCH := x86

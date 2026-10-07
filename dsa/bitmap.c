@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/bitmap.h>
 
 static inline uint32_t popcount32(uint32_t x)

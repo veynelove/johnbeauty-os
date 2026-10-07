@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/font_8x16.h>
 
 const uint8_t jlos_font_8x16[JLOS_FONT_GLYPH_COUNT][JLOS_FONT_GLYPH_HEIGHT] = {

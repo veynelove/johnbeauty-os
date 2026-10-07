@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <lib/syscall.h>
 
 int32_t syscall(uint32_t num, uint32_t arg1, uint32_t arg2, uint32_t arg3)

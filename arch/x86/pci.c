@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/pci.h>
 #include <hal/diag.h>
 #include <drivers/driver.h>

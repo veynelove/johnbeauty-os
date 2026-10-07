@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_SYSCALL_ABI_H
 #define _JLOS_HAL_SYSCALL_ABI_H
 

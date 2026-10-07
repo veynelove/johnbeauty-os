@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
 #include <hal/paging.h>

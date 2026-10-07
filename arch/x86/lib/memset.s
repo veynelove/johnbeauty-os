@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 # SSE2 优化 memset — 32B 宽写
 # void jlos_memset(void *ptr, uint8_t value, size_t size)
 .text

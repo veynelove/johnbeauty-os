@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 .text
 .global jlos_irq_ignore_request
 .global jlos_handle_interrupt_request0x00
@@ -150,6 +155,8 @@ ring3_no_err:
     pushl %esi
     pushl %edi
     pushl %ebp
+    movw $0x38, %ax
+    movw %ax, %gs
     jmp common_entry
 
 error_frame:
@@ -177,6 +184,8 @@ ring3_err:
     pushl %esi
     pushl %edi
     pushl %ebp
+    movw $0x38, %ax
+    movw %ax, %gs
     jmp common_entry
 
 common_entry:

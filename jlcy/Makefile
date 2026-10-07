@@ -1,3 +1,6 @@
+# Copyright 2026 veyne.
+# SPDX-License-Identifier: Apache-2.0
+
 # jlcy - JLOS C library (用户态库 + 应用程序)
 ARCH := x86
 OBJ_DIR := obj

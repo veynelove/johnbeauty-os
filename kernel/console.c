@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/console.h>
 #include <kernel/initcall.h>
 #include <hal/display.h>

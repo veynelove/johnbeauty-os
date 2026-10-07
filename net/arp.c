@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <net/arp.h>
 #include <hal/hal_arch.h>
 #include <include/config.h>

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 # SSE2 优化 memcpy — 32B 宽读写
 # void *jlos_memcpy(void *dst, const void *src, size_t size)
 .text

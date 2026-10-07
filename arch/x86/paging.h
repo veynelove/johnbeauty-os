@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_ARCH_X86_PAGING_H
 #define _JLOS_ARCH_X86_PAGING_H
 
@@ -6,7 +11,6 @@
 
 #define JLOS_PAGE_TABLE_ENTRIES                     1024
 #define JLOS_PAGE_DIR_ENTRIES                       1024
-#define JLOS_PAGING_VIRTUAL_ADDR_MASK               0xFFFFF000
 #define JLOS_PAGING_PT_INDEX_MASK                   0x000FF000
 #define JLOS_PAGING_PD_INDEX_MASK                   0xFFC00000
 

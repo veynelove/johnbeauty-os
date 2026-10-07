@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLCY_LIB_SYSCALL_H
 #define _JLCY_LIB_SYSCALL_H
 

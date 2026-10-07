@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/initcall.h>
 
 extern jlos_initcall_fn_t __initcall0_start, __initcall0_end;

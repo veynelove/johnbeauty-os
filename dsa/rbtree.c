@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/rbtree.h>
 
 static void rbtree_left_rotate(jlos_rbtree_t *tree, jlos_rbtree_node_t *x)

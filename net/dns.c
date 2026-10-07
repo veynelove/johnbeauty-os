@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <net/dns.h>
 #include <net/network.h>
 #include <kernel/timek.h>
