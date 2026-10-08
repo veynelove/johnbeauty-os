@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS__KERNEL_MULTITASK_H
 #define _JLOS__KERNEL_MULTITASK_H
 
@@ -5,8 +10,11 @@
 #include <hal/mmu.h>
 #include <hal/cpu_state.h>
 #include <hal/ext_state.h>
+#include <hal/syscall_abi.h>
+#include <hal/smp.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
+#include <dsa/timer_wheel.h>
 #include <kernel/vma.h>
 
 #define JLOS_TASK_READY             0
@@ -15,6 +23,8 @@
 #define JLOS_TASK_WAITING           4
 #define JLOS_TASK_ZOMBIE            5
 
+#define JLOS_CLONE_VM               0x1
+
 #define JLOS_TASK_STACK_SIZE        16384
 #define JLOS_TASK_NAME_SIZE         32
 
@@ -22,7 +32,7 @@
 #define JLOS_TASK_MLFQ_AGING_TICKS  200
 
 #define JLOS_TASK_FDS_NUM           16
-#define JLOS_TASK_MAX_NUM           256
+#define JLOS_TASK_DEFAULT_MAX_NUM   256
 
 #define JLOS_TASK_FD_READ_ONLY      1
 #define JLOS_TASK_FD_WRITE_ONLY     2
@@ -35,21 +45,24 @@
 #define JLOS_TASK_USER_STACK_TOP    0xBFFFF000
 #define JLOS_TASK_USER_STACK_SIZE   0x00010000
 
+#define JLOS_TASK_USER_MMAP_BASE    0x40000000
+#define JLOS_TASK_USER_MMAP_LIMIT   0xBFF00000
+
 #define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
 #define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
 #define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_U32OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
                                      (JLOS_KERN_U32OF(p) + (sz) >  JLOS_KERN_U32OF(p)) && \
                                      (JLOS_KERN_U32OF(p) + (sz) <= 0xFFFFFFFFu) )
 
-#define jLOS_TASK_PID_HASH_SIZE     256
+#define JLOS_TASK_PID_HASH_SIZE     256
 
 #define jlos_task_curr()  (g_current_task_ptr)
 
 extern uint32_t _kernel_end;
 
 typedef enum {
-    TASK_EXIT_DEAUFT        = 0,
-    TASK_EXIT_PAGE_FAULT
+    TASK_EXIT_DEFAULT       = 0,
+    TASK_EXIT_PAGE_FAULT    = 1,
 } jlos_task_exit_code;
 
 enum jlos_task_errno {
@@ -88,7 +101,6 @@ typedef struct jlos_task {
     jlos_task_exit_code     exit_code;
     bool                    is_user_process;
     jlos_mm_t               *mm;
-    uint32_t                wake_tick;
     bool                    sleeping;
     bool                    yield;
     int32_t                 errno;
@@ -100,26 +112,36 @@ typedef struct jlos_task {
     jlos_task_fd_t          *fds;
     jlos_list_head_t        wait_node;
     jlos_hash_node_t        pid_hash_node;
+    jlos_timer_wheel_node_t sleep_node;
     jlos_list_head_t        zombie_node;
     jlos_list_head_t        rq_node;
     int32_t                 slot_idx;
     jlos_arch_ext_state_t   ext_state;
+    jlos_cpu_state_t        *syscall_tf;
+    uint32_t                signal_pending;
+    uint32_t                signal_handlers[JLOS_SIGNAL_NUM];
+    uint32_t                cpu;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
-    jlos_task_t         *tasks[JLOS_TASK_MAX_NUM];
-    jlos_hash_chain_t   pid_hash;
-    int                 num_tasks;
-    int                 current_task;
-    jlos_list_head_t    zombie_head;
-    jlos_list_head_t    sleep_queue;
     struct {
         jlos_list_head_t head;
         uint32_t count;
-    }                   rq[JLOS_TASK_MLFQ_LEVELS];
-    uint32_t            rq_nonempty;
-    jlos_task_t         *idle_task;
-    bool                need_resched;
+    }                   queue[JLOS_TASK_MLFQ_LEVELS];
+    uint32_t            nonempty;
+} jlos_task_runqueue_t;
+
+typedef struct {
+    jlos_task_t             **tasks;
+    uint32_t                max_tasks;
+    jlos_hash_chain_t       pid_hash;
+    uint32_t                num_tasks;
+    int                     current_task;
+    jlos_list_head_t        zombie_head;
+    jlos_timer_wheel_t      sleep_wheel;
+    jlos_task_runqueue_t    rq[JLOS_MAX_CPUS];
+    jlos_task_t             *idle_task;
+    bool                    need_resched;
 } jlos_task_manager_t;
 
 extern jlos_task_t *g_current_task_ptr;
@@ -145,8 +167,14 @@ void jlos_task_set_waiting(jlos_task_t *t, uint32_t pid);
 #define JLOS_TASK_SET_ZOMBIE    jlos_task_set_zombie
 #define JLOS_TASK_SET_WAITING   jlos_task_set_waiting
 
+int32_t jlos_signal_send(jlos_task_t *t, uint32_t sig);
+void jlos_signal_check_deliver(jlos_task_t *t, jlos_cpu_state_t *tf);
+
 void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick);
 const char *jlos_task_status_map_str(uint32_t status);
+
+void jlos_task_wakeup(jlos_task_t *task);
+void jlos_task_sleep_hrtimer(jlos_task_manager_t *self, uint64_t ns);
 
 void jlos_task_manager_init();
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
@@ -156,13 +184,24 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self);
 
 jlos_task_t *jlos_task_manager_find_pid(jlos_task_manager_t *self, uint32_t pid);
 jlos_task_t *jlos_task_manager_curr_task_on_tick(jlos_task_manager_t *self);
+void jlos_task_manager_tick_and_schedule(jlos_task_manager_t *self);
 
-jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent,
-    uint32_t fork_esp_ref, uint32_t fork_resume_pc);
+jlos_task_t *jlos_process_fork(jlos_task_manager_t *self, jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe);
+jlos_task_t *jlos_process_clone(jlos_task_manager_t *self,
+    jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack);
+
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
-void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
+__attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);
 void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
+void jlos_sched_balance(jlos_task_manager_t *self);
+
+#define JLOS_EXECVE_MAX_ARGS    256
+#define JLOS_EXECVE_MAX_STRLEN  256
+
+int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *const argv[], char *const envp[]);
+void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top);
+
 #endif

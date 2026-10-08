@@ -1,7 +1,13 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_KERNEL_SYSCALL_H
 #define _JLOS_HAL_KERNEL_SYSCALL_H
 
 #include <common/types.h>
+#include <hal/cpu_state.h>
 
 typedef uint32_t (*jlos_hal_syscall_entry_fn)(void *handler, uint32_t ctx);
 typedef int32_t  (*jlos_hal_syscall_dispatch_fn)(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3);

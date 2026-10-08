@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/rbtree.h>
 
 static void rbtree_left_rotate(jlos_rbtree_t *tree, jlos_rbtree_node_t *x)
@@ -162,23 +167,22 @@ static jlos_rbtree_node_t *rbtree_maximum(const jlos_rbtree_t *tree, jlos_rbtree
     return x;
 }
 
-void jlos_rbtree_init(jlos_rbtree_t *tree, jlos_rbtree_compare_fn compare)
+void jlos_rbtree_init(jlos_rbtree_t *tree)
 {
     tree->nil.parent = &tree->nil;
     tree->nil.left = &tree->nil;
     tree->nil.right = &tree->nil;
     tree->nil.red = false;
     tree->root = &tree->nil;
-    tree->compare = compare;
 }
 
-void jlos_rbtree_insert(jlos_rbtree_t *tree, jlos_rbtree_node_t *z)
+void jlos_rbtree_insert(jlos_rbtree_t *tree, jlos_rbtree_node_t *z, jlos_rbtree_compare_fn cmp)
 {
     jlos_rbtree_node_t *y = &tree->nil;
     jlos_rbtree_node_t *x = tree->root;
     while (x != &tree->nil) {
         y = x;
-        if (tree->compare(z, x) < 0) {
+        if (cmp(z, x) < 0) {
             x = x->left;
         } else {
             x = x->right;
@@ -187,7 +191,7 @@ void jlos_rbtree_insert(jlos_rbtree_t *tree, jlos_rbtree_node_t *z)
     z->parent = y;
     if (y == &tree->nil) {
         tree->root = z;
-    } else if (tree->compare(z, y) < 0) {
+    } else if (cmp(z, y) < 0) {
         y->left = z;
     } else {
         y->right = z;
@@ -230,14 +234,14 @@ void jlos_rbtree_remove(jlos_rbtree_t *tree, jlos_rbtree_node_t *z)
     }
 }
 
-jlos_rbtree_node_t *jlos_rbtree_find(const jlos_rbtree_t *tree, const jlos_rbtree_node_t *key)
+jlos_rbtree_node_t *jlos_rbtree_find(const jlos_rbtree_t *tree, const jlos_rbtree_node_t *key, jlos_rbtree_compare_fn cmp)
 {
     jlos_rbtree_node_t *x = tree->root;
     while (x != &tree->nil) {
-        int cmp = tree->compare(key, x);
-        if (cmp < 0) {
+        int r = cmp(key, x);
+        if (r < 0) {
             x = x->left;
-        } else if (cmp > 0) {
+        } else if (r > 0) {
             x = x->right;
         } else {
             return x;
@@ -246,12 +250,12 @@ jlos_rbtree_node_t *jlos_rbtree_find(const jlos_rbtree_t *tree, const jlos_rbtre
     return NULL;
 }
 
-jlos_rbtree_node_t *jlos_rbtree_find_le(const jlos_rbtree_t *tree, const jlos_rbtree_node_t *key)
+jlos_rbtree_node_t *jlos_rbtree_find_le(const jlos_rbtree_t *tree, const jlos_rbtree_node_t *key, jlos_rbtree_compare_fn cmp)
 {
     jlos_rbtree_node_t *best = NULL;
     jlos_rbtree_node_t *x = tree->root;
     while (x != &tree->nil) {
-        if (tree->compare(x, key) <= 0) {
+        if (cmp(x, key) <= 0) {
             best = x;
             x = x->right;
         } else {
@@ -312,4 +316,35 @@ jlos_rbtree_node_t *jlos_rbtree_prev(const jlos_rbtree_t *tree, jlos_rbtree_node
 bool jlos_rbtree_empty(const jlos_rbtree_t *tree)
 {
     return tree->root == &tree->nil;
+}
+
+jlos_rbtree_node_t *jlos_rbtree_find_key(const jlos_rbtree_t *tree, const void *key, jlos_rbtree_cmp_key_fn cmp)
+{
+    jlos_rbtree_node_t *x = tree->root;
+    while (x != &tree->nil) {
+        int r = cmp(x, key);
+        if (r < 0) {
+            x = x->right;
+        } else if (r > 0) {
+            x = x->left;
+        } else {
+            return x;
+        }
+    }
+    return NULL;
+}
+
+jlos_rbtree_node_t *jlos_rbtree_find_key_le(const jlos_rbtree_t *tree, const void *key, jlos_rbtree_cmp_key_fn cmp)
+{
+    jlos_rbtree_node_t *best = NULL;
+    jlos_rbtree_node_t *x = tree->root;
+    while (x != &tree->nil) {
+        if (cmp(x, key) <= 0) {
+            best = x;
+            x = x->right;
+        } else {
+            x = x->left;
+        }
+    }
+    return best;
 }

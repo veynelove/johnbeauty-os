@@ -1,8 +1,14 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <net/arp.h>
-#include <kernel/printk.h>
-#include <tools/config.h>
+#include <hal/hal_arch.h>
+#include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "arp"
+#include <kernel/printk.h>
 
 static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
 {
@@ -20,26 +26,13 @@ static uint64_t mac_to_uint64(uint8_t *mac)
     return result;
 }
 
-void jlos_arp_init(jlos_arp_t* self, jlos_ether_frame_provider_t *backend)
+static bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, jlos_net_sk_buff_t *skb)
 {
-    printk_info("initializing ARP protocol\n");
-    self->num_cache_entries = 0;
-    jlos_ether_frame_handler_init(&self->base_handler, backend, 0x806);
-    self->base_handler.on_ether_frame_received = (bool (*)(jlos_ether_frame_handler_t*, uint8_t*, uint32_t))jlos_arp_on_ether_frame_received;
-}
-
-void jlos_arp_destroy(jlos_arp_t* self)
-{
-    jlos_ether_frame_handler_destroy(&self->base_handler);
-}
-
-bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payload, uint32_t size)
-{
-    if (size < sizeof(jlos_arp_message_t)) {
+    if (jlos_net_skb_len(skb) < sizeof(jlos_arp_message_t)) {
         printk_debug("packet too small\n");
         return false;
     }
-    jlos_arp_message_t *arp = (jlos_arp_message_t *)etherframe_payload;
+    jlos_arp_message_t *arp = (jlos_arp_message_t *)skb->data;
     if (arp->hardware_type == 0x0100) {
         if (arp->protocol == 0x0008 && arp->hardware_address_size == 6
             && arp->protocol_address_size == 4 && arp->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
@@ -70,38 +63,63 @@ bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, uint8_t *etherframe_payl
     return false;
 }
 
+void jlos_arp_init(jlos_arp_t* self, jlos_ether_frame_provider_t *backend)
+{
+    printk_info("initializing ARP protocol\n");
+    self->num_cache_entries = 0;
+    jlos_ether_frame_handler_init(&self->base_handler, backend, 0x806);
+    self->base_handler.on_ether_frame_received = (bool (*)(jlos_ether_frame_handler_t *, jlos_net_sk_buff_t *))jlos_arp_on_ether_frame_received;
+}
+
+void jlos_arp_destroy(jlos_arp_t* self)
+{
+    jlos_ether_frame_handler_destroy(&self->base_handler);
+}
+
 void jlos_arp_broadcast_mac_address(jlos_arp_t* self, uint32_t IP_BE)
 {
-    jlos_arp_message_t arp;
-    arp.hardware_type = 0x0100;
-    arp.protocol = 0x0008;
-    arp.hardware_address_size = 6;
-    arp.protocol_address_size = 4;
-    arp.command = 0x0200;
-    uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp.src_mac);
-    arp.src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+    uint32_t max_hdr = sizeof(jlos_ether_frame_header_t);
+    jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(sizeof(jlos_arp_message_t) + max_hdr);
+    if (!skb) {
+        return;
+    }
+    jlos_net_skb_reserve(skb, max_hdr);
+    jlos_arp_message_t *arp = (jlos_arp_message_t *)jlos_net_skb_put(skb, sizeof(jlos_arp_message_t));
+    arp->hardware_type = 0x0100;
+    arp->protocol = 0x0008;
+    arp->hardware_address_size = 6;
+    arp->protocol_address_size = 4;
+    arp->command = 0x0200;
+    uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp->src_mac);
+    arp->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
     uint64_t dst_mac_be = jlos_arp_resolve(self, IP_BE);
-    uint64_to_mac(dst_mac_be, arp.dst_mac);
-    arp.dst_ip = IP_BE;
-    jlos_ether_frame_handler_send(&self->base_handler, dst_mac_be, self->base_handler.etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
+    uint64_to_mac(dst_mac_be, arp->dst_mac);
+    arp->dst_ip = IP_BE;
+    jlos_ether_frame_handler_send(&self->base_handler, dst_mac_be, self->base_handler.etherType_BE, skb);
     printk_debug("broadcast complete\n");
 }
 
 void jlos_arp_request_mac_address(jlos_arp_t* self, uint32_t IP_BE)
 {
-    jlos_arp_message_t arp;
-    arp.hardware_type = 0x0100;
-    arp.protocol = 0x0008;
-    arp.hardware_address_size = 6;
-    arp.protocol_address_size = 4;
-    arp.command = 0x0100;
-    uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp.src_mac);
-    arp.src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
-    for (int i = 0; i < 6; i++) {
-        arp.dst_mac[i] = 0xFF;
+    uint32_t max_hdr = sizeof(jlos_ether_frame_header_t);
+    jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(sizeof(jlos_arp_message_t) + max_hdr);
+    if (!skb) {
+        return;
     }
-    arp.dst_ip = IP_BE;
-    jlos_ether_frame_handler_send(&self->base_handler, 0xFFFFFFFFFFFF, self->base_handler.etherType_BE, (uint8_t *)&arp, sizeof(jlos_arp_message_t));
+    jlos_net_skb_reserve(skb, max_hdr);
+    jlos_arp_message_t *arp = (jlos_arp_message_t *)jlos_net_skb_put(skb, sizeof(jlos_arp_message_t));
+    arp->hardware_type = 0x0100;
+    arp->protocol = 0x0008;
+    arp->hardware_address_size = 6;
+    arp->protocol_address_size = 4;
+    arp->command = 0x0100;
+    uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp->src_mac);
+    arp->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+    for (int i = 0; i < 6; i++) {
+        arp->dst_mac[i] = 0xFF;
+    }
+    arp->dst_ip = IP_BE;
+    jlos_ether_frame_handler_send(&self->base_handler, 0xFFFFFFFFFFFF, self->base_handler.etherType_BE, skb);
     printk_debug("request sent\n");
 }
 
@@ -136,7 +154,7 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
     /* 忙等 + CPU relax，避免 hlt 卡死；超时返回 FFFF 标记未解析 */
     volatile uint32_t timeout = 0;
     while (result == 0xFFFFFFFFFFFF && timeout < 5000000) {
-        __asm__ __volatile__("pause" ::: "memory");
+        jlos_hal_cpu_relax();
         timeout++;
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_NET_UDP_H
 #define _JLOS_NET_UDP_H
 
@@ -58,7 +63,6 @@ void jlos_udp_socket_disconnect(jlos_udp_socket_t* self);
 
 void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_provider_t *backend);
 void jlos_udp_provider_destroy(jlos_udp_provider_t* self);
-bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
 jlos_udp_socket_t *jlos_udp_provider_connect(jlos_udp_provider_t* self, uint32_t ip, uint16_t port);
 jlos_udp_socket_t *jlos_udp_provider_listen(jlos_udp_provider_t* self, uint16_t port);
 void jlos_udp_provider_disconnect(jlos_udp_provider_t* self, jlos_udp_socket_t *socket);

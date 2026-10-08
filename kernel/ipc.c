@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/ipc.h>
 #include <kernel/memory_manager.h>
 
@@ -123,6 +128,20 @@ uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len)
         }
     }
     return read;
+}
+
+void jlos_pipe_ref_inc(jlos_pipe_t *pipe)
+{
+    if (pipe) {
+        pipe->refcount++;
+    }
+}
+
+void jlos_pipe_ref_dec(jlos_pipe_t *pipe)
+{
+    if (pipe && --pipe->refcount == 0) {
+        jlos_pipe_destroy(pipe);
+    }
 }
 
 void jlos_mq_init(jlos_mq_t *mq)

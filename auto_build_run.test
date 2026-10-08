@@ -1,11 +1,24 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 @echo off
 chcp 65001 >nul
 echo ========================================
 echo  自动化构建与启动流程
 echo ========================================
 
+set VMX_PATH=E:\johnbeauty\johnbeauty.vmx
+set VMRUN=F:\vmware\vmrun.exe
+
 echo.
-echo [1/4] 正在远程编译 Ubuntu 项目...
+echo [0/5] 正在关闭 johnbeauty 虚拟机...
+"%VMRUN%" -T player stop "%VMX_PATH%" hard >nul 2>nul
+timeout /t 3 /nobreak >nul
+
+echo.
+echo [1/5] 正在远程编译 Ubuntu 项目...
 ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"
 if errorlevel 1 (
     echo.
@@ -15,17 +28,28 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] 正在下载 ISO 文件到 Windows 桌面...
+echo [2/5] 正在下载 ISO 文件到 Windows 桌面...
 scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Desktop\johnkernel.iso
 if errorlevel 1 (
     echo.
-    echo [错误] 文件下载失败
+    echo [错误] ISO 下载失败
     pause
     exit /b 1
 )
 
 echo.
-echo [3/4] 正在远程删除 Ubuntu 项目编译产物...
+echo [3/5] 正在下载磁盘镜像到 Windows 桌面...
+scp veyne@192.168.159.128:~/johnbeauty-os/disk.vmdk C:\Users\johnbeauty\Desktop\disk.vmdk
+scp veyne@192.168.159.128:~/johnbeauty-os/disk-flat.vmdk C:\Users\johnbeauty\Desktop\disk-flat.vmdk
+if errorlevel 1 (
+    echo.
+    echo [错误] 磁盘镜像下载失败
+    pause
+    exit /b 1
+)
+
+echo.
+echo [4/5] 正在远程删除 Ubuntu 项目编译产物...
 ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean"
 if errorlevel 1 (
     echo.
@@ -35,8 +59,14 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] 正在启动 johnbeauty 虚拟机...
-start "" "F:\vmware\vmplayer.exe" "E:\johnbeauty\johnbeauty.vmx"
+echo [5/5] 正在启动 johnbeauty 虚拟机...
+"%VMRUN%" -T player start "%VMX_PATH%"
+
+if errorlevel 1 (
+    echo.
+    echo [警告] vmrun 启动失败，尝试用 vmplayer 直接启动...
+    start "" "F:\vmware\vmplayer.exe" "%VMX_PATH%"
+)
 
 echo.
 echo ========================================

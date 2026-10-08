@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/sync.h>
 
 extern jlos_task_t *g_current_task_ptr;
@@ -53,7 +58,7 @@ void jlos_semaphore_post(jlos_semaphore_t *sem)
     }
     jlos_task_t *wait = wait_dequeue(&sem->wait_queue);
     if (wait && wait->status == JLOS_TASK_BLOCKED) {
-        JLOS_TASK_SET_READY(wait);
+        jlos_task_wakeup(wait);
     }
     jlos_spin_unlock_irqrestore(&sem->lock, flags);
 }
@@ -111,7 +116,7 @@ void jlos_mutex_unlock(jlos_mutex_t *mutex)
         mutex->locked = 1;
         mutex->owner = wait;
         mutex->recursion = 1;
-        JLOS_TASK_SET_READY(wait);
+        jlos_task_wakeup(wait);
     }
     jlos_spin_unlock_irqrestore(&mutex->lock, flags);
 }
@@ -134,6 +139,7 @@ void jlos_cond_wait(jlos_cond_t *cond, jlos_mutex_t *mutex)
     jlos_spin_unlock_irqrestore(&cond->lock, flags);
     jlos_mutex_unlock(mutex);
     jlos_task_manager_schedule(g_task_manager_ptr);
+    jlos_mutex_lock(mutex);
 }
 
 void jlos_cond_signal(jlos_cond_t *cond)
@@ -141,7 +147,7 @@ void jlos_cond_signal(jlos_cond_t *cond)
     uint32_t flags = jlos_spin_lock_irqsave(&cond->lock);
     jlos_task_t *wait = wait_dequeue(&cond->wait_queue);
     if (wait && wait->status == JLOS_TASK_BLOCKED) {
-        JLOS_TASK_SET_READY(wait);
+        jlos_task_wakeup(wait);
     }
     jlos_spin_unlock_irqrestore(&cond->lock, flags);
 }
@@ -152,7 +158,7 @@ void jlos_cond_broadcast(jlos_cond_t *cond)
     jlos_task_t *wait = NULL;
     while ((wait = wait_dequeue(&cond->wait_queue))) {
         if (wait->status == JLOS_TASK_BLOCKED) {
-            JLOS_TASK_SET_READY(wait);
+            jlos_task_wakeup(wait);
         }
     }
     jlos_spin_unlock_irqrestore(&cond->lock, flags);

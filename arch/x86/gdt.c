@@ -1,13 +1,19 @@
-#include <arch/x86/gdt.h>
-#include <hal/mmu.h>
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-extern uint32_t _text_start, _text_end;
-extern uint32_t _rodata_start, _rodata_end;
-extern uint32_t _data_start, _data_end;
-extern uint32_t _bss_start, _bss_end;
+#include <arch/x86/gdt.h>
+#include <arch/x86/smp.h>
+#include <hal/mmu.h>
+#include <hal/smp.h>
+
+extern uint32_t _text_start,    _text_end;
+extern uint32_t _rodata_start,  _rodata_end;
+extern uint32_t _data_start,    _data_end;
+extern uint32_t _bss_start,     _bss_end;
 
 static jlos_hal_kernel_segments_t s_kernel_segments = {0};
-static jlos_mmu_t s_kernel_gdt;
 
 void jlos_hal_kernel_segments_init(void)
 {
@@ -76,9 +82,15 @@ uint32_t jlos_gdt_segment_descriptor_limit(jlos_gdt_segment_descriptor_t* self)
     return result;
 }
 
-void jlos_mmu_init()
+void jlos_mmu_init(void)
 {
-    jlos_mmu_t *gdt = &s_kernel_gdt;
+    jlos_arch_cpu_gdt_init(0);
+}
+
+void jlos_arch_cpu_gdt_init(uint32_t cpu)
+{
+    jlos_mmu_t *gdt = (jlos_mmu_t *)((uint8_t *)&jlos_cpu_gdt + jlos_smp_per_cpu_offset(cpu));
+
     jlos_gdt_segment_descriptor_init(&gdt->null_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->unused_segment_selector, 0, 0, 0);
     jlos_gdt_segment_descriptor_init(&gdt->code_segment_selector, 0, 0xFFFFFFFF, 0x9A);
@@ -87,6 +99,8 @@ void jlos_mmu_init()
     jlos_gdt_segment_descriptor_init(&gdt->user_code_segment_selector, 0, 0xFFFFFFFF, 0xFA);
     jlos_gdt_segment_descriptor_init(&gdt->user_data_segment_selector, 0, 0xFFFFFFFF, 0xF2);
     jlos_gdt_segment_descriptor_init(&gdt->tss_segment_selector, 0, 0, 0x89);
+
+    jlos_gdt_segment_descriptor_init(&gdt->per_cpu_segment_selector, jlos_smp_per_cpu_offset(cpu), 0xFFFFFFFF, 0x92);
     uint32_t i[2];
     i[1] = (uint32_t)gdt;
     i[0] = sizeof(jlos_mmu_t) << 16;
@@ -94,17 +108,19 @@ void jlos_mmu_init()
     __asm__ __volatile__(
         "lgdt %0                           \n\t"
         /* 强制重载所有数据段描述符缓存 */
-        "movw   $0x18, %%ax                \n\t"   /* DATA_SEL = 0x18 (RPL0, GDT) */
+        "movw   $0x18,  %%ax               \n\t"   /* DATA_SEL = 0x18 (RPL0, GDT) */
         "movw   %%ax,   %%ds               \n\t"
         "movw   %%ax,   %%es               \n\t"
         "movw   %%ax,   %%fs               \n\t"
+        "movw   $0x38,  %%ax               \n\t"
         "movw   %%ax,   %%gs               \n\t"
+        "movw   $0x18,  %%ax               \n\t"
         "movw   %%ax,   %%ss               \n\t"
         /* 远跳强制重载 CS 描述符缓存（否则CS selector仍=GRUB 0x08 → 指向我们unused=0描述符，
          * 下次任何触发描述符重查就会 #GP → triple fault）
          */
         "ljmp   $0x10, $1f                 \n\t"   /* CODE_SEL = 0x10 */
-        "1:                                 \n\t"
+        "1:                                \n\t"
         : : "m" (*(((uint8_t *) i)+2)) : "eax", "memory"
     );
 }
@@ -145,5 +161,5 @@ void jlos_gdt_set_tss(jlos_mmu_t *self, uint32_t base, uint32_t limit)
 
 jlos_mmu_t *jlos_mmu_get_kernel(void)
 {
-    return &s_kernel_gdt;
+    return this_cpu_ptr(jlos_cpu_gdt);
 }

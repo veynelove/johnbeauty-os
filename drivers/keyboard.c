@@ -1,7 +1,12 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/keyboard.h>
-#include <kernel/printk.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "kbd"
+#include <kernel/printk.h>
 
 void jlos_keyboard_event_handler_init(jlos_keyboard_event_handler_t* self)
 {
@@ -125,6 +130,9 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
         case 0x2A: case 0x36: shift = true; break;
         case 0xAA: case 0xB6: shift = false; break;
         case 0x3A: break;
+
+        case 0x49: if(keyboard->handler->on_special_key) keyboard->handler->on_special_key(keyboard->handler, JLOS_KEY_PGUP, shift); break;
+        case 0x51: if(keyboard->handler->on_special_key) keyboard->handler->on_special_key(keyboard->handler, JLOS_KEY_PGDN, shift); break;
         
         default:
             break;

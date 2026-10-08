@@ -1,4 +1,10 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/cpu_state.h>
+#include <arch/x86/gdt.h>
 #include <hal/cpu_state.h>
 
 bool jlos_cpu_state_is_user_mode(jlos_cpu_state_t *s)
@@ -24,6 +30,21 @@ uint32_t jlos_cpu_state_get_syscall_num(jlos_cpu_state_t *s)
 void jlos_cpu_state_set_retval(jlos_cpu_state_t *s, int32_t val)
 {
     ((jlos_x86_regs_t *)s)->eax = val;
+}
+
+int32_t jlos_cpu_state_get_retval(jlos_cpu_state_t *s)
+{
+    return ((jlos_x86_regs_t *)s)->eax;
+}
+
+void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uint32_t entry, uint32_t stack_top)
+{
+    jlos_x86_regs_t *r = (jlos_x86_regs_t *)s;
+    r->eip = entry;
+    r->user_esp = stack_top;
+    r->cs = JLOS_X86_USER_CS;
+    r->user_ss = JLOS_X86_USER_DS;
+    r->eflags = 0x0200;
 }
 
 void jlos_cpu_state_record_user_stack(jlos_cpu_state_t *curr_cpu, jlos_cpu_state_t *cpu)

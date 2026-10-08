@@ -1,8 +1,14 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_NET_TCP_H
 #define _JLOS_NET_TCP_H
 
 #include <net/ipv4.h>
 #include <dsa/hash_chain.h>
+#include <kernel/sync.h>
 
 typedef enum {
     JLOS_TCP_CLOSED = 0,
@@ -15,6 +21,7 @@ typedef enum {
     JLOS_TCP_CLOSING,
     JLOS_TCP_TIME_WAIT,
     JLOS_TCP_CLOSE_WAIT,
+    JLOS_TCP_LAST_ACK,
 } jlos_tcp_socket_state_t;
 
 typedef enum {
@@ -75,6 +82,8 @@ struct jlos_tcp_socket {
     jlos_tcp_provider_t     *backend;
     jlos_tcp_handler_t      *handler;
     jlos_tcp_socket_state_t state;
+    jlos_cond_t             state_cond;
+    jlos_mutex_t            state_mutex;
     jlos_hash_node_t        hash_node;
     bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*send)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
@@ -105,7 +114,6 @@ void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self);
 
 void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_provider_t *backend);
 void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self);
-bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t* self, uint32_t srcIP_BE, uint32_t dstIP_BE, uint8_t *internet_protocol_payload, uint32_t size);
 jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t ip, uint16_t port);
 jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t port);
 void jlos_tcp_provider_disconnect(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket);

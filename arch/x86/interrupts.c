@@ -1,8 +1,12 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/interrupts.h>
 #include <arch/x86/cpu_state.h>
 #include <arch/x86/io.h>
 #include <arch/x86/gdt.h>
-#include <hal/timer.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
@@ -11,21 +15,23 @@
 #include <hal/hal_arch.h>
 #include <kernel/initcall.h>
 #include <kernel/paging.h>
-#include <kernel/printk.h>
+#include <kernel/hrtimer.h>
+#include <kernel/multitask.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
+#include <kernel/printk.h>
 
 extern void jlos_arch_tss_init_for_asm(void);
-extern jlos_task_t *g_current_task_ptr;
 
-static jlos_irq_manager_t s_interrupt_manager;
-jlos_irq_manager_t        *jlos_active_irq_manager = &s_interrupt_manager;
+extern jlos_task_t              *g_current_task_ptr;
+static jlos_irq_manager_t       s_interrupt_manager;
+jlos_irq_manager_t              *jlos_active_irq_manager = &s_interrupt_manager;
 
 /* 保存 syscall 的 ring3 上下文，用于从 ring0 返回 ring3 */
 uint32_t                        jlos_syscall_ring3_ctx = 0;
 uint32_t                        jlos_syscall_ring3_kstack = 0;
 
-jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[256];
+jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[JLOS_IDT_ENTRIES];
 
 /* PIC IRQ 动态屏蔽：驱动注册 handler 时自动 unmask，避免无处理的 IRQ 导致 UNHANDLED */
 static uint8_t                  s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
@@ -125,7 +131,7 @@ void jlos_irq_manager_init(void)
     /* 初始化 TSS 基地址 (供汇编使用) */
     jlos_arch_tss_init_for_asm();
     
-    for (uint16_t i = 0; i < 256; i++) {
+    for (uint16_t i = 0; i < JLOS_IDT_ENTRIES; i++) {
         jlos_set_interrupt_descriptor_table_entry(i, code_segment, &jlos_irq_ignore_request, 0,
             IDT_INTERRUPT_GATE);
     }
@@ -200,12 +206,16 @@ void jlos_irq_manager_init(void)
     jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
 
+    jlos_arch_irq_load_idt();
+}
+
+void jlos_arch_irq_load_idt(void)
+{
     jlos_idt_pointer_t idt;
-    idt.size = 256 * sizeof(jlos_gate_descriptor_t) - 1;
+    idt.size = JLOS_IDT_ENTRIES * sizeof(jlos_gate_descriptor_t) - 1;
     idt.base = (uint32_t)jlos_interrupt_descriptor_table;
     __asm__ __volatile__("lidt %0" : : "m" (idt));
 }
-
 
 void jlos_irq_manager_activate(void)
 {
@@ -233,6 +243,19 @@ uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)
     return self->hardware_interrupt_offset;
 }
 
+static void jlos_signal_deliver_check(uint32_t esp)
+{
+    jlos_task_t *curr = g_current_task_ptr;
+    if (!curr || !curr->is_user_process) {
+        return;
+    }
+    jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
+    if (!(cpu->cs & 3)) {
+        return;
+    }
+    jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)cpu);
+}
+
 uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uint32_t esp)
 {
     /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
@@ -240,6 +263,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
         jlos_irq_context_t context;
         jlos_irq_context_init(&context, esp);
         jlos_paging_page_fault_handler(&context);
+        jlos_signal_deliver_check(esp);
         return esp;
     }
     
@@ -289,25 +313,20 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
             interrupt, cpu->error, cpu->eip, cpu->cs, cpu->eflags);
     }
 
-    /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
-    if (interrupt == 0 && self && self->task_manager) {
-        jlos_hal_timer_on_tick();
-        jlos_task_t *curr = jlos_task_manager_curr_task_on_tick(self->task_manager);
-
-        bool resched = self->task_manager->need_resched;
-        if (!curr || curr->status != JLOS_TASK_RUNNING || (KERNEL_CONFIG_PREEMPTIVE && !curr->remain_slice)) {
-            resched = true;
-        }
-        if (resched) {
-            jlos_task_manager_schedule(self->task_manager);
-        }
-    }
+    /* EOI 先于 schedule: 否则切换后 IRQ0 保持 IN-SERVICE, 压制全部中断 (经典 early-EOI) */
     if (vector >= 0x20 && vector < 0x30) {
         jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
         if (vector >= 0x28) {
             jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
         }
     }
+
+    /* IRQ0 (PIT): 先 tick 再调度，调度器读到最新 tick */
+    if (interrupt == 0 && self && self->task_manager) {
+        jlos_hrtimer_interrupt();
+        jlos_task_manager_tick_and_schedule(self->task_manager);
+    }
+    jlos_signal_deliver_check(esp);
     return esp;
 }
 

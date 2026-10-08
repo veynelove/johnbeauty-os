@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 ENTRY(loader)
 OUTPUT_FORMAT(elf32-i386)
 OUTPUT_ARCH(i386:i386)
@@ -33,6 +38,7 @@ SECTIONS
     {
         _text_start = .;
         *(.text*)
+        KEEP(*(.trampoline))
         . = ALIGN(4K);
         _text_end = .;
     } :code
@@ -57,6 +63,13 @@ SECTIONS
         __initcall2_start = .; KEEP(*(.initcall2))  __initcall2_end = .;
         __initcall3_start = .; KEEP(*(.initcall3))  __initcall3_end = .;
         __initcall4_start = .; KEEP(*(.initcall4))  __initcall4_end = .;
+        __initcall5_start = .; KEEP(*(.initcall5))  __initcall5_end = .;
+        __jlos_test_start = .; KEEP(*(.jlos_test))  __jlos_test_end = .;
+        . = ALIGN(64);
+        __per_cpu_start = .;
+        KEEP(*(.data..percpu))
+        . = ALIGN(64);
+        __per_cpu_end = .;
         . = ALIGN(4K);
         _data_end = .;
     } :data

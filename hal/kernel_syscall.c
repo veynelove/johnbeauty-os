@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/kernel_syscall.h>
 
 jlos_hal_syscall_entry_fn          jlos_hal_syscall_entry          = 0;

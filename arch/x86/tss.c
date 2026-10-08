@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <arch/x86/tss.h>
 
 void jlos_x86_tss_init(jlos_x86_tss_t *self, uint32_t esp0, uint16_t ss0)

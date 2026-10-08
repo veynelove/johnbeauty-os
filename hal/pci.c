@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/pci.h>
 #include <kernel/initcall.h>
 #include <kernel/memory_manager.h>
@@ -41,7 +46,7 @@ static void pci_subsys_init(void)
     jlos_hal_pci_init();
     jlos_memory_manager_switch_low();
     jlos_hal_pci_enumerate_and_bind_drivers();
-    Jlos_memory_manager_switch_main();
+    jlos_memory_manager_switch_main();
 }
 
 JLOS_INITCALL(JLOS_INITCALL_SUBSYS, pci_subsys_init);

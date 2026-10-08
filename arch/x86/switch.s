@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 .text
 .global jlos_hal_context_switch
 .type   jlos_hal_context_switch, @function

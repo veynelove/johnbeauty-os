@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_H
 #define _JLOS_HAL_H
 
@@ -41,6 +46,13 @@ typedef struct {
     void        (*init_io32)(jlos_io32_t *self, uint16_t port);
     void        (*write_io32)(jlos_io32_t *self, uint32_t val);
     uint32_t    (*read_io32)(jlos_io32_t *self);
+
+    uint8_t     (*read_mmio8)(const volatile void *addr);
+    uint16_t    (*read_mmio16)(const volatile void *addr);
+    uint32_t    (*read_mmio32)(const volatile void *addr);
+    void        (*write_mmio8)(volatile void *addr, uint8_t val);
+    void        (*write_mmio16)(volatile void *addr, uint16_t val);
+    void        (*write_mmio32)(volatile void *addr, uint32_t val);
 } jlos_hal_io_ops_t;
 
 typedef struct {

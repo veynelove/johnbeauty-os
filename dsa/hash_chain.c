@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dsa/hash_chain.h>
 #include <kernel/memory_manager.h>
 #include <kernel/printk.h>
@@ -85,6 +90,20 @@ void jlos_hash_chain_remove(jlos_hash_chain_t *self, jlos_hash_node_t *node)
     jlos_spin_unlock_irqrestore(&self->lock, flags);
 }
 
+void jlos_hash_chain_for_each(jlos_hash_chain_t *self, jlos_hash_chain_visit_fn visit, void *arg)
+{
+    uint32_t fl = jlos_spin_lock_irqsave(&self->lock);
+    for (uint32_t i = 0; i < self->bucket_count; i++) {
+        jlos_hash_node_t *node = self->buckets[i].first;
+        while (node) {
+            jlos_hash_node_t *next = node->next;
+            visit(node, arg);
+            node = next;
+        }
+    }
+    jlos_spin_unlock_irqrestore(&self->lock, fl);
+}
+
 void jlos_hash_chain_destroy(jlos_hash_chain_t *self)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&self->lock);
@@ -115,4 +134,14 @@ uint32_t jlos_hash_uint32(const void *key)
 uint32_t jlos_hash_ptr(const void *key)
 {
     return (uint32_t)key;
+}
+
+uint32_t jlos_hash_str(const void *key)
+{
+    const char *s = (const char *)key;
+    uint32_t h = 0;
+    while (*s) {
+        h = h * JLOS_HASH_STR_PREME + (uint8_t)*s++;
+    }
+    return h;
 }

@@ -1,14 +1,20 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <kernel/memory_manager.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
-#include <kernel/printk.h>
 #include <kernel/device.h>
 #include <kernel/initcall.h>
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
+#include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "mm"
+#include <kernel/printk.h>
 
 static jlos_memory_manager_t    s_low_memory_manager;
 static jlos_memory_manager_t    s_main_memory_manager;
@@ -24,13 +30,11 @@ static jlos_spinlock_t          s_heap_lock = JLOS_SPINLOCK_INIT;
 
 static inline int mm_size_to_class(size_t size, int max_class)
 {
-    int cls = 0;
-    size_t s = JLOS_MM_MIN_ALLOC;
-    while (s < size && cls < max_class) {
-        s <<= 1;
-        cls++;
+    if (size <= JLOS_MM_MIN_ALLOC) {
+        return 0;
     }
-    return cls;
+    int cls = JLOS_MM_CLASS_COUNT - __builtin_clz((unsigned)(size - 1)) - 4;
+    return cls > max_class ? max_class : cls;
 }
 
 static void mm_class_add(jlos_memory_manager_t *self, int cls, jlos_memory_chunk_t *chunk)
@@ -122,7 +126,7 @@ void jlos_memory_manager_init_main(void)
         }
         uint32_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
         uint32_t phys = (uint32_t)VIRT_TO_PHYS(pf);
-        if (!jlos_paging_map(jlos_active_paging_context, va, phys, JLOS_PTE_KERNEL_RW)) {
+        if (!jlos_paging_map(jlos_hal_paging_get_active_context(), va, phys, JLOS_PG_KERNEL_RW)) {
             printk_err("out of memory: paging map failed at page %u\n", i);
             jlos_page_frame_free(pf);
             for (;;) {
@@ -152,7 +156,7 @@ void jlos_memory_manager_switch_low(void)
     jlos_active_memory_manager = jlos_low_memory_manager;
 }
 
-void Jlos_memory_manager_switch_main(void)
+void jlos_memory_manager_switch_main(void)
 {
     jlos_active_memory_manager = jlos_main_memory_manager;
 }
@@ -166,28 +170,23 @@ void jlos_memory_manager_destroy(jlos_memory_manager_t* self)
 
 static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_t *self, size_t size)
 {
-    if (!jlos_active_paging_context) {
+    if (!jlos_hal_paging_get_active_context()) {
         return NULL;
     }
     size_t pages_needed = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
     uint8_t *new_heap_start = self->heap_current;
 
-    void *vframe = jlos_page_frame_reserve_bulk(pages_needed);
+    void *vframe = jlos_page_frame_alloc_n((uint32_t)pages_needed);
     if (!vframe) {
         return NULL;
     }
     uint32_t phys = (uint32_t)VIRT_TO_PHYS(vframe);
+    size_t map_size = pages_needed * JLOS_PAGE_SIZE;
+    if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uint32_t)new_heap_start, phys, map_size, JLOS_PG_KERNEL_RW)) {
+        jlos_page_frame_free_n(vframe, (uint32_t)pages_needed);
+        return NULL;
+    }
     for (size_t i = 0; i < pages_needed; i++) {
-        uint32_t virtual_addr = (uint32_t)(new_heap_start + i * JLOS_PAGE_SIZE);
-        if (!jlos_paging_map(jlos_active_paging_context, virtual_addr, phys + i * JLOS_PAGE_SIZE, JLOS_PTE_KERNEL_RW)) {
-            for (uint32_t j = 0; j < i; j++) {
-                jlos_paging_unmap(jlos_active_paging_context, (uint32_t)(new_heap_start + j * JLOS_PAGE_SIZE));
-                jlos_page_frame_clear_owner_type(phys + j * JLOS_PAGE_SIZE);
-                jlos_page_frame_refcount_dec(phys + j * JLOS_PAGE_SIZE);
-            }
-            jlos_page_frame_free_bulk(phys, pages_needed);
-            return NULL;
-        }
         jlos_page_frame_set_owner_type(phys + i * JLOS_PAGE_SIZE, (void *)jlos_active_memory_manager, JLOS_PAGE_FRAME_TYPE_KV_HEAP);
         jlos_page_frame_refcount_inc(phys + i * JLOS_PAGE_SIZE);
     }
@@ -305,7 +304,6 @@ void jlos_memory_manager_free(jlos_memory_manager_t* self, void *ptr)
     int cls = mm_size_to_class(chunk->size, self->max_class);
     mm_class_add(self, cls, chunk);
     jlos_spin_unlock_irqrestore(&s_heap_lock, fl);
-    ptr = NULL;
 }
 
 void *jlos_kvalloc(size_t size)
@@ -317,7 +315,7 @@ void *jlos_kvalloc(size_t size)
         size_t raw = size + sizeof(jlos_kv_contig_hdr_t);
         size_t npages = JLOS_EXCEPT_CEIL(raw, JLOS_PAGE_FRAME_SIZE);
         if (npages <= JLOS_KV_CONTIG_MAX_PAGES) {
-            void *vframe = jlos_page_frame_reserve_bulk((uint32_t)npages);
+            void *vframe = jlos_page_frame_alloc_n((uint32_t)npages);
             if (vframe) {
                 jlos_kv_contig_hdr_t *hdr = (jlos_kv_contig_hdr_t *)vframe;
                 hdr->magic = JLOS_KV_CONTIG_MAGIC;
@@ -362,11 +360,14 @@ void jlos_kvfree(void *ptr)
                 for (uint32_t i = 0; i < np; i++) {
                     jlos_page_frame_clear_owner_type(phys_hdr + i * JLOS_PAGE_FRAME_SIZE);
                 }
-                jlos_page_frame_free_bulk(phys_hdr, np);
+                jlos_page_frame_free_n(hdr, np);
             }
             return;
         }
         printk_err("bad type ptr = 0x%x, type = %u, owner = %p\n", va, (unsigned)t, owner);
+        for (;;) {
+            jlos_hal_halt();
+        }
         return;
     }
     if (va >= KERNEL_HEAP_VIRT_BASE && jlos_active_memory_manager) {
@@ -591,7 +592,7 @@ void jlos_memory_slab_cache_free(jlos_memory_slab_cache_t *cache, const void *ob
     uint32_t fl = jlos_spin_lock_irqsave(&s_slab_lock);
     uint32_t page_base = JLOS_ALIGN_DOWN(obj, JLOS_PAGE_FRAME_SIZE);
     jlos_memory_slab_page_t *sp = (jlos_memory_slab_page_t *)page_base;
-    
+
     bool was_full = (sp->inuse == sp->obj_count);
     *(void **)obj = sp->freelist;
     sp->freelist = (void *)obj;

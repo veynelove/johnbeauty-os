@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_IO_H
 #define _JLOS_HAL_IO_H
 
@@ -34,5 +39,13 @@ uint16_t jlos_io16_read(jlos_io16_t *self);
 void jlos_io32_init(jlos_io32_t *self, uint16_t port);
 void jlos_io32_write(jlos_io32_t *self, uint32_t val);
 uint32_t jlos_io32_read(jlos_io32_t *self);
+
+uint8_t jlos_io_mmio_read8(const volatile void *addr);
+uint16_t jlos_io_mmio_read16(const volatile void *addr);
+uint32_t jlos_io_mmio_read32(const volatile void *addr);
+
+void jlos_io_mmio_write8(volatile void *addr, uint8_t val);
+void jlos_io_mmio_write16(volatile void *addr, uint16_t val);
+void jlos_io_mmio_write32(volatile void *addr, uint32_t val);
 
 #endif

@@ -1,8 +1,13 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/diag.h>
-#include <hal/timer.h>
-#include <kernel/printk.h>
+#include <kernel/timek.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "diag"
+#include <kernel/printk.h>
 
 #if HAL_CONFIG_TRACE_IO
 
@@ -38,9 +43,9 @@ static void trace_ensure_init(void)
 static uint32_t trace_safe_tick(void)
 {
     /* timer 可能还没初始化；返回 0 不影响排序 */
-    extern uint32_t jlos_hal_timer_get_ticks(void);
-    if (jlos_hal_timer_get_ticks == 0) return 0;
-    return jlos_hal_timer_get_ticks();
+    extern uint32_t jlos_timek_get_ticks(void);
+    if (jlos_timek_get_ticks == 0) return 0;
+    return jlos_timek_get_ticks();
 }
 
 void jlos_hal_trace_io(const char *file, uint16_t line,

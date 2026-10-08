@@ -1,8 +1,20 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
-#include <kernel/printk.h>
+#include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "eth"
+#include <kernel/printk.h>
+
+static void jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, jlos_net_sk_buff_t *skb)
+{
+    (void)self;
+    jlos_net_skb_free(skb);
+}
 
 void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend)
 {
@@ -15,14 +27,6 @@ void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t
 void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self)
 {
     jlos_amd_am79c973_set_handler(self->backend, NULL);
-}
-
-bool jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
-{
-    (void)self;
-    (void)buffer;
-    (void)size;
-    return false;
 }
 
 void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
@@ -102,8 +106,8 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     jlos_memset(self->send_buffer_descr, 0, NUM_SEND_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t));
     jlos_memset(self->recv_buffer_descr, 0, NUM_RECV_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t));
 
-    self->init_block->recv_buffer_descr_address = (uint32_t)self->recv_buffer_descr;
-    self->init_block->send_buffer_descr_address = (uint32_t)self->send_buffer_descr;
+    self->init_block->recv_buffer_descr_address = VIRT_TO_PHYS(self->recv_buffer_descr);
+    self->init_block->send_buffer_descr_address = VIRT_TO_PHYS(self->send_buffer_descr);
 
     uint32_t send_buffers_base = (((uint32_t)&self->send_buffers[0][0]) + 0x7FF) & ~((uint32_t)0x7FF);
     uint32_t recv_buffers_base = (((uint32_t)&self->recv_buffers[0][0]) + 0x7FF) & ~((uint32_t)0x7FF);
@@ -112,14 +116,14 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
 
     uint32_t buffer_size_bs = (2048 / 256) << 16;
     for (uint8_t i = 0; i < NUM_SEND_BUFFERS; i++) {
-        self->send_buffer_descr[i].address = (uint32_t)&self->send_buffers[i][0];
+        self->send_buffer_descr[i].address = VIRT_TO_PHYS(&self->send_buffers[i][0]);
         self->send_buffer_descr[i].flags = buffer_size_bs;
         self->send_buffer_descr[i].flags2 = 0;
         self->send_buffer_descr[i].avail = 0x8000;
         self->send_buffer_descr[i].reserved = 0;
     }
     for (uint8_t i = 0; i < NUM_RECV_BUFFERS; i++) {
-        self->recv_buffer_descr[i].address = (uint32_t)&self->recv_buffers[i][0];
+        self->recv_buffer_descr[i].address = VIRT_TO_PHYS(&self->recv_buffers[i][0]);
         self->recv_buffer_descr[i].flags = (0x80000000 | buffer_size_bs | 0xF800);
         self->recv_buffer_descr[i].flags2 = 0;
         self->recv_buffer_descr[i].avail = 0x8000;
@@ -157,7 +161,7 @@ void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self)
     temp = jlos_io16_read(&self->register_data_port);
     jlos_io16_write(&self->register_data_port, (temp & 0x0FFF) | 0x0115);
 
-    uint32_t init_block_addr = (uint32_t)self->init_block;
+    uint32_t init_block_addr = VIRT_TO_PHYS(self->init_block);
     jlos_io16_write(&self->register_address_port, 1);
     jlos_io16_write(&self->register_data_port, init_block_addr & 0xFFFF);
     jlos_io16_write(&self->register_address_port, 2);
@@ -247,8 +251,7 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size
     if (size > 1518) {
         size = 1518;
     }
-    for (uint8_t *src = buffer + size - 1, *dst =
-         (uint8_t *)(self->send_buffer_descr[send_descriptor].address + size - 1);
+    for (uint8_t *src = buffer + size - 1, *dst = (uint8_t *)(PHYS_TO_VIRT(self->send_buffer_descr[send_descriptor].address) + size - 1);
          src >= buffer; src--, dst--)
     {
         *dst = *src;
@@ -315,10 +318,12 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
             if (size > 64) {
                 size -= 4;
             }
-            uint8_t *buffer = (uint8_t *)(self->recv_buffer_descr[idx].address);
+            uint8_t *buffer = (uint8_t *)PHYS_TO_VIRT(self->recv_buffer_descr[idx].address);
             if (self->handler) {
-                if (self->handler->on_raw_data_received(self->handler, buffer, size)) {
-                    jlos_amd_am79c973_send(self, buffer, size);
+                jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(size);
+                if (skb) {
+                    jlos_memcpy(jlos_net_skb_put(skb, size), buffer, size);
+                    self->handler->on_raw_data_received(self->handler, skb);
                 }
             }
         }

@@ -1,58 +1,70 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/spinlock.h>
 
 void jlos_spinlock_init(jlos_spinlock_t *lock)
 {
-    if (!lock) return;
-    lock->lock = 0;
-    lock->irq_state = 0;
-    lock->recursion_depth = 0;
+    if (!lock) {
+        return;
+    }
+    lock->lock_word.value = 0;
 }
 
 void jlos_spinlock_destroy(jlos_spinlock_t *lock)
 {
-    if (!lock) return;
-    lock->lock = 0;
-    lock->irq_state = 0;
-    lock->recursion_depth = 0;
+    if (!lock) {
+        return;
+    }
+    lock->lock_word.value = 0;
+}
+
+void jlos_spin_lock(jlos_spinlock_t *lock)
+{
+    if (!lock) {
+        return;
+    }
+    uint16_t my_ticket;
+    __asm__ __volatile__(
+        "movw $1, %%ax\n\t"
+        "lock xaddw %%ax, %1\n\t"
+        : "=a"(my_ticket), "+m"(lock->lock_word.tickets.next)
+        : : "memory"
+    );
+    while (lock->lock_word.tickets.owner != my_ticket) {
+        __asm__ __volatile__("pause" ::: "memory");
+    }
+    jlos_mb();
+}
+
+void jlos_spin_unlock(jlos_spinlock_t *lock)
+{
+    if (!lock) {
+        return;
+    }
+    jlos_mb();
+    lock->lock_word.tickets.owner++;
 }
 
 uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock)
 {
-    if (!lock) return 0;
+    if (!lock) {
+        return 0;
+    }
     uint32_t flags;
     __asm__ __volatile__("pushf; pop %0; cli" : "=r"(flags) :: "memory");
 
-    if (lock->recursion_depth > 0) {
-        lock->recursion_depth++;
-        return flags;
-    }
-
-    register volatile uint32_t * const lockp = &lock->lock;
-    __asm__ __volatile__(
-    "1:\n\t"
-        "movl $1, %%eax\n\t"
-        "xchgl %%eax, %1\n\t"
-        "test %%eax, %%eax\n\t"
-        "jz 2f\n\t"
-        "pause\n\t"
-        "jmp 1b\n\t"
-    "2:\n\t"
-        : "+m"(*lockp) : : "eax", "memory"
-    );
-    
-    jlos_mb();
-    lock->recursion_depth = 1;
-    lock->irq_state = flags;
+    jlos_spin_lock(lock);
     return flags;
 }
 
 void jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags)
 {
-    if (!lock || lock->recursion_depth <= 0) return;
-    lock->recursion_depth--;
-    if (lock->recursion_depth == 0) {
-        jlos_mb();
-        __asm__ __volatile__("movl $0, %0" : "+m"(lock->lock) :: "memory");
-        __asm__ __volatile__("push %0; popf" :: "r"(flags) : "memory", "cc");
+    if (!lock) {
+        return;
     }
+    jlos_spin_unlock(lock);
+    __asm__ __volatile__("push %0; popf" :: "r"(flags) : "memory", "cc");
 }

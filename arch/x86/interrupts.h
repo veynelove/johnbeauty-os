@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_ARCH_X86_INTERRUPTS_H
 #define _JLOS_ARCH_X86_INTERRUPTS_H
 
@@ -7,10 +12,11 @@
 #include <kernel/multitask.h>
 
 #define KERNEL_FIRST_INTERRUPT_VECTOR 0x20
+#define JLOS_IDT_ENTRIES 256
 
 struct jlos_irq_manager {
     uint16_t                hardware_interrupt_offset;
-    void                    *handles[256];
+    void                    *handles[JLOS_IDT_ENTRIES];
     jlos_task_manager_t     *task_manager;
     jlos_io8_slow_t         pic_master_command;
     jlos_io8_slow_t         pic_master_data;
@@ -65,5 +71,7 @@ void jlos_handle_interrupt_request0x0e();
 void jlos_handle_interrupt_request0x0f();
 void jlos_handle_interrupt_request0x31();
 void jlos_handle_interrupt_request0x80();
+
+void jlos_arch_irq_load_idt(void);
 
 #endif

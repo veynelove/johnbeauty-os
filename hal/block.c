@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/block.h>
 #include <hal/diag.h>
 #include <drivers/ata.h>
@@ -48,8 +53,10 @@ static int ata_pio28_read_sectors(jlos_hal_block_dev_t *self, uint64_t lba, uint
     uint32_t total_bytes = count * self->bytes_per_sector;
     (void)total_bytes;
     for (uint32_t i = 0; i < count; i++) {
-        jlos_ata_read28(block_ata(self), (uint32_t)lba + i, buf + i * self->bytes_per_sector,
-            (int)self->bytes_per_sector);
+        if (jlos_ata_read28(block_ata(self), (uint32_t)lba + i, buf + i * self->bytes_per_sector,
+            (int)self->bytes_per_sector) != 0) {
+            return -1;
+        }
     }
     return 0;
 }
@@ -89,13 +96,15 @@ void jlos_hal_block_ata_pio28_create(jlos_hal_block_dev_t *self, uint16_t port_b
         return;
     }
     self->dev_type = JLOS_HAL_BLOCK_DEV_ATA_PIO28;
-    self->bytes_per_sector = 512;
+    self->bytes_per_sector = JLOS_BLOCK_SECTOR_SIZE;
     self->total_sectors = 0;
     self->ops = &s_ata_pio28_ops;
     self->inited = 0;
     jlos_ata_init(block_ata(self), port_base, master);
+    jlos_ata_identify(block_ata(self));
     self->bytes_per_sector = block_ata(self)->bytes_per_sector;
-    self->inited = 1;
+    self->total_sectors = block_ata(self)->total_sectors;
+    self->inited = (self->total_sectors > 0) ? 1 : 0;
 }
 
 void jlos_hal_block_init(jlos_hal_block_dev_t *self)

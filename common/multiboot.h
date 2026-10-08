@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* multiboot.h - Multiboot header file.
  * Copyright (C) 1999,2003,2007,2008,2009  Free Software Foundation, Inc.
  *

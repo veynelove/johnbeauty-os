@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef _JLOS_HAL_BLOCK_H
 #define _JLOS_HAL_BLOCK_H
 
@@ -5,13 +10,15 @@
 
 #define JLOS_HAL_BLOCK_PRIV_SIZE 64
 
-#define JLOS_ATA28_LBA_MAX 0x0FFFFFFFu
+#define JLOS_ATA28_LBA_MAX      0x0FFFFFFFu
+#define JLOS_BLOCK_SECTOR_SIZE  512
 
 typedef enum {
     JLOS_HAL_BLOCK_DEV_ATA_PIO28 = 1,
     JLOS_HAL_BLOCK_DEV_ATA_DMA   = 2,
     JLOS_HAL_BLOCK_DEV_AHCI      = 3,
     JLOS_HAL_BLOCK_DEV_NVME      = 4,
+    JLOS_HAL_BLOCK_DEV_PARTITION = 5,
 } jlos_hal_block_dev_type_t;
 
 typedef struct jlos_hal_block_dev jlos_hal_block_dev_t;

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 veyne.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <hal/io.h>
 #include <hal/hal.h>
 #include <hal/diag.h>
@@ -86,4 +91,34 @@ uint32_t jlos_io32_read(jlos_io32_t *self)
     uint32_t v = ops_safe()->read_io32(self);
     HAL_TRACE_IO(JLOS_HAL_TRACE_OP_RD32, self->portnumber, v);
     return v;
+}
+
+uint8_t jlos_io_mmio_read8(const volatile void *addr)
+{
+    return ops_safe()->read_mmio8(addr);
+}
+
+uint16_t jlos_io_mmio_read16(const volatile void *addr)
+{
+    return ops_safe()->read_mmio16(addr);
+}
+
+uint32_t jlos_io_mmio_read32(const volatile void *addr)
+{
+    return ops_safe()->read_mmio32(addr);
+}
+
+void jlos_io_mmio_write8(volatile void *addr, uint8_t val)
+{
+    return ops_safe()->write_mmio8(addr, val);
+}
+
+void jlos_io_mmio_write16(volatile void *addr, uint16_t val)
+{
+    return ops_safe()->write_mmio16(addr, val);
+}
+
+void jlos_io_mmio_write32(volatile void *addr, uint32_t val)
+{
+    return ops_safe()->write_mmio32(addr, val);
 }
