@@ -12,8 +12,12 @@
 #include <hal/smp.h>
 #include <hal/paging.h>
 #include <hal/context.h>
+#include <hal/clock_event.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/initcall.h>
+#include <kernel/multitask.h>
+#include <kernel/hrtimer.h>
+#include <kernel/timek.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
 #include <kernel/printk.h>
@@ -90,6 +94,15 @@ void jlos_ap_main(void)
 
     this_cpu_write(jlos_cpu_online, true);
     printk_info("AP %u online\n", cpu);
+
+    __asm__ __volatile__("sti");
+
+    jlos_clock_event_select();
+    jlos_hrtimer_base_init_cpu();
+    jlos_tick_init_cpu();
+    
+    jlos_sched_init_cpu();
+    printk_info("ap %u idle ready\n", cpu);
 
     for (;;) {
         __asm__ __volatile__("hlt");

@@ -8,6 +8,8 @@
 #include <hal/mmu.h>
 #include <hal/smp.h>
 #include <arch/x86/paging.h>
+#include <arch/x86/smp.h>
+#include <arch/x86/lapic.h>
 #include <kernel/paging.h>
 #include <kernel/page_frame_allocator.h>
 #include <kernel/device.h>
@@ -514,13 +516,39 @@ void jlos_arch_paging_free_boot_tables(void)
 
 void jlos_hal_paging_tlb_shootdown(uint32_t cpu_mask, uint32_t va)
 {
-    (void)cpu_mask;
-    (void)va;
+    uint32_t this_cpu = jlos_hal_get_cpu_id();
+    uint32_t num_cpus = jlos_hal_num_cpus();
+    jlos_hal_paging_flush_tlb(va);
+    for (uint32_t cpu = 0; cpu < num_cpus; cpu++) {
+        if (cpu == this_cpu || !(cpu_mask & (1u << cpu))) {
+            continue;
+        }
+        per_cpu_write_cpu(jlos_cpu_tlb_flush_va, cpu, va);
+        per_cpu_write_cpu(jlos_cpu_tlb_flush_done, cpu, false);
+        jlos_arch_smp_send_ipi(cpu, JLOS_ARCH_IPI_TLB_SHOOTDOWN_VECTOR);
+    }
+    for (uint32_t cpu = 0; cpu < num_cpus; cpu++) {
+        if (cpu == this_cpu || !(cpu_mask & (1u << cpu))) {
+            continue;
+        }
+        while (!per_cpu_read_cpu(jlos_cpu_tlb_flush_done, cpu)) {
+            __asm__ __volatile__("pause" : : : "memory");
+        }
+    }
+        
 }
 
 void jlos_hal_paging_tlb_shootdown_all(uint32_t va)
 {
-    (void)va;
+    uint32_t this_cpu = jlos_hal_get_cpu_id();
+    uint32_t num_cpus = jlos_hal_num_cpus();
+    uint32_t mask = 0;
+    for (uint32_t cpu = 0; cpu < num_cpus; cpu++) {
+        if (cpu != this_cpu) {
+            mask |= (1u << cpu);
+        }
+    }
+    jlos_hal_paging_tlb_shootdown(mask, va);
 }
 
 void jlos_hal_paging_enable(uint32_t page_dir_physical_addr)

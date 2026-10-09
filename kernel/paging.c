@@ -14,8 +14,6 @@
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
 #include <kernel/printk.h>
 
-extern jlos_task_t *g_current_task_ptr;
-
 void jlos_paging_context_init(jlos_paging_context_t *self)
 {
     self->root = NULL;
@@ -181,8 +179,9 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     bool present = error_code & 0x01;
     bool write = error_code & 0x02;
     bool user = error_code & 0x04;
+    jlos_task_t *current_task = jlos_hal_current_task();
     if (!user) {
-        if (fault_addr < KERNEL_VIRTUAL_BASE && g_current_task_ptr && g_current_task_ptr->mm) {
+        if (fault_addr < KERNEL_VIRTUAL_BASE && current_task && current_task->mm) {
             user = true;
         } else {
             for (;;) {
@@ -191,13 +190,13 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
         }
     }
 
-    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+    if (!current_task || !current_task->mm) {
         for (;;) {
             jlos_hal_halt();
         }
     }
 
-    jlos_task_t *task = g_current_task_ptr;
+    jlos_task_t *task = current_task;
     jlos_paging_context_t *ctx = task->mm->pc;
 
     if (!present) {

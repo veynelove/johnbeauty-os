@@ -4,13 +4,15 @@
  */
 
 #include <hal/clock_event.h>
+#include <hal/smp.h>
 #include <kernel/initcall.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "clocke"
 #include <kernel/printk.h>
 
+DEFINE_PER_CPU(jlos_clock_event_device_t *, jlos_cpu_active_evt);
+
 static JLOS_LIST_HEAD(s_evt_devs);
-static jlos_clock_event_device_t *s_active_evt;
 
 void jlos_clock_event_register(jlos_clock_event_device_t *dev)
 {
@@ -22,26 +24,28 @@ void jlos_clock_event_register(jlos_clock_event_device_t *dev)
 
 jlos_clock_event_device_t *jlos_clock_event_get_active(void)
 {
-    return s_active_evt;
+    return *this_cpu_ptr(jlos_cpu_active_evt);
 }
 
 void jlos_clock_event_start_periodic(uint32_t hz)
 {
-    if (!s_active_evt || !s_active_evt->set_state_periodic) {
+    jlos_clock_event_device_t *evt = jlos_clock_event_get_active();
+    if (!evt || !evt->set_state_periodic) {
         return;
     }
-    s_active_evt->set_state_periodic(hz);
+    evt->set_state_periodic(hz);
 }
 
 void jlos_clock_event_shutdown(void)
 {
-    if (!s_active_evt || !s_active_evt->set_state_shutdown) {
+    jlos_clock_event_device_t *evt = jlos_clock_event_get_active();
+    if (!evt || !evt->set_state_shutdown) {
         return;
     }
-    s_active_evt->set_state_shutdown();
+    evt->set_state_shutdown();
 }
 
-static void clock_event_select_and_start(void)
+void jlos_clock_event_select(void)
 {
     jlos_clock_event_device_t *best = NULL;
     jlos_clock_event_device_t *d;
@@ -50,29 +54,36 @@ static void clock_event_select_and_start(void)
             best = d;
         }
     }
-    s_active_evt = best;
+    *this_cpu_ptr(jlos_cpu_active_evt) = best;
     if (best) {
         printk_info("selected = %s, rating = %u\n", best->name, best->rating);
     } else {
         printk_err("no clock event device registered\n");
     }
+}
+
+static void clock_event_select_and_start(void)
+{
+    jlos_clock_event_select();
     jlos_clock_event_start_periodic(JLOS_HAL_TIME_FREQ_HZ);
 }
 
 void jlos_clock_event_start_oneshot(void)
 {
-    if (!s_active_evt || !s_active_evt->set_state_oneshot) {
+    jlos_clock_event_device_t *evt = jlos_clock_event_get_active();
+    if (!evt || !evt->set_state_oneshot) {
         return;
     }
-    s_active_evt->set_state_oneshot();
+    evt->set_state_oneshot();
 }
 
 void jlos_clock_event_set_next(uint64_t delta_ns)
 {
-    if (!s_active_evt || !s_active_evt->set_next_event) {
+    jlos_clock_event_device_t *evt = jlos_clock_event_get_active();
+    if (!evt || !evt->set_next_event) {
         return;
     }
-    s_active_evt->set_next_event(delta_ns);
+    evt->set_next_event(delta_ns);
 }
 
 JLOS_INITCALL(JLOS_INITCALL_DEVICE, clock_event_select_and_start);

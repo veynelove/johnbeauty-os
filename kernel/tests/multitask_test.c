@@ -40,7 +40,7 @@ static void reap_zombies(void)
 {
     for (int i = s_mgr->num_tasks - 1; i > 0; i--) {
         jlos_task_t *t = s_mgr->tasks[i];
-        if (!t || t == s_mgr->idle_task) {
+        if (!t || t == s_mgr->idle_task[0]) {
             continue;
         }
         if (t->status == JLOS_TASK_ZOMBIE) {
@@ -84,9 +84,10 @@ static void fork_test_entry(void)
 {
     char *argv[] = {"/fork_test.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/fork_test.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/fork_test.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 
@@ -94,9 +95,10 @@ static void ring3_loader_entry(void)
 {
     char *argv[] = {"/hello.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/hello.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/hello.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 
@@ -104,9 +106,10 @@ static void ring3_file_test_entry(void)
 {
     char *argv[] = {"/file_test.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/file_test.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/file_test.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 
@@ -114,9 +117,10 @@ static void ring3_signal_test_entry(void)
 {
     char *argv[] = {"/signal_test.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/signal_test.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/signal_test.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 
@@ -124,9 +128,10 @@ static void ring3_mmap_test_entry(void)
 {
     char *argv[] = {"/mmap_test.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/mmap_test.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/mmap_test.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 
@@ -134,9 +139,10 @@ static void ring3_nanosleep_test_entry(void)
 {
     char *argv[] = {"/nanosleep_test.elf", NULL};
     char *envp[] = {NULL};
-    int ret = jlos_process_exec_elf(g_current_task_ptr, "/nanosleep_test.elf", 1, argv, envp);
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/nanosleep_test.elf", 1, argv, envp);
     if (ret < 0) {
-        jlos_process_exit(g_current_task_ptr, 0);
+        jlos_process_exit(current_task, 0);
     }
 }
 

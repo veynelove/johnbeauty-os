@@ -46,6 +46,7 @@ void jlos_hrtimer_start(jlos_hrtimer_base_t *base, jlos_hrtimer_t *timer, uint64
 void jlos_hrtimer_cancel(jlos_hrtimer_base_t *base, jlos_hrtimer_t *timer);
 
 jlos_hrtimer_base_t *jlos_hrtimer_get_base(void);
+void jlos_hrtimer_base_init_cpu(void);
 void jlos_hrtimer_interrupt(void);
 
 #endif

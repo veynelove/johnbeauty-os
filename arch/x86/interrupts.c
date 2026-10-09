@@ -7,6 +7,8 @@
 #include <arch/x86/cpu_state.h>
 #include <arch/x86/io.h>
 #include <arch/x86/gdt.h>
+#include <arch/x86/lapic.h>
+#include <arch/x86/smp.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
@@ -23,7 +25,6 @@
 
 extern void jlos_arch_tss_init_for_asm(void);
 
-extern jlos_task_t              *g_current_task_ptr;
 static jlos_irq_manager_t       s_interrupt_manager;
 jlos_irq_manager_t              *jlos_active_irq_manager = &s_interrupt_manager;
 
@@ -169,6 +170,13 @@ void jlos_irq_manager_init(void)
         &jlos_handle_interrupt_request0x0f, 0, IDT_INTERRUPT_GATE);
     jlos_set_interrupt_descriptor_table_entry(KERNEL_FIRST_INTERRUPT_VECTOR + 0x31, code_segment,
         &jlos_handle_interrupt_request0x31, 0, IDT_INTERRUPT_GATE);
+    
+    jlos_set_interrupt_descriptor_table_entry(JLOS_ARCH_IPI_TLB_SHOOTDOWN_VECTOR, code_segment,
+        &jlos_handle_interrupt_request0xfb, 0, IDT_INTERRUPT_GATE);
+    jlos_set_interrupt_descriptor_table_entry(JLOS_ARCH_IPI_RESCHEDULE_VECTOR, code_segment,
+        &jlos_handle_interrupt_request0xfc, 0, IDT_INTERRUPT_GATE);
+    jlos_set_interrupt_descriptor_table_entry(JLOS_ARCH_LAPIC_TIMER_VECTOR, code_segment,
+        &jlos_handle_interrupt_request0xef, 0, IDT_INTERRUPT_GATE);
 
     /* syscall 入口：DPL=3 允许 ring3 调用，但 handler 运行在 ring0（内核代码段） */
     jlos_set_interrupt_descriptor_table_entry(0x80, code_segment,
@@ -245,7 +253,7 @@ uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)
 
 static void jlos_signal_deliver_check(uint32_t esp)
 {
-    jlos_task_t *curr = g_current_task_ptr;
+    jlos_task_t *curr = jlos_hal_current_task();
     if (!curr || !curr->is_user_process) {
         return;
     }
@@ -267,14 +275,38 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
         return esp;
     }
     
+    if (interrupt >= JLOS_ARCH_IPI_VECTOR_FIRST) {
+        jlos_arch_lapic_eoi();
+        if (interrupt == JLOS_ARCH_IPI_TLB_SHOOTDOWN_VECTOR) {
+            jlos_hal_paging_flush_tlb(this_cpu_read(jlos_cpu_tlb_flush_va));
+            this_cpu_write(jlos_cpu_tlb_flush_done, true);
+        } else if (interrupt == JLOS_ARCH_IPI_RESCHEDULE_VECTOR) {
+            if (self->task_manager && jlos_need_resched()) {
+                jlos_task_manager_schedule(self->task_manager);
+            }
+        }
+        return esp;
+    }
+
+    if (interrupt == JLOS_ARCH_LAPIC_TIMER_VECTOR) {
+        jlos_arch_lapic_eoi();
+        if (self && self->task_manager) {
+            jlos_hrtimer_interrupt();
+            jlos_task_manager_tick_and_schedule(self->task_manager);
+        }
+        jlos_signal_deliver_check(esp);
+        return esp;
+    }
+
     if (interrupt < 0x20 && interrupt != 0x07 && interrupt != 0x00 && interrupt != 0x02 &&
         self->handles[interrupt + self->hardware_interrupt_offset] == NULL) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
-        uint32_t err = cpu->padding;   /* offset 32 = CPU 压入的真实 error code */
+        uint32_t err = cpu->error;   /* offset 32 = CPU 压入的真实 error code */
+        jlos_task_t *current_task = jlos_hal_current_task();
         printk_err("exception num=0x%x err=0x%x eip=0x%x cs=0x%x efl=0x%x uesp=0x%x uss=0x%x pid=%u\n",
                interrupt, err, cpu->eip, cpu->cs, cpu->eflags,
                cpu->user_esp, cpu->user_ss,
-               g_current_task_ptr ? g_current_task_ptr->pid : 0);
+               current_task ? current_task->pid : 0);
         if (interrupt == 0x0D) {  /* #GP: error code 非零时为触犯的段选择子 */
             if (err) {
                 printk_err("#GP sel=0x%x idx=%u TI=%u RPL=%u ext=%u\n",
@@ -339,7 +371,7 @@ void jlos_irq_manager_register(jlos_irq_manager_t* self, uint8_t interrupt, jlos
 void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
 {
     jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)arch_state_ptr;
-    context->error = cpu->padding;
+    context->error = cpu->error;
     context->instruction_pointer = cpu->eip;
     context->code_segment = cpu->cs;
     context->flags = cpu->eflags;

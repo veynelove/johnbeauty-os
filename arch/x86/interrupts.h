@@ -72,6 +72,11 @@ void jlos_handle_interrupt_request0x0f();
 void jlos_handle_interrupt_request0x31();
 void jlos_handle_interrupt_request0x80();
 
+void jlos_handle_interrupt_request0xfb();
+void jlos_handle_interrupt_request0xfc();
+
+void jlos_handle_interrupt_request0xef();
+
 void jlos_arch_irq_load_idt(void);
 
 #endif

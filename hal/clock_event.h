@@ -32,6 +32,7 @@ typedef struct jlos_clock_event_device {
 } jlos_clock_event_device_t;
 
 void jlos_clock_event_register(jlos_clock_event_device_t *dev);
+void jlos_clock_event_select(void);
 jlos_clock_event_device_t *jlos_clock_event_get_active(void);
 void jlos_clock_event_start_periodic(uint32_t hz);
 void jlos_clock_event_shutdown(void);

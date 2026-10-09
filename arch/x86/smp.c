@@ -5,6 +5,7 @@
 
 #include <hal/smp.h>
 #include <arch/x86/smp.h>
+#include <arch/x86/lapic.h>
 #include <kernel/page_frame_allocator.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
@@ -23,7 +24,10 @@ DEFINE_PER_CPU(jlos_x86_tss_t, jlos_cpu_tss);
 DEFINE_PER_CPU(void *,         jlos_cpu_kernel_stack);
 DEFINE_PER_CPU(void *,         jlos_cpu_kernel_stack_bottom);
 DEFINE_PER_CPU(uint32_t,       jlos_cpu_kernel_stack_size);
-DEFINE_PER_CPU(bool,           jlos_cpu_online); 
+DEFINE_PER_CPU(bool,           jlos_cpu_online);
+DEFINE_PER_CPU(uint32_t,       jlos_cpu_tlb_flush_va);
+DEFINE_PER_CPU(bool,           jlos_cpu_tlb_flush_done);
+DEFINE_PER_CPU(bool,           jlos_cpu_need_resched);
 
 static uint32_t s_per_cpu_offsets[JLOS_MAX_CPUS];
 static uint32_t s_num_cpus = 1;
@@ -90,5 +94,23 @@ void jlos_smp_alloc_percpu_areas(void)
         }
         jlos_memset(area, 0, JLOS_PAGE_SIZE);
         s_per_cpu_offsets[cpu] = (uint32_t)((uint8_t *)area - __per_cpu_start);
+    }
+}
+
+bool jlos_hal_need_resched(void)
+{
+    return this_cpu_read(jlos_cpu_need_resched);
+}
+
+void jlos_hal_set_need_resched(bool val)
+{
+    this_cpu_write(jlos_cpu_need_resched, val);
+}
+
+void jlos_hal_set_need_resched_on(uint32_t cpu, bool val)
+{
+    per_cpu_write_cpu(jlos_cpu_need_resched, cpu, val);
+    if (cpu != jlos_hal_get_cpu_id()) {
+        jlos_arch_smp_send_ipi(cpu, JLOS_ARCH_IPI_RESCHEDULE_VECTOR);
     }
 }

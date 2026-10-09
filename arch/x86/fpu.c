@@ -16,8 +16,6 @@ static bool             s_init_template_done = false;
 
 static uint8_t          s_fxsave_template[JLOS_ARCH_EXT_STATE_SIZE] __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN)));
 
-extern jlos_task_t *g_current_task_ptr;
-
 static void build_clean_template(void)
 {
     if (s_init_template_done) {
@@ -64,7 +62,7 @@ void jlos_arch_task_ext_switch(void)
 void jlos_arch_task_ext_trap_body(void)
 {
     __asm__ __volatile__("clts\n\t" ::: "memory");
-    jlos_task_t *curr = g_current_task_ptr;
+    jlos_task_t *curr = jlos_hal_current_task();
     if (!curr) {
         return;
     }

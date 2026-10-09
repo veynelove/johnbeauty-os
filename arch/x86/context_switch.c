@@ -17,17 +17,28 @@
 #define JLOS_KERNEL_LOG_SUBSYS "arch"
 #include <kernel/printk.h>
 
-jlos_task_t *g_current_task_ptr = NULL;
+DEFINE_PER_CPU(jlos_task_t *, jlos_cpu_current_task);
 uint32_t jlos_arch_tss_base_addr = 0;
+
+jlos_task_t *jlos_hal_current_task(void)
+{
+    return this_cpu_read(jlos_cpu_current_task);
+}
+
+void jlos_hal_set_current_task(jlos_task_t *task)
+{
+    this_cpu_write(jlos_cpu_current_task, task);
+}
 
 __attribute__((noreturn)) void jlos_task_do_exit(void)
 {
+    jlos_task_t *current_task = jlos_hal_current_task();
     __asm__ __volatile__("cli");
-    if (g_current_task_ptr) {
-        JLOS_TASK_SET_ZOMBIE(g_current_task_ptr, 0);
+    if (current_task) {
+        JLOS_TASK_SET_ZOMBIE(current_task, 0);
     }
     __asm__ __volatile__("sti");
-    jlos_process_exit(g_current_task_ptr, 0);
+    jlos_process_exit(current_task, 0);
     for (;;) {
         jlos_hal_halt();
     }

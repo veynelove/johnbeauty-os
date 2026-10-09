@@ -30,4 +30,7 @@ extern void jlos_arch_boot_stack_info(uint8_t **base, uint32_t *size);
 
 extern void jlos_hal_context_switch(uint32_t *old_sp_ptr, uint32_t new_sp);
 
+jlos_task_t *jlos_hal_current_task(void);
+void jlos_hal_set_current_task(jlos_task_t *task);
+
 #endif

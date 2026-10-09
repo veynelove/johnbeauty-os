@@ -19,7 +19,10 @@ DECLARE_PER_CPU(jlos_x86_tss_t, jlos_cpu_tss);
 DECLARE_PER_CPU(void *,         jlos_cpu_kernel_stack);
 DECLARE_PER_CPU(void *,         jlos_cpu_kernel_stack_bottom);
 DECLARE_PER_CPU(uint32_t,       jlos_cpu_kernel_stack_size);
-DECLARE_PER_CPU(bool,           jlos_cpu_online); 
+DECLARE_PER_CPU(bool,           jlos_cpu_online);
+DECLARE_PER_CPU(uint32_t,       jlos_cpu_tlb_flush_va);
+DECLARE_PER_CPU(bool,           jlos_cpu_tlb_flush_done);
+DECLARE_PER_CPU(bool,           jlos_cpu_need_resched);
 
 #define this_cpu_read(var) \
     ({ typeof(var) _ret; \
@@ -30,12 +33,6 @@ DECLARE_PER_CPU(bool,           jlos_cpu_online);
     do { typeof(var) _val = (val); \
          __asm__ __volatile__("mov %0, %%gs:%1" : : "r"(_val), "m"(var)); \
     } while (0)
-
-#define this_cpu_ptr(var) \
-    ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(jlos_hal_get_cpu_id())))
-
-#define per_cpu_ptr_cpu(var, cpu) \
-    ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(cpu)))
 
 #define per_cpu_read_cpu(var, cpu) \
     (*per_cpu_ptr_cpu(var, cpu))

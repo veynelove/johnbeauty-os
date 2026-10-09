@@ -5,7 +5,6 @@
 
 #include <kernel/sync.h>
 
-extern jlos_task_t *g_current_task_ptr;
 extern jlos_task_manager_t *g_task_manager_ptr;
 
 static void wait_enqueue(jlos_list_head_t *q, jlos_task_t *task)
@@ -32,7 +31,8 @@ void jlos_semaphore_init(jlos_semaphore_t *sem, int32_t init_count)
 
 void jlos_semaphore_wait(jlos_semaphore_t *sem)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return;
     }
     uint32_t flags = jlos_spin_lock_irqsave(&sem->lock);
@@ -41,9 +41,9 @@ void jlos_semaphore_wait(jlos_semaphore_t *sem)
         jlos_spin_unlock_irqrestore(&sem->lock, flags);
         return;
     }
-    wait_enqueue(&sem->wait_queue, g_current_task_ptr);
+    wait_enqueue(&sem->wait_queue, current_task);
 
-    JLOS_TASK_SET_BLOCKED(g_current_task_ptr);
+    JLOS_TASK_SET_BLOCKED(current_task);
     jlos_spin_unlock_irqrestore(&sem->lock, flags);
     jlos_task_manager_schedule(g_task_manager_ptr);
 }
@@ -74,25 +74,26 @@ void jlos_mutex_init(jlos_mutex_t *mutex)
 
 void jlos_mutex_lock(jlos_mutex_t *mutex)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return;
     }
     uint32_t flags = jlos_spin_lock_irqsave(&mutex->lock);
-    if (mutex->owner == g_current_task_ptr) {
+    if (mutex->owner == current_task) {
         mutex->recursion++;
         jlos_spin_unlock_irqrestore(&mutex->lock, flags);
         return;
     }
     if (!mutex->locked) {
         mutex->locked = 1;
-        mutex->owner = g_current_task_ptr;
+        mutex->owner = current_task;
         mutex->recursion = 1;
         jlos_spin_unlock_irqrestore(&mutex->lock, flags);
         return;
     }
-    wait_enqueue(&mutex->wait_queue, g_current_task_ptr);
+    wait_enqueue(&mutex->wait_queue, current_task);
     
-    JLOS_TASK_SET_BLOCKED(g_current_task_ptr);
+    JLOS_TASK_SET_BLOCKED(current_task);
     jlos_spin_unlock_irqrestore(&mutex->lock, flags);
     jlos_task_manager_schedule(g_task_manager_ptr);
 }
@@ -100,7 +101,8 @@ void jlos_mutex_lock(jlos_mutex_t *mutex)
 void jlos_mutex_unlock(jlos_mutex_t *mutex)
 {
     uint32_t flags = jlos_spin_lock_irqsave(&mutex->lock);
-    if (!g_current_task_ptr || mutex->owner != g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || mutex->owner != current_task) {
         jlos_spin_unlock_irqrestore(&mutex->lock, flags);
         return;
     }
@@ -129,13 +131,14 @@ void jlos_cond_init(jlos_cond_t *cond)
 
 void jlos_cond_wait(jlos_cond_t *cond, jlos_mutex_t *mutex)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return;
     }
     uint32_t flags = jlos_spin_lock_irqsave(&cond->lock);
-    wait_enqueue(&cond->wait_queue, g_current_task_ptr);
+    wait_enqueue(&cond->wait_queue, current_task);
 
-    JLOS_TASK_SET_BLOCKED(g_current_task_ptr);
+    JLOS_TASK_SET_BLOCKED(current_task);
     jlos_spin_unlock_irqrestore(&cond->lock, flags);
     jlos_mutex_unlock(mutex);
     jlos_task_manager_schedule(g_task_manager_ptr);

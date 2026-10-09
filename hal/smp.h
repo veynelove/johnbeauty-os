@@ -20,9 +20,19 @@
 
 #define DECLARE_PER_CPU(type, name) extern type name
 
+#define this_cpu_ptr(var) \
+    ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(jlos_hal_get_cpu_id())))
+
+#define per_cpu_ptr_cpu(var, cpu) \
+    ((typeof(var) *)((unsigned long)&(var) + jlos_smp_per_cpu_offset(cpu)))
+
 uint32_t jlos_hal_get_cpu_id(void);
 uint32_t jlos_hal_num_cpus(void);
 uint32_t jlos_smp_per_cpu_offset(uint32_t cpu);
+
+bool jlos_hal_need_resched(void);
+void jlos_hal_set_need_resched(bool val);
+void jlos_hal_set_need_resched_on(uint32_t cpu, bool val);
 
 void jlos_smp_init(void);
 void jlos_hal_smp_boot_aps(void);

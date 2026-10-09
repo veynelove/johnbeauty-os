@@ -10,8 +10,9 @@
 static uint32_t s_x86_syscall_entry(void *handler, uint32_t ctx)
 {
     (void)handler;
+    jlos_task_t *current_task = jlos_hal_current_task();
     jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)ctx;
-    jlos_task_t *me = g_current_task_ptr;
+    jlos_task_t *me = current_task;
     if (me) {
         me->syscall_tf = (jlos_cpu_state_t *)cpu;
     }
@@ -26,7 +27,7 @@ static uint32_t s_x86_syscall_entry(void *handler, uint32_t ctx)
             ctx = jlos_hal_syscall_resched_do(ctx);
         }
     }
-    jlos_task_t *curr = g_current_task_ptr;
+    jlos_task_t *curr = current_task;
     if (curr) {
         jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)ctx);
     }

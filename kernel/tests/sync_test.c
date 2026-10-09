@@ -37,7 +37,7 @@ static void sync_reap_zombies(void)
 {
     for (int i = s_mgr->num_tasks - 1; i > 0; i--) {
         jlos_task_t *t = s_mgr->tasks[i];
-        if (!t || t == s_mgr->idle_task) {
+        if (!t || t == s_mgr->idle_task[0]) {
             continue;
         }
         if (t->status == JLOS_TASK_ZOMBIE) {
