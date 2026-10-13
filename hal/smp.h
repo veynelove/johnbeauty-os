@@ -10,8 +10,9 @@
 
 /* Symmetric Multi-Processing */
 
-#define JLOS_MAX_CPUS   8
+#define JLOS_MAX_CPUS           8
 #define JLOS_CACHELINE_SIZE     64
+#define JLOS_SMP_BOOT_CPU       0
 
 #define DEFINE_PER_CPU(type, name) \
     __attribute__((section(".data..percpu"))) \

@@ -15,13 +15,12 @@
 #define JLOS_KERNEL_LOG_SUBSYS "timek"
 #include <kernel/printk.h>
 
-#define JLOS_TICK_PERIOD_NS  (1000000000ULL / JLOS_HAL_TIME_FREQ_HZ)
+#define JLOS_TICK_PERIOD_NS     (1000000000ULL / JLOS_HAL_TIME_FREQ_HZ)
 
-static uint64_t             s_realtime_base_ns;
-static uint64_t             s_last_cycles;
-static uint64_t             s_monotonic_ns;
-static bool                 s_timek_inited;
-static jlos_atomic_t        s_ticks;
+static uint64_t       s_realtime_base_ns;
+static uint64_t       s_tsc_base;
+static bool           s_timek_inited;
+static jlos_atomic_t  s_ticks;
 
 DEFINE_PER_CPU(jlos_hrtimer_t, jlos_cpu_tick_hrtimer);
 
@@ -34,8 +33,7 @@ void jlos_timek_init(void)
     if (!cs) {
         return;
     }
-    s_last_cycles = cs->read();
-    s_monotonic_ns = 0;
+    s_tsc_base = cs->read();
     s_realtime_base_ns = 0;
     s_timek_inited = true;
     jlos_atomic_set(&s_ticks, 0);
@@ -48,13 +46,11 @@ uint64_t jlos_timek_get_monotonic_ns(void)
     }
     jlos_clocksource_t *cs = jlos_clocksource_get_active();
     if (!cs || !cs->read) {
-        return s_monotonic_ns;
+        return 0;
     }
     uint64_t cycles = cs->read();
-    uint64_t delta = (cycles - s_last_cycles) & cs->mask;
-    s_last_cycles = cycles;
-    s_monotonic_ns += jlos_clocksource_cycles_to_ns(delta);
-    return s_monotonic_ns;
+    uint64_t delta = (cycles - s_tsc_base) & cs->mask;
+    return jlos_clocksource_cycles_to_ns(delta);
 }
 
 uint64_t jlos_timek_get_realtime_ns(void)
@@ -73,7 +69,6 @@ void jlos_timek_on_tick(void)
         jlos_timek_init();
     }
     jlos_atomic_inc(&s_ticks);
-    jlos_timek_get_monotonic_ns();
 }
 
 uint32_t jlos_timek_get_ticks(void)
@@ -94,7 +89,9 @@ static void jlos_timek_rtc_init(void)
 static int tick_hrtimer_func(jlos_hrtimer_t *timer)
 {
     (void)timer;
-    jlos_timek_on_tick();
+    if (jlos_hal_get_cpu_id() == JLOS_SMP_BOOT_CPU) {
+        jlos_timek_on_tick();
+    }
     return 0;
 }
 

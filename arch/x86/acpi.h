@@ -52,6 +52,24 @@ typedef struct {
     uint32_t    flags;
 } __attribute__((packed)) jlos_acpi_madt_lapic_t;
 
+typedef struct {
+    uint8_t     type;
+    uint8_t     length;
+    uint8_t     ioapic_id;
+    uint8_t     reserved;
+    uint32_t    ioapic_address;
+    uint32_t    gsi_base; // global system interrupt
+} __attribute__((packed)) jlos_acpi_madt_ioapic_t;
+
+typedef struct {
+    uint8_t     type;
+    uint8_t     length;
+    uint8_t     bus;
+    uint8_t     source;
+    uint32_t    gsi;
+    uint16_t    flags;
+} __attribute__((packed)) jlos_acpi_madt_iso_t;
+
 #define JLOS_ACPI_RSDP_SIGNATURE        "RSD PTR "
 #define JLOS_ACPI_RSDP_CHECKSUM_LEN     20
 #define JLOS_ACPI_RSDP_SCAN_START       0xe0000
@@ -60,6 +78,8 @@ typedef struct {
 
 #define JLOS_ACPI_MADT_SIGNATURE        "APIC"
 #define JLOS_ACPI_MADT_TYPE_LAPIC       0
+#define JLOS_ACPI_MADT_TYPE_IOAPIC      1
+#define JLOS_ACPI_MADT_TYPE_ISO         2
 #define JLOS_ACPI_MADT_LAPIC_ENABLED    0x1
 
 #define JLOS_ACPI_EBDA_PTR_ADDR         0x40e

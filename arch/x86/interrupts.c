@@ -9,6 +9,7 @@
 #include <arch/x86/gdt.h>
 #include <arch/x86/lapic.h>
 #include <arch/x86/smp.h>
+#include <arch/x86/ioapic.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
@@ -63,8 +64,14 @@ static void jlos_set_interrupt_descriptor_table_entry(uint8_t interrupt_number,
 static void jlos_irq_pic_unmask(jlos_irq_manager_t* self, uint8_t vector)
 {
     uint16_t base = self->hardware_interrupt_offset;
-    if (vector < base || vector >= base + 16) return; /* 非 PIC IRQ 范围，不管 */
+    if (vector < base || vector >= base + 16) {
+        return; /* 非 PIC IRQ 范围，不管 */
+    }
     uint8_t irq = vector - base;
+    if (jlos_ioapic_enabled()) {
+        jlos_ioapic_unmask_irq(irq);
+        return;
+    }
     if (irq < 8) {
         s_pic_master_mask &= ~(1U << irq);
         jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
@@ -117,8 +124,7 @@ void jlos_irq_manager_init(void)
     jlos_port_io8_slow_write(&self->pic_master_data, 0x01);
     jlos_port_io8_slow_write(&self->pic_slave_data, 0x01);
 
-    // OCW1：动态策略——默认只开 IRQ0(PIT)+IRQ2(cascade)，驱动注册 handler 时自动 unmask
-    s_pic_master_mask = 0xFA;
+    s_pic_master_mask = jlos_ioapic_enabled() ? 0xFF : 0xFA;
     s_pic_slave_mask  = 0xFF;
     jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask);
@@ -210,7 +216,8 @@ void jlos_irq_manager_init(void)
     jlos_port_io8_slow_write(&self->pic_master_data, 0x04);
     jlos_port_io8_slow_write(&self->pic_slave_data, 0x02); 
     jlos_port_io8_slow_write(&self->pic_master_data, 0x01);
-    jlos_port_io8_slow_write(&self->pic_slave_data, 0x01); 
+    jlos_port_io8_slow_write(&self->pic_slave_data, 0x01);
+
     jlos_port_io8_slow_write(&self->pic_master_data, s_pic_master_mask);
     jlos_port_io8_slow_write(&self->pic_slave_data, s_pic_slave_mask); 
 
@@ -345,11 +352,14 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
             interrupt, cpu->error, cpu->eip, cpu->cs, cpu->eflags);
     }
 
-    /* EOI 先于 schedule: 否则切换后 IRQ0 保持 IN-SERVICE, 压制全部中断 (经典 early-EOI) */
     if (vector >= 0x20 && vector < 0x30) {
-        jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
-        if (vector >= 0x28) {
-            jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
+        if (jlos_ioapic_enabled()) {
+            jlos_arch_lapic_eoi();
+        } else {
+            jlos_port_io8_slow_write(&self->pic_master_command, 0x20);
+            if (vector >= 0x28) {
+                jlos_port_io8_slow_write(&self->pic_slave_command, 0x20);
+            }
         }
     }
 

@@ -33,6 +33,7 @@ static jlos_task_t *spawn_kernel_task(void (*fn)(void), const char *name)
         jlos_task_free(s_mgr, t);
         return NULL;
     }
+    jlos_task_manager_enqueue(s_mgr, t);
     return t;
 }
 

@@ -33,4 +33,7 @@ extern void jlos_hal_context_switch(uint32_t *old_sp_ptr, uint32_t new_sp);
 jlos_task_t *jlos_hal_current_task(void);
 void jlos_hal_set_current_task(jlos_task_t *task);
 
+void jlos_hal_set_prev_task(jlos_task_t *task);
+bool jlos_hal_is_task_in_use(jlos_task_t *task);
+
 #endif

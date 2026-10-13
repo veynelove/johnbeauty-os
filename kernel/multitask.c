@@ -315,6 +315,9 @@ static void task_free_locked(jlos_task_manager_t *self, jlos_task_t *task)
     if (!self || !task) {
         return;
     }
+    if (jlos_hal_is_task_in_use(task)) {
+        return;
+    }
     jlos_hash_chain_remove(&self->pid_hash, &task->pid_hash_node);
     jlos_arch_task_ext_destroy(task);
     if (task->stack && task->pid != 0) {
@@ -510,10 +513,17 @@ bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task)
     self->num_tasks++;
     jlos_hash_chain_insert(&self->pid_hash, &task->pid, &task->pid_hash_node);
     jlos_spin_unlock_irqrestore(&self->manager_lock, flags);
+    return true;
+}
+
+void jlos_task_manager_enqueue(jlos_task_manager_t *self, jlos_task_t *task)
+{
+    if (!self || !task) {
+        return;
+    }
     if (task->status == JLOS_TASK_READY) {
         rq_enqueue(self, task);
     }
-    return true;
 }
 
 static void sleep_expire(jlos_timer_wheel_node_t *node, void *ctx)
@@ -610,11 +620,13 @@ void jlos_task_manager_schedule(jlos_task_manager_t* self)
     jlos_arch_tss_set_ctx((uint32_t)(next->stack + next->stack_size));
     jlos_arch_task_ext_switch();
     
+    jlos_hal_set_prev_task(prev);
     jlos_hal_set_current_task(next);
     JLOS_TASK_SET_RUNNING(next);
     jlos_hal_set_need_resched(false);
 
     jlos_hal_context_switch(&prev->sp.value, next->sp.value);
+    jlos_hal_set_prev_task(NULL);
     jlos_hal_irq_restore(sched_eflags);
 }
 
@@ -740,6 +752,7 @@ static jlos_task_t *jlos_process_fork_inner(jlos_task_manager_t *self, jlos_task
             }
         }
     }
+    jlos_task_manager_enqueue(self, child);
     return child;
 
 ROLLBACK_OOM:
@@ -944,6 +957,7 @@ void jlos_sched_init_cpu(void)
         }
     }
     jlos_task_manager_add_task(self, idle);
+    jlos_task_manager_enqueue(self, idle);
     self->idle_task[cpu] = idle;
     jlos_hal_set_current_task(idle);
 }

@@ -18,6 +18,7 @@
 #include <kernel/printk.h>
 
 DEFINE_PER_CPU(jlos_task_t *, jlos_cpu_current_task);
+DEFINE_PER_CPU(jlos_task_t *, jlos_cpu_prev_task);
 uint32_t jlos_arch_tss_base_addr = 0;
 
 jlos_task_t *jlos_hal_current_task(void)
@@ -28,6 +29,28 @@ jlos_task_t *jlos_hal_current_task(void)
 void jlos_hal_set_current_task(jlos_task_t *task)
 {
     this_cpu_write(jlos_cpu_current_task, task);
+}
+
+void jlos_hal_set_prev_task(jlos_task_t *task)
+{
+    this_cpu_write(jlos_cpu_prev_task, task);
+}
+
+bool jlos_hal_is_task_in_use(jlos_task_t *task)
+{
+    if (!task) {
+        return false;
+    }
+    uint32_t n = jlos_hal_num_cpus();
+    for (uint32_t i = 0; i < n; i++) {
+        if (*per_cpu_ptr_cpu(jlos_cpu_current_task, i) == task) {
+            return true;
+        }
+        if (*per_cpu_ptr_cpu(jlos_cpu_prev_task, i) == task) {
+            return true;
+        }
+    }
+    return false;
 }
 
 __attribute__((noreturn)) void jlos_task_do_exit(void)

@@ -30,6 +30,7 @@ static jlos_task_t *sync_spawn(void (*fn)(void), const char *name)
         jlos_task_free(s_mgr, t);
         return NULL;
     }
+    jlos_task_manager_enqueue(s_mgr, t);
     return t;
 }
 

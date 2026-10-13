@@ -1,14 +1,16 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.9 | 日期: 2026-10-07 | 作者: JohnLove
+版本: v4.0 | 日期: 2026-10-13 | 作者: JohnLove
 
-> v3.9 变更：SMP 升级 Step 1（per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` section + GS 段访问）与 Step 2（LAPIC 驱动 + fixmap/MMIO/MSR/cache 属性抽象）落地；修复 `jlos_page_frame_get_free` 漏计 per-CPU cache 的记账 bug；确立 SMP 8 步实施计划。详见 history_update.md。
+> v4.0 变更：SMP 8 步全部完成——per-CPU 基础 + LAPIC + ACPI/AP 启动 + 中断改造 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC。衡生竞态修复 3 项：时间系统 SMP 竞态（s_ticks 4 倍速 + monotonic_ns 竞态）、fork 子进程生命周期竞态（rq_enqueue 延后）、zombie reaping 竞态（per-CPU prev_task 防跨核释放）。VMware 4 核 54/54 测试全 PASS。
 
-> v3.8 变更：内部测试框架（section-based 自注册 + 12 套件 54 用例全 PASS）+ 修复 jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched 两个内核 bug + printk 宽度修饰支持（flags/width 解析）+ 升级优先级纠正（SMP P0 → 64位 P1 → 多架构 P2），详见 history_update.md。
+> v3.9 变更：SMP 升级 Step 1（per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` section + GS 段访问）与 Step 2（LAPIC 驱动 + fixmap/MMIO/MSR/cache 属性抽象）落地；修复 `jlos_page_frame_get_free` 漏计 per-CPU cache 的记账 bug；确立 SMP 8 步实施计划。
 
-> v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构），详见 history_update.md。
+> v3.8 变更：内部测试框架（section-based 自注册 + 12 套件 54 用例全 PASS）+ 修复 jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched 两个内核 bug + printk 宽度修饰支持（flags/width 解析）+ 升级优先级纠正（SMP P0 → 64位 P1 → 多架构 P2）。
 
-> v3.6 变更：FS 缓存统一 page cache（per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space），详见 history_update.md。
+> v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构）。
+
+> v3.6 变更：FS 缓存统一 page cache（per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space）。
 
 > v3.5 变更：hrtimer 高精度定时器（红黑树 + PIT oneshot + 周期性 tick + sleeper/nanosleep syscall）+ 测试体系改造（initcall TEST 级别自注册 + 测试文件迁移到各子系统 tests/ + tag 规范化 + config.h 移到 include/ + tools/ 目录删除）。
 
@@ -82,6 +84,8 @@
 | 内部测试框架 | section-based 自注册（JLOS_TEST 宏 + .jlos_test 段）+ 12 套件 54 用例 + 汇总表格 | 54 passed 0 failed |
 | 内核 bug 修复 | jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched | 测试驱动发现并修复 |
 | printk 宽度修饰 | flags(-/0) + width 解析 + printk_fmt_uint/int + emit_padded | 汇总表格列对齐 |
+| SMP 多核支持 | per-CPU 基础 + LAPIC + ACPI/AP 启动 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC | VMware 4 核 54/54 全 PASS |
+| SMP 竞态修复 | 时间系统（s_ticks 4 倍速 + monotonic_ns 竞态）+ fork 子进程生命周期（enqueue 延后）+ zombie reaping（per-CPU prev_task） | 54/54 全 PASS |
 
 ***
 
@@ -202,16 +206,16 @@ graph TD
 
 ***
 
-## Phase 4: SMP 预留（多 CPU 准备）
+## Phase 4: SMP 预留 → SMP 实现 ✅ 已完成
 
-本阶段不实现 SMP，而是为 SMP 预留清晰的扩展点。当前单核实现中就把架构搭好，避免未来重写。
+本阶段原为 SMP 预留扩展点，现已在 SMP Step 1-8 中全部实现落地。
 
 | 序号 | 任务                                                                               | 涉及文件                   | 复杂度 | 状态 |
 | ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ | ---- |
 | 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     | ✅   |
-| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     | ✅ 接口已声明，实现空 stub 归 SMP |
-| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     | ⏸ 结构就位，锁未无锁化，归 SMP |
-| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     | ✅ rq+cpu 已完成，cpumask 待 SMP |
+| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     | ✅   |
+| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     | ✅   |
+| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     | ✅   |
 | 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/smp.h                  | 低     | ✅ section-based per-CPU 实现 |
 | 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     | ✅   |
 
@@ -225,12 +229,12 @@ graph TD
 | ------- | -------------------------------------------------------------------- | ---- |
 | Step 1  | per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` + GS 段访问     | ✅   |
 | Step 2  | LAPIC 驱动 + 抽象（fixmap / MMIO 读写 / MSR / cache PCD 属性）       | ✅   |
-| Step 3  | ACPI MADT 解析（RSDP→XSDT→MADT 提取 CPU/IOAPIC）+ AP 启动            | ⏳   |
-| Step 4  | per-CPU GDT/TSS + 中断改造（切 APIC 模式）                           | ⏳   |
-| Step 5  | IPI + TLB shootdown                                                  | ⏳   |
-| Step 6  | 调度器 SMP 化                                                        | ⏳   |
-| Step 7  | 锁粒度优化                                                           | ⏳   |
-| Step 8  | IOAPIC                                                               | ⏳   |
+| Step 3  | ACPI MADT 解析（RSDP→XSDT→MADT 提取 CPU/IOAPIC）+ AP 启动            | ✅   |
+| Step 4  | per-CPU GDT/TSS + 中断改造（切 APIC 模式）                           | ✅   |
+| Step 5  | IPI + TLB shootdown                                                  | ✅   |
+| Step 6  | 调度器 SMP 化                                                        | ✅   |
+| Step 7  | 锁粒度优化                                                           | ✅   |
+| Step 8  | IOAPIC                                                               | ✅   |
 
 测试策略教训（Step 2 暴露）：记账类接口语义须对齐「系统总量」（`get_free` = buddy + Σper-CPU cache）；测试断言优先用恒等式/不变量（`free + occupied == total`）而非前后差值守恒，避免缺陷藏在不变量里被初始稳态掩盖。
 
@@ -292,7 +296,7 @@ graph TD
 | PFA-7 | per-CPU cache 补 `percpu_refill`（原只有 drain 无 refill，malloc miss 走 `alloc_n` 每次持 buddy 锁）+ `s_free_frames` 对称记账 | refill 漏减 s_free_frames 致 free 计数虚高；malloc 热路径原持锁取 1 个 | kernel/page_frame_allocator.c | ✅ |
 | MT-9 | exit 孤儿 zombie 回收 + schedule skip-prev 防 UAF | 孤儿无父 wait 泄漏 PCB；schedule 在 context_switch 前 free 当前 task 栈 = UAF | kernel/multitask.c | ✅ |
 | PAG-8 | PT slab cache（pgtable_cache）评估 | 被 PFA per-CPU refill 替代（per-CPU 无锁快路径 > slab 全局锁），不再单独做 | paging.c | ✅ 结论 |
-| MM-6 | slab per-CPU freelist 无锁快路径 | 单核无锁竞争收益为负，归 Phase 4.3（SMP 阶段随 per-CPU runqueue 一起做） | memory_manager.c | ⏸ 归 SMP |
+| MM-6 | slab per-CPU freelist 无锁快路径 | 单核无锁竞争收益为负，SMP 阶段已随 per-CPU runqueue 一起做 | memory_manager.c | ✅ |
 
 验证：spinlock/pfa/multitask 全测试 ALL PASSED。
 
@@ -554,10 +558,11 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init NULL/fork clear），exit 经 kfree 隐式回收 | 无 |
 | ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
 | ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
+| ~~**6（P0）**~~ | ~~SMP 实现（Step 1-8：per-CPU + LAPIC + ACPI/AP + 中断改造 + IPI + 调度器 SMP + 锁优化 + IOAPIC）~~ | **已完成**：8 步全部落地 + 3 项衡生竞态修复（时间/fork/zombie reaping），VMware 4 核 54/54 全 PASS | 批次 5 ✅ |
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-完成后进入 Phase 4 SMP 实现 + 多架构（ARM/RISC-V）阶段。
+SMP 8 步已全部完成，后续进入多架构（ARM/RISC-V）+ 用户态运行时 + 网络栈深化阶段。
 
 ***
 
@@ -663,19 +668,20 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 - `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
 - `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
 
-### 后续规划（v3.4 路线，基于项目核心子系统扫描）
+### 后续规划（v4.0 路线，基于项目核心子系统扫描）
 
 NTP 同步走用户空间守护进程路线（经典做法），内核只提供 syscall。以下按依赖与收益排序：
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
-| **高** | SMP 实现 | APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化 | — | P0 架构性升级，Phase 4 预留接口已就位；详见 Phase 9 |
+| ~~**高**~~ | ~~SMP 实现~~ | ~~APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化~~ | — | **已完成**：8 步全部落地 + 3 项竞态修复，54/54 全 PASS |
 | 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP | |
+| 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP ✅ | |
+| 低 | 多架构 | ARM/RISC-V 架构支持（HAL 层已就位） | SMP ✅ | 长期目标 |
 
 ### 实施优先级（历史，已被批次规划取代）
 
@@ -693,7 +699,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | **P1** | F5/F7 | open/close/read/write syscall + signal/kill 信号机制                | F5/F7 → 批次 1/3 |
 | **P2** | 5.3   | 经典化 / 扩展性                                                     | ✅ MT-4 已核销（残留 fork 上限 → 批次 4），仅剩 MM-3 |
 | **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | → 批次 3 |
-| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成 |
+| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成；SMP 实现 → 批次 6 已完成 |
 | **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | ✅ 已完成（v3.3） |
 
 ***

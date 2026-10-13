@@ -178,6 +178,7 @@ void jlos_task_sleep_hrtimer(jlos_task_manager_t *self, uint64_t ns);
 void jlos_task_manager_init();
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
+void jlos_task_manager_enqueue(jlos_task_manager_t *self, jlos_task_t *task);
 
 void jlos_task_manager_schedule(jlos_task_manager_t* self);
 
