@@ -22,7 +22,7 @@ void jlos_hash_chain_init(jlos_hash_chain_t *self, uint32_t bucket_count,
     self->bucket_mask = power - 1;
     self->buckets = (jlos_hash_head_t *)jlos_kalloc(power * sizeof(jlos_hash_head_t));
     for (uint32_t i = 0; i < power; i++) {
-        self->buckets[i].first = NULL;
+        self->buckets[i].first = nullptr;
     }
     self->hash = hash;
     self->cmp = cmp;
@@ -57,7 +57,7 @@ jlos_hash_node_t *jlos_hash_chain_see(jlos_hash_chain_t *self, const void *key)
     }
 
     jlos_spin_unlock_irqrestore(&self->lock, flags);
-    return NULL;
+    return nullptr;
 }
 
 jlos_hash_node_t *jlos_hash_chain_find(jlos_hash_chain_t *self, const void *key, jlos_hash_chain_match_t match, void *arg)
@@ -73,7 +73,7 @@ jlos_hash_node_t *jlos_hash_chain_find(jlos_hash_chain_t *self, const void *key,
         node = node->next;
     }
     jlos_spin_unlock_irqrestore(&self->lock, flags);
-    return NULL;
+    return nullptr;
 }
 
 void jlos_hash_chain_remove(jlos_hash_chain_t *self, jlos_hash_node_t *node)
@@ -109,15 +109,15 @@ void jlos_hash_chain_destroy(jlos_hash_chain_t *self)
     uint32_t flags = jlos_spin_lock_irqsave(&self->lock);
     if (self->buckets) {
         for (uint32_t i = 0; i < self->bucket_count; i++) {
-            self->buckets[i].first = NULL;
+            self->buckets[i].first = nullptr;
         }
         jlos_kfree(self->buckets);
-        self->buckets = NULL;
+        self->buckets = nullptr;
     }
     self->bucket_count = 0;
     self->bucket_mask = 0;
-    self->hash = NULL;
-    self->cmp = NULL;
+    self->hash = nullptr;
+    self->cmp = nullptr;
     jlos_spin_unlock_irqrestore(&self->lock, flags);
 }
 

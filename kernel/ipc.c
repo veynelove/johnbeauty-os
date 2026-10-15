@@ -45,7 +45,7 @@ void jlos_pipe_destroy(jlos_pipe_t *pipe)
     if (!pipe) return;
     if (pipe->buffer) {
         jlos_kfree(pipe->buffer);
-        pipe->buffer = NULL;
+        pipe->buffer = nullptr;
     }
     jlos_kfree(pipe);
 }
@@ -146,8 +146,8 @@ void jlos_pipe_ref_dec(jlos_pipe_t *pipe)
 
 void jlos_mq_init(jlos_mq_t *mq)
 {
-    mq->head = NULL;
-    mq->tail = NULL;
+    mq->head = nullptr;
+    mq->tail = nullptr;
     mq->count = 0;
     jlos_semaphore_init(&mq->sem_read_items, 0);
     jlos_mutex_init(&mq->mutex);
@@ -162,8 +162,8 @@ void jlos_mq_destroy(jlos_mq_t *mq)
         jlos_kfree(node);
         node = next;
     }
-    mq->head = NULL;
-    mq->tail = NULL;
+    mq->head = nullptr;
+    mq->tail = nullptr;
     mq->count = 0;
     jlos_mutex_unlock(&mq->mutex);
 }
@@ -182,7 +182,7 @@ uint32_t jlos_mq_send(jlos_mq_t *mq, const void *buf, uint32_t len)
     }
     jlos_memcpy(node->data, buf, len);
     node->len = len;
-    node->next = NULL;
+    node->next = nullptr;
     jlos_mutex_lock(&mq->mutex);
     if (mq->tail) {
         mq->tail->next = node;
@@ -212,7 +212,7 @@ uint32_t jlos_mq_recv(jlos_mq_t *mq, void *buf, uint32_t max_len)
     }
     mq->head = node->next;
     if (!mq->head) {
-        mq->tail = NULL;
+        mq->tail = nullptr;
     }
     mq->count--;
     jlos_mutex_unlock(&mq->mutex);

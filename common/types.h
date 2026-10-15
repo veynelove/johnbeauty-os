@@ -18,11 +18,6 @@ typedef short                      int16_t;
 typedef int                        int32_t;
 typedef long long int              int64_t;
 
-typedef unsigned char               bool;
-#define true                        1
-#define false                       0
-#define NULL                        ((void*)0)
-
 typedef const char *               string;
 typedef uint32_t                   size_t;
 
@@ -45,7 +40,7 @@ typedef uint32_t                   size_t;
 #define offsetof(type, member) ((size_t)&((type *)0)->member)
 
 #define container_of(ptr, type, member) ({ \
-    const __typeof__(((type *)0)->member) *__mptr = (ptr); \
+    const typeof(((type *)0)->member) *__mptr = (ptr); \
     (type *)((char *)__mptr - offsetof(type, member)); \
 })
 

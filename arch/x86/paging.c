@@ -21,7 +21,7 @@ extern uint32_t                     _boot_end_phys;
 extern uint32_t                     boot_page_dir[];
 
 jlos_paging_context_t               s_kernel_paging_context;
-static jlos_paging_table_alloc_fn   s_page_table_alloc = NULL;
+static jlos_paging_table_alloc_fn   s_page_table_alloc = nullptr;
 static struct jlos_paging_context   *s_active_paging_context[JLOS_MAX_CPUS];
 
 static uint32_t pte_prot(uint32_t prot)
@@ -45,11 +45,11 @@ static uint32_t pte_prot(uint32_t prot)
 static jlos_page_table_entry_t *pte_walk(jlos_paging_context_t *ctx, uint32_t va)
 {
     if (!ctx || !ctx->root) {
-        return NULL;
+        return nullptr;
     }
     jlos_page_dir_entry_t *pde = &((jlos_page_dir_t *)ctx->root)->entries[jlos_paging_get_page_dir_index(va)];
     if (!(*pde & JLOS_PDE_PRESENT) || (*pde & JLOS_PDE_4MB)) {
-        return NULL;
+        return nullptr;
     }
     jlos_page_table_t *pt = (jlos_page_table_t *)PHYS_TO_VIRT(*pde & JLOS_PAGE_ADDR_MASK);
     return &pt->entries[jlos_paging_get_page_table_index(va)];
@@ -165,7 +165,7 @@ bool jlos_arch_map_entry(jlos_paging_context_t *ctx, uint32_t va, uint32_t pa, u
     }
     uint32_t pt_index = jlos_paging_get_page_table_index(va);
     jlos_page_dir_entry_t *pde = &((jlos_page_dir_t *)ctx->root)->entries[jlos_paging_get_page_dir_index(va)];
-    jlos_page_table_t *page_table = NULL;
+    jlos_page_table_t *page_table = nullptr;
     uint32_t pt_phys;
     if (*pde & JLOS_PDE_PRESENT) {
         page_table = (jlos_page_table_t *)PHYS_TO_VIRT(*pde & JLOS_PAGE_ADDR_MASK);
@@ -180,7 +180,7 @@ bool jlos_arch_map_entry(jlos_paging_context_t *ctx, uint32_t va, uint32_t pa, u
         pt_phys = VIRT_TO_PHYS(page_table);
         *pde = VIRT_TO_PHYS(page_table) | JLOS_PDE_PRESENT | JLOS_PDE_WRITABLE | (pte_prot(prot) & JLOS_PDE_USER);
         ctx->num_page_tables++;
-        jlos_page_frame_set_owner_type(pt_phys, NULL, JLOS_PAGE_FRAME_TYPE_PAGE_TABLE);
+        jlos_page_frame_set_owner_type(pt_phys, nullptr, JLOS_PAGE_FRAME_TYPE_PAGE_TABLE);
         jlos_page_frame_pt_present_count_set(pt_phys, 0);
     }
     jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
@@ -256,7 +256,7 @@ bool jlos_arch_map_range_entry(jlos_paging_context_t *ctx, uint32_t va_start, ui
     while (virtual_addr < end_addr) {
         uint32_t pt_index = jlos_paging_get_page_table_index(virtual_addr);
         jlos_page_dir_entry_t *pde = &((jlos_page_dir_t *)ctx->root)->entries[pd_index];
-        jlos_page_table_t *page_table = NULL;
+        jlos_page_table_t *page_table = nullptr;
         uint32_t pt_phys;
         if (*pde & JLOS_PDE_PRESENT) {
             page_table = (jlos_page_table_t *)PHYS_TO_VIRT((*pde) & JLOS_PAGE_ADDR_MASK);
@@ -271,7 +271,7 @@ bool jlos_arch_map_range_entry(jlos_paging_context_t *ctx, uint32_t va_start, ui
             pt_phys = VIRT_TO_PHYS(page_table);
             *pde = VIRT_TO_PHYS(page_table) | JLOS_PDE_PRESENT | JLOS_PDE_WRITABLE | (pte_prot(prot) & JLOS_PDE_USER);
             ctx->num_page_tables++;
-            jlos_page_frame_set_owner_type(pt_phys, NULL, JLOS_PAGE_FRAME_TYPE_PAGE_TABLE);
+            jlos_page_frame_set_owner_type(pt_phys, nullptr, JLOS_PAGE_FRAME_TYPE_PAGE_TABLE);
             jlos_page_frame_pt_present_count_set(pt_phys, 0);
         }
         jlos_page_table_entry_t *pte = &page_table->entries[pt_index];
@@ -478,7 +478,7 @@ void jlos_arch_paging_initialize_kernel(jlos_paging_table_alloc_fn alloc_fn)
     }
     jlos_paging_enable(&s_kernel_paging_context);
     jlos_hal_paging_enable_global_pages();
-    s_page_table_alloc = NULL;
+    s_page_table_alloc = nullptr;
 }
 
 void jlos_arch_paging_print_states(jlos_paging_context_t *ctx)

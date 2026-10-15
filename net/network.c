@@ -14,26 +14,26 @@
 
 extern void jlos_amd_am79c973_activate(jlos_amd_am79c973_t*);
 
-network_stack_t *g_network_stack = NULL;
+network_stack_t *g_network_stack = nullptr;
 
 void network_init(void)
 {
     g_network_stack = (network_stack_t *)jlos_kalloc(sizeof(network_stack_t));
     if (!g_network_stack) {
-        printk_err("network init failed. g_network_stack is NULL\n");
+        printk_err("network init failed. g_network_stack is nullptr\n");
         return;
     }
 
     jlos_net_skb_init();
-    jlos_amd_am79c973_t *eth0 = NULL;
+    jlos_amd_am79c973_t *eth0 = nullptr;
     for (int i = 0; i < g_driver_manager_ptr->num_drivers; i++) {
         jlos_driver_t *drv = g_driver_manager_ptr->drivers[i];
-        if (drv != NULL && drv->activate == (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate) {
+        if (drv != nullptr && drv->activate == (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate) {
             eth0 = (jlos_amd_am79c973_t *)drv;
             break;
         }
     }
-    if (eth0 == NULL) {
+    if (eth0 == nullptr) {
         printk_warn("AMD AM79C973 ethernet driver not found, skipping network stack init\n");
         return;
     }

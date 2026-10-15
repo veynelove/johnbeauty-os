@@ -42,13 +42,13 @@ void jlos_fs_page_cache_init(void)
     jlos_list_lru_init(&s_page_lru);
     jlos_spinlock_init(&s_page_lock);
     s_bh_cache = jlos_memory_slab_cache_create("fs_buffer_head_array",
-        sizeof(jlos_fs_buffer_head_t) * JLOS_FS_PAGE_SECTORS, 0, 0, NULL, NULL);
+        sizeof(jlos_fs_buffer_head_t) * JLOS_FS_PAGE_SECTORS, 0, 0, nullptr, nullptr);
 }
 
 jlos_fs_address_space_t *jlos_fs_address_space_init(jlos_fs_address_space_t *self, void *host, jlos_hal_block_dev_t *bdev)
 {
     if (!self) {
-        return NULL;
+        return nullptr;
     }
     jlos_memset(self, 0, sizeof(jlos_fs_address_space_t));
     self->host = host;
@@ -62,11 +62,11 @@ static jlos_page_t *page_alloc(jlos_fs_address_space_t *mapping, uint64_t index)
 {
     void *addr = jlos_page_frame_malloc();
     if (!addr) {
-        return NULL;
+        return nullptr;
     }
     jlos_page_t *page = jlos_page_frame_to_page(addr);
     jlos_list_init(&page->lru);
-    page->bufs = NULL;
+    page->bufs = nullptr;
     page->page_state = 0;
     page->type = JLOS_PAGE_FRAME_TYPE_FILE_PAGE;
     page->u.file.mapping = mapping;
@@ -228,16 +228,16 @@ jlos_page_t *jlos_fs_page_get(jlos_fs_address_space_t *mapping, uint64_t index)
 
     jlos_page_t *page = page_alloc(mapping, index);
     if (!page) {
-        return NULL;
+        return nullptr;
     }
     if (mapping->readpage) {
         if (mapping->readpage(mapping, page) != 0) {
             page_free(page);
-            return NULL;
+            return nullptr;
         }
     } else if (page_read_block(page) != 0) {
         page_free(page);
-        return NULL;
+        return nullptr;
     }
 
     jlos_atomic_inc(&page->refcount);
@@ -305,7 +305,7 @@ void jlos_fs_page_bh_dirty(jlos_page_t *page, uint32_t sector_idx)
 void jlos_fs_page_cache_shrink(void)
 {
     for (;;) {
-        jlos_page_t *victim = NULL;
+        jlos_page_t *victim = nullptr;
         uint32_t fl = jlos_spin_lock_irqsave(&s_page_lock);
         if (s_page_lru.count > JLOS_FS_PAGE_CACHE_MAX) {
             jlos_list_head_t *n = jlos_list_lru_evict(&s_page_lru);

@@ -8,11 +8,13 @@
 
 #include <common/types.h>
 
-#define JLOS_ATOMIC_INIT(i) {(i)}
+#define JLOS_ATOMIC_INIT(i)     {(i)}
+
 
 typedef struct {
     volatile int counter;
 } jlos_atomic_t;
+
 
 static inline int jlos_atomic_read(const jlos_atomic_t *v)         { return __atomic_load_n(&v->counter, __ATOMIC_SEQ_CST); }
 static inline void jlos_atomic_set(jlos_atomic_t *v, int i)        { __atomic_store_n(&v->counter, i, __ATOMIC_SEQ_CST); }
@@ -40,5 +42,6 @@ static inline int jlos_atomic_add_unless(jlos_atomic_t *v, int add, int unless)
         if (jlos_atomic_cmpxchg(v, &old, old + add)) return old;
     }
 }
+
 
 #endif

@@ -13,7 +13,7 @@ static jlos_memory_slab_cache_t *skbuff_head_cache;
 void jlos_net_skb_init(void)
 {
     skbuff_head_cache =
-        jlos_memory_slab_cache_create("skbuff_head", sizeof(jlos_net_sk_buff_t), JLOS_NET_SKB_HEAD_ALIGN, 0, NULL, NULL);
+        jlos_memory_slab_cache_create("skbuff_head", sizeof(jlos_net_sk_buff_t), JLOS_NET_SKB_HEAD_ALIGN, 0, nullptr, nullptr);
 }
 
 static uint8_t *jlos_net_skb_data_alloc(uint32_t size, uint8_t *flags, uint8_t *pages)
@@ -42,14 +42,14 @@ jlos_net_sk_buff_t *jlos_net_skb_alloc(uint32_t size)
 {
     jlos_net_sk_buff_t *skb = jlos_memory_slab_cache_alloc(skbuff_head_cache);
     if (!skb) {
-        return NULL;
+        return nullptr;
     }
     uint8_t flags;
     uint8_t pages;
     uint8_t *head = jlos_net_skb_data_alloc(size, &flags, &pages);
     if (!head) {
         jlos_memory_slab_cache_free(skbuff_head_cache, skb);
-        return NULL;
+        return nullptr;
     }
     skb->head = head;
     skb->data = head;

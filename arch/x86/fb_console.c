@@ -14,7 +14,7 @@
 #define JLOS_FB_BPP              32
 #define JLOS_FB_CURSOR_HEIGHT    2
 
-static uint32_t *s_fb_base = NULL;
+static uint32_t *s_fb_base = nullptr;
 static uint32_t s_fb_pitch = 0;
 static uint32_t s_fb_pixel_width = 0;
 static uint32_t s_fb_pixel_height = 0;
@@ -125,7 +125,7 @@ static void fb_get_info(jlos_hal_display_info_t *info)
 }
 
 static const jlos_hal_display_ops_t jlos_hal_x86_fb_ops = {
-    .init          = NULL,
+    .init          = nullptr,
     .putc_at       = fb_putc_at,
     .clear         = fb_clear,
     .scroll_up     = fb_scroll_up,

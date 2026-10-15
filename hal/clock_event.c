@@ -47,7 +47,7 @@ void jlos_clock_event_shutdown(void)
 
 void jlos_clock_event_select(void)
 {
-    jlos_clock_event_device_t *best = NULL;
+    jlos_clock_event_device_t *best = nullptr;
     jlos_clock_event_device_t *d;
     jlos_list_for_each_entry(d, &s_evt_devs, list) {
         if (!best || d->rating > best->rating) {

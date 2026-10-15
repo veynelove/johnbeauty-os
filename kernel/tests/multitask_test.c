@@ -23,15 +23,15 @@ static jlos_task_t *spawn_kernel_task(void (*fn)(void), const char *name)
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_task_t *t = (jlos_task_t *)jlos_kalloc(sizeof(*t));
     if (!t) {
-        return NULL;
+        return nullptr;
     }
     if (jlos_task_init(t, mmu, fn, name) < 0) {
         jlos_kfree(t);
-        return NULL;
+        return nullptr;
     }
     if (!jlos_task_manager_add_task(s_mgr, t)) {
         jlos_task_free(s_mgr, t);
-        return NULL;
+        return nullptr;
     }
     jlos_task_manager_enqueue(s_mgr, t);
     return t;
@@ -39,18 +39,7 @@ static jlos_task_t *spawn_kernel_task(void (*fn)(void), const char *name)
 
 static void reap_zombies(void)
 {
-    for (int i = s_mgr->num_tasks - 1; i > 0; i--) {
-        jlos_task_t *t = s_mgr->tasks[i];
-        if (!t || t == s_mgr->idle_task[0]) {
-            continue;
-        }
-        if (t->status == JLOS_TASK_ZOMBIE) {
-            if (!jlos_list_empty(&t->zombie_node)) {
-                jlos_list_del_init(&t->zombie_node);
-            }
-            jlos_task_free(s_mgr, t);
-        }
-    }
+    jlos_task_reap_all_zombies(s_mgr);
 }
 
 static void kernel_task_exit(void)
@@ -83,8 +72,8 @@ static void alt_entry_b(void)
 
 static void fork_test_entry(void)
 {
-    char *argv[] = {"/fork_test.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/fork_test.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/fork_test.elf", 1, argv, envp);
     if (ret < 0) {
@@ -94,8 +83,8 @@ static void fork_test_entry(void)
 
 static void ring3_loader_entry(void)
 {
-    char *argv[] = {"/hello.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/hello.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/hello.elf", 1, argv, envp);
     if (ret < 0) {
@@ -105,8 +94,8 @@ static void ring3_loader_entry(void)
 
 static void ring3_file_test_entry(void)
 {
-    char *argv[] = {"/file_test.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/file_test.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/file_test.elf", 1, argv, envp);
     if (ret < 0) {
@@ -116,8 +105,8 @@ static void ring3_file_test_entry(void)
 
 static void ring3_signal_test_entry(void)
 {
-    char *argv[] = {"/signal_test.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/signal_test.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/signal_test.elf", 1, argv, envp);
     if (ret < 0) {
@@ -127,8 +116,8 @@ static void ring3_signal_test_entry(void)
 
 static void ring3_mmap_test_entry(void)
 {
-    char *argv[] = {"/mmap_test.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/mmap_test.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/mmap_test.elf", 1, argv, envp);
     if (ret < 0) {
@@ -138,8 +127,8 @@ static void ring3_mmap_test_entry(void)
 
 static void ring3_nanosleep_test_entry(void)
 {
-    char *argv[] = {"/nanosleep_test.elf", NULL};
-    char *envp[] = {NULL};
+    char *argv[] = {"/nanosleep_test.elf", nullptr};
+    char *envp[] = {nullptr};
     jlos_task_t *current_task = jlos_hal_current_task();
     int ret = jlos_process_exec_elf(current_task, "/nanosleep_test.elf", 1, argv, envp);
     if (ret < 0) {
@@ -198,8 +187,7 @@ JLOS_TEST(multitask, fork_pressure)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *ft = jlos_task_manager_find_pid(s_mgr, pid);
-        if (ft && ft->status == JLOS_TASK_ZOMBIE && ft->exit_code == 42) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);
@@ -218,8 +206,7 @@ JLOS_TEST(multitask, ring3_smoke)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *rt = jlos_task_manager_find_pid(s_mgr, pid);
-        if (rt && rt->status == JLOS_TASK_ZOMBIE && rt->exit_code == 7) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 7)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);
@@ -238,8 +225,7 @@ JLOS_TEST(multitask, ring3_file)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *ft = jlos_task_manager_find_pid(s_mgr, pid);
-        if (ft && ft->status == JLOS_TASK_ZOMBIE && ft->exit_code == 42) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);
@@ -258,8 +244,7 @@ JLOS_TEST(multitask, ring3_signal)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *st = jlos_task_manager_find_pid(s_mgr, pid);
-        if (st && st->status == JLOS_TASK_ZOMBIE && st->exit_code == 42) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);
@@ -278,8 +263,7 @@ JLOS_TEST(multitask, ring3_mmap)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *mt = jlos_task_manager_find_pid(s_mgr, pid);
-        if (mt && mt->status == JLOS_TASK_ZOMBIE && mt->exit_code == 42) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);
@@ -298,8 +282,7 @@ JLOS_TEST(multitask, ring3_nanosleep)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
-        jlos_task_t *nt = jlos_task_manager_find_pid(s_mgr, pid);
-        if (nt && nt->status == JLOS_TASK_ZOMBIE && nt->exit_code == 42) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
         for (volatile int k = 0; k < 20000; k++);

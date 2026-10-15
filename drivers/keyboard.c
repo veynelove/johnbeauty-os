@@ -70,7 +70,7 @@ uint32_t jlos_keyboard_driver_handle_interrupt(jlos_keyboard_driver_t* self, uin
         return esp;
     }
     uint8_t key = jlos_io8_read(&keyboard->dataport);
-    if (keyboard->handler == NULL) return esp;
+    if (keyboard->handler == nullptr) return esp;
     static bool shift = false;
     switch (key) {
         case 0x29: if(shift) keyboard->handler->key_down(keyboard->handler, '~'); else keyboard->handler->key_down(keyboard->handler, '`'); break;

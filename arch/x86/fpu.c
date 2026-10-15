@@ -10,7 +10,7 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 
-static jlos_task_t      *s_fpu_owner = NULL;
+static jlos_task_t      *s_fpu_owner = nullptr;
 static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
 static bool             s_init_template_done = false;
 
@@ -44,7 +44,7 @@ void jlos_arch_task_ext_destroy(jlos_task_t *task)
 {
     uint32_t fl = jlos_spin_lock_irqsave(&s_fpu_lock);
     if (s_fpu_owner == task) {
-        s_fpu_owner = NULL;
+        s_fpu_owner = nullptr;
     }
     jlos_spin_unlock_irqrestore(&s_fpu_lock, fl);
 }

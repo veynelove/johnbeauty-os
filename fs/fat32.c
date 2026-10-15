@@ -351,7 +351,7 @@ static bool fat32_name_char_legal(char c)
 
 static bool fat32_name_need_lfn(const char *name)
 {
-    const char *dot = NULL;
+    const char *dot = nullptr;
     uint32_t name_len = 0;
     for (uint32_t i = 0; name[i]; i++) {
         if (name[i] == '.') {
@@ -402,7 +402,7 @@ static bool fat32_name_need_lfn(const char *name)
 
 static void fat32_generate_short_name(const char *name, jlos_fat32_dirent_t *de)
 {
-    const char *dot = NULL;
+    const char *dot = nullptr;
     for (const char *p = name; *p; p++) {
         if (*p == '.') {
             dot = p;
@@ -465,7 +465,7 @@ static uint32_t fat32_lfn_build(const char *name, uint8_t checksum, jlos_fat32_d
 
 static int fat32_name_to_83(const char *name, jlos_fat32_dirent_t *de)
 {
-    const char *dot = NULL;
+    const char *dot = nullptr;
     uint32_t name_len = 0;
     for (uint32_t i = 0; name[i]; i++) {
         if (name[i] == '.') {
@@ -613,7 +613,7 @@ static fat32_scan_verdict_t fat32_dir_scan(jlos_vfs_inode_t *dir, fat32_dir_matc
                 lfn_valid = true;
                 continue;
             }
-            const char *long_name = lfn_valid ? lfn_buf : NULL;
+            const char *long_name = lfn_valid ? lfn_buf : nullptr;
             lfn_valid = false;
             fat32_scan_verdict_t v = match(de, entry_pos, long_name, ctx);
             if (v == FAT32_SCAN_MISS) {
@@ -745,13 +745,13 @@ static jlos_vfs_inode_t *fat32_alloc_inode(jlos_vfs_super_block_t *sb)
     (void)sb;
     jlos_vfs_inode_t *inode = jlos_kalloc(sizeof(jlos_vfs_inode_t));
     if (!inode) {
-        return NULL;
+        return nullptr;
     }
     jlos_memset(inode, 0, sizeof(*inode));
     jlos_fat32_inode_info_t *fi = jlos_kalloc(sizeof(jlos_fat32_inode_info_t));
     if (!fi) {
         jlos_kfree(inode);
-        return NULL;
+        return nullptr;
     }
     jlos_memset(fi, 0, sizeof(*fi));
     inode->fs_private = fi;
@@ -779,7 +779,7 @@ static jlos_vfs_inode_t *fat32_dirent_to_inode(jlos_vfs_inode_t *dir, uint32_t d
     jlos_vfs_super_block_t *sb = dir->sb;
     jlos_vfs_inode_t *inode = jlos_vfs_inode_alloc(sb, first_cluster);
     if (!inode) {
-        return NULL;
+        return nullptr;
     }
     inode->mode = (de->attributes & JLOS_FAT32_ATTR_DIRECTORY) ? JLOS_VFS_S_IFDIR : JLOS_VFS_S_IFREG;
     inode->size = de->size;
@@ -799,11 +799,11 @@ static jlos_vfs_dentry_t *fat32_lookup_inner(jlos_vfs_inode_t *dir, const char *
 
     fat32_dirent_hit_t hit;
     if (fat32_dir_scan(dir, fat32_match_name, (void *)name, &hit) != FAT32_SCAN_HIT) {
-        return NULL;
+        return nullptr;
     }
     jlos_vfs_inode_t *inode = fat32_dirent_to_inode(dir, hit.dirent_offset, &hit.de);
     if (!inode) {
-        return NULL;
+        return nullptr;
     }
     return jlos_vfs_dentry_alloc(name, inode);
 }
@@ -1100,17 +1100,17 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     uint8_t sector[JLOS_FAT32_BYTES_PER_SECTOR];
     if (jlos_hal_block_read(dev, 0, sector, 1) != 0) {
         printk_err("failed to read BPB\n");
-        return NULL;
+        return nullptr;
     }
     jlos_fat32_bpb_t bpb;
     jlos_memcpy(&bpb, sector, sizeof(bpb));
     if (bpb.bytes_per_sector != JLOS_FAT32_BYTES_PER_SECTOR) {
         printk_err("unsupported sector size: %u\n", bpb.bytes_per_sector);
-        return NULL;
+        return nullptr;
     }
     jlos_fat32_sb_info_t *sbi = jlos_kalloc(sizeof(jlos_fat32_sb_info_t));
     if (!sbi) {
-        return NULL;
+        return nullptr;
     }
     jlos_memcpy(&sbi->bpb, &bpb, sizeof(bpb));
     sbi->fat_start = bpb.reserved_sectors;
@@ -1128,7 +1128,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     jlos_vfs_super_block_t *sb = jlos_kalloc(sizeof(jlos_vfs_super_block_t));
     if (!sb) {
         jlos_kfree(sbi);
-        return NULL;
+        return nullptr;
     }
     jlos_memset(sb, 0, sizeof(*sb));
     sb->block_dev = dev;
@@ -1140,7 +1140,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     if (!root_inode) {
         jlos_kfree(sbi);
         jlos_kfree(sb);
-        return NULL;
+        return nullptr;
     }
     root_inode->mode = JLOS_VFS_S_IFDIR;
     root_inode->size = 0;
@@ -1154,7 +1154,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
         jlos_vfs_inode_put(root_inode);
         jlos_kfree(sbi);
         jlos_kfree(sb);
-        return NULL;
+        return nullptr;
     }
     sb->root_dentry = root_dentry;
 

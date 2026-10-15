@@ -31,7 +31,7 @@ bool jlos_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_sock
 void jlos_tcp_socket_init(jlos_tcp_socket_t* self, jlos_tcp_provider_t *backend)
 {
     self->backend = backend;
-    self->handler = NULL;
+    self->handler = nullptr;
     self->state = JLOS_TCP_CLOSED;
     jlos_cond_init(&self->state_cond);
     jlos_mutex_init(&self->state_mutex);
@@ -126,7 +126,7 @@ static bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t*
         flags,
         JLOS_SWAP_ENDIAN_32(msg->sequence_number),
         JLOS_SWAP_ENDIAN_32(msg->acknowledgement_number));
-    jlos_tcp_socket_t *socket = NULL;
+    jlos_tcp_socket_t *socket = nullptr;
     jlos_tcp_key_t key = {skb->dst_ip, msg->dst_port};
     uint32_t args[] = {skb->src_ip, msg->src_port, flags, skb->dst_ip, msg->dst_port};
     jlos_hash_node_t *node = jlos_hash_chain_find(&self->sockets, &key, tcp_match_socket, args);

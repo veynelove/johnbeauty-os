@@ -33,7 +33,7 @@ void jlos_udp_socket_init(jlos_udp_socket_t* self, jlos_udp_provider_t *backend)
 {
     printk_debug("socket initialized\n");
     self->backend = backend;
-    self->handler = NULL;
+    self->handler = nullptr;
     self->listening = false;
     self->handle_udp_message = jlos_udp_socket_handle_udp_message;
     self->send = jlos_udp_socket_send;
@@ -114,7 +114,7 @@ static bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t*
     jlos_udp_header_t *msg = (jlos_udp_header_t *)skb->data;
     printk_debug("destination port=%x%x\n", msg->dst_port & 0xFF, (msg->dst_port >> 8) & 0xFF);
 
-    jlos_udp_socket_t *socket = NULL;
+    jlos_udp_socket_t *socket = nullptr;
     jlos_udp_key_t key = {skb->dst_ip, msg->dst_port};
     uint32_t args[] = {skb->src_ip, msg->src_port, skb->dst_ip, msg->dst_port};
     jlos_hash_node_t *node = jlos_hash_chain_find(&self->sockets, &key, udp_match_socket, args);

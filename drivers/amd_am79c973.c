@@ -26,7 +26,7 @@ void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t
 
 void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self)
 {
-    jlos_amd_am79c973_set_handler(self->backend, NULL);
+    jlos_amd_am79c973_set_handler(self->backend, nullptr);
 }
 
 void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
@@ -55,7 +55,7 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     jlos_io16_init(&self->reset_port, dev->port_base + 0x14);
     jlos_io16_init(&self->bus_control_register_data_port, dev->port_base + 0x16);
 
-    self->handler = NULL;
+    self->handler = nullptr;
     self->current_send_buffer = 0;
     self->current_recv_buffer = 0;
 

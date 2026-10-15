@@ -13,7 +13,7 @@
 uint32_t jlos_device_physical_memory_end = 0;
 uint32_t jlos_device_available_ram_bytes = 0;
 
-const multiboot_info_t *jlos_device_multiboot_info = NULL;
+const multiboot_info_t *jlos_device_multiboot_info = nullptr;
 
 void jlos_device_init(const multiboot_info_t *mb)
 {

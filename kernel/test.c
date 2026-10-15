@@ -55,11 +55,11 @@ void jlos_test_run_all(void)
     uint32_t num_suites = 0;
     uint32_t total_pass = 0;
     uint32_t total_fail = 0;
-    const char *cur_suite = NULL;
+    const char *cur_suite = nullptr;
     const jlos_test_case_t *t;
 
     for (t = __jlos_test_start; t < __jlos_test_end; t++) {
-        if (cur_suite == NULL || jlos_strcmp(t->suite, cur_suite) != 0) {
+        if (cur_suite == nullptr || jlos_strcmp(t->suite, cur_suite) != 0) {
             printk_info("=== %s ===\n", t->suite);
             cur_suite = t->suite;
             if (num_suites < JLOS_TEST_MAX_SUITES) {

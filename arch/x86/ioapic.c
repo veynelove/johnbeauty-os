@@ -45,7 +45,7 @@ static jlos_ioapic_t *jlos_ioapic_for_gsi(uint32_t gsi)
             return ioapic;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static void jlos_ioapic_set_entry(uint32_t gsi, uint32_t vector, uint32_t dest, uint16_t flags)

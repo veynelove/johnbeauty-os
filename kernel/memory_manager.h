@@ -8,6 +8,8 @@
 
 #include <common/types.h>
 #include <hal/smp.h>
+#include <hal/spinlock.h>
+#include <hal/atomic.h>
 #include <dsa/list.h>
 
 #define KERNEL_MEMORY_PHYSICAL_START        0x100000
@@ -76,7 +78,8 @@ typedef struct jlos_memory_slab_page jlos_memory_slab_page_t;
 
 typedef struct {
     jlos_memory_slab_page_t *partial;
-    uint32_t                 partial_count;
+    uint32_t                partial_count;
+    jlos_spinlock_t         lock;
 } jlos_memory_slab_cpu_t;
 
 typedef struct jlos_memory_slab_cache {
@@ -101,13 +104,14 @@ typedef struct jlos_memory_slab_cache {
 } jlos_memory_slab_cache_t;
 
 typedef struct jlos_memory_slab_page {
-    struct jlos_memory_slab_page *next;
-    struct jlos_memory_slab_page *prev;
-    jlos_memory_slab_cache_t     *cache;
-    uint32_t                     inuse;
-    void                         *freelist;
-    uint32_t                     obj_count;
-    uint8_t                      *obj_start;
+    struct jlos_memory_slab_page    *next;
+    struct jlos_memory_slab_page    *prev;
+    jlos_memory_slab_cache_t        *cache;
+    uint32_t                        obj_count;
+    uint8_t                         *obj_start;
+    int32_t                         owner;
+    uint32_t                        inuse;
+    void                            *freelist;
 } jlos_memory_slab_page_t;
 
 jlos_memory_slab_cache_t *jlos_memory_slab_cache_create(const char *name, size_t size, size_t align,

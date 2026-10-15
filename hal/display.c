@@ -5,7 +5,7 @@
 
 #include <hal/display.h>
 
-const jlos_hal_display_ops_t *jlos_hal_display_ops = NULL;
+const jlos_hal_display_ops_t *jlos_hal_display_ops = nullptr;
 
 void jlos_hal_display_init(void)
 {

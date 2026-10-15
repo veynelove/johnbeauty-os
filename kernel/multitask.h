@@ -150,6 +150,11 @@ int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(vo
 int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task);
 
+int32_t jlos_task_reap_child(jlos_task_manager_t *self, uint32_t pid, jlos_task_t *parent, int32_t *exit_code_out);
+void jlos_task_reap_all_zombies(jlos_task_manager_t *self);
+int32_t jlos_task_wait_or_reap(jlos_task_manager_t *self, uint32_t pid, jlos_task_t *parent, int32_t *exit_code_out);
+bool jlos_task_check_zombie_exit(jlos_task_manager_t *self, uint32_t pid, uint32_t expected_exit);
+
 int32_t jlos_task_fd_malloc(jlos_task_t *task);
 jlos_task_fd_t *jlos_task_fd_get(jlos_task_t *task, int32_t fd);
 void jlos_task_fd_free(jlos_task_t *task, int32_t fd);
@@ -191,7 +196,7 @@ jlos_task_t *jlos_process_clone(jlos_task_manager_t *self,
     jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack);
 
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
-__attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
+[[noreturn]] void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);

@@ -20,7 +20,7 @@ static uint32_t s_x86_syscall_entry(void *handler, uint32_t ctx)
         cpu->eax = (uint32_t)jlos_hal_syscall_dispatch(cpu->eax, cpu->ebx, cpu->ecx, cpu->edx);
     }
     if (me) {
-        me->syscall_tf = NULL;
+        me->syscall_tf = nullptr;
     }
     if (jlos_hal_syscall_resched_check && jlos_hal_syscall_resched_check()) {
         if (jlos_hal_syscall_resched_do) {

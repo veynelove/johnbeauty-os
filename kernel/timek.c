@@ -98,7 +98,7 @@ static int tick_hrtimer_func(jlos_hrtimer_t *timer)
 void jlos_tick_init_cpu(void)
 {
     jlos_hrtimer_t *tick = this_cpu_ptr(jlos_cpu_tick_hrtimer);
-    jlos_hrtimer_init(tick, tick_hrtimer_func, NULL);
+    jlos_hrtimer_init(tick, tick_hrtimer_func, nullptr);
     jlos_clock_event_shutdown();
     jlos_clock_event_start_oneshot();
     jlos_hrtimer_start(jlos_hrtimer_get_base(), tick, JLOS_TICK_PERIOD_NS, JLOS_TICK_PERIOD_NS, JLOS_HRTIMER_MODE_REL);

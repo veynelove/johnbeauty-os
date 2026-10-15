@@ -66,7 +66,7 @@ static void jlos_vfs_init(void)
 {
     jlos_list_init(&s_fs_types);
     jlos_list_init(&s_mounts);
-    s_root_dentry = NULL;
+    s_root_dentry = nullptr;
     jlos_spinlock_init(&s_vfs_lock);
     jlos_hash_chain_init(&s_inode_hash, JLOS_VFS_HASH_BUCKETS, inode_hash_fn, inode_cmp_fn);
     jlos_hash_chain_init(&s_dentry_hash, JLOS_VFS_HASH_BUCKETS, dentry_hash_fn, dentry_cmp_fn);
@@ -101,7 +101,7 @@ static jlos_vfs_fs_type_t *find_fs_type(const char *name)
             return ft;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static jlos_vfs_dentry_t *dentry_lookup_child(jlos_vfs_dentry_t *parent, const char *name)
@@ -109,7 +109,7 @@ static jlos_vfs_dentry_t *dentry_lookup_child(jlos_vfs_dentry_t *parent, const c
     vfs_dentry_key_t key = {.parent = parent, .name = name};
     jlos_hash_node_t *node = jlos_hash_chain_see(&s_dentry_hash, &key);
     if (!node) {
-        return NULL;
+        return nullptr;
     }
     return container_of(node, jlos_vfs_dentry_t, hash_node);
 }
@@ -127,7 +127,7 @@ static int path_next_component(const char *path, char *buf, size_t bufsize)
 
 static int path_parent_leaf(const char *path, char *parent, size_t parent_size, char *leaf, size_t leaf_size)
 {
-    const char *slash = NULL;
+    const char *slash = nullptr;
     for (const char *p = path; *p; p++) {
         if (*p == '/') {
             slash = p;
@@ -155,18 +155,18 @@ jlos_vfs_mount_t *jlos_vfs_mount(const char *fs_type_name, jlos_hal_block_dev_t 
     jlos_vfs_fs_type_t *ft = find_fs_type(fs_type_name);
     if (!ft) {
         printk_err("unknown fs type: %s\n", fs_type_name);
-        return NULL;
+        return nullptr;
     }
-    jlos_vfs_super_block_t *sb = ft->mount(dev, NULL);
+    jlos_vfs_super_block_t *sb = ft->mount(dev, nullptr);
     if (!sb) {
         printk_err("mount failed\n");
-        return NULL;
+        return nullptr;
     }
     sb->fs_type = ft;
     jlos_fs_address_space_init(&sb->block_mapping, sb->block_dev, sb->block_dev);
     jlos_vfs_mount_t *mnt = jlos_kalloc(sizeof(jlos_vfs_mount_t));
     if (!mnt) {
-        return NULL;
+        return nullptr;
     }
     jlos_memset(mnt, 0, sizeof(*mnt));
     mnt->sb = sb;
@@ -174,13 +174,13 @@ jlos_vfs_mount_t *jlos_vfs_mount(const char *fs_type_name, jlos_hal_block_dev_t 
         s_root_dentry = sb->root_dentry;
         jlos_vfs_dentry_get(s_root_dentry);
         mnt->root = s_root_dentry;
-        mnt->mountpoint = NULL;
+        mnt->mountpoint = nullptr;
     } else {
         jlos_vfs_dentry_t *mp = jlos_vfs_lookup(mount_path);
         if (!mp) {
             printk_err("mountpoint not fount: %s\n", mount_path);
             jlos_kfree(mnt);
-            return NULL;
+            return nullptr;
         }
         mp->inode = sb->root_dentry->inode;
         jlos_vfs_inode_get(mp->inode);
@@ -212,7 +212,7 @@ jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path)
 {
     const char *p = path;
     if (!p || p[0] != '/' || !s_root_dentry) {
-        return NULL;
+        return nullptr;
     }
     char component[JLOS_VFS_NAME_MAX + 1];
     jlos_vfs_dentry_t *cur = s_root_dentry;
@@ -239,12 +239,12 @@ jlos_vfs_dentry_t *jlos_vfs_lookup(const char *path)
         }
         if (!cur->inode || !cur->inode->i_ops || !cur->inode->i_ops->lookup) {
             jlos_vfs_dentry_put(cur);
-            return NULL;
+            return nullptr;
         }
         child = cur->inode->i_ops->lookup(cur->inode, component);
         if (!child) {
             jlos_vfs_dentry_put(cur);
-            return NULL;
+            return nullptr;
         }
         child->parent = cur;
         jlos_vfs_dentry_get(cur);
@@ -286,12 +286,12 @@ jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags, uint32_t mode)
         if (d) {
             jlos_vfs_dentry_put(d);
         }
-        return NULL;
+        return nullptr;
     }
     jlos_vfs_file_t *file = jlos_kalloc(sizeof(jlos_vfs_file_t));
     if (!file) {
         jlos_vfs_dentry_put(d);
-        return NULL;
+        return nullptr;
     }
     jlos_memset(file, 0, sizeof(*file));
     file->dentry = d;
@@ -304,7 +304,7 @@ jlos_vfs_file_t *jlos_vfs_open(const char *path, uint32_t flags, uint32_t mode)
         if (file->f_ops->open(file) != 0) {
             jlos_vfs_dentry_put(d);
             jlos_kfree(file);
-            return NULL;
+            return nullptr;
         }
     }
     return file;
@@ -353,7 +353,7 @@ int jlos_vfs_unlink(const char *path)
         jlos_list_del(&d->sibling);
         jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
         jlos_vfs_dentry_put(d->parent);
-        d->parent = NULL;
+        d->parent = nullptr;
     }
     jlos_vfs_dentry_put(d);
     return 0;
@@ -443,8 +443,8 @@ void jlos_vfs_dentry_get(jlos_vfs_dentry_t *dentry)
 static void dentry_shrink(void)
 {
     for (;;) {
-        jlos_vfs_dentry_t *victim = NULL;
-        jlos_vfs_dentry_t *parent = NULL;
+        jlos_vfs_dentry_t *victim = nullptr;
+        jlos_vfs_dentry_t *parent = nullptr;
         uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
         if (s_dentry_lru.count > JLOS_VFS_DCACHE_MAX) {
             jlos_list_head_t *n = jlos_list_lru_evict(&s_dentry_lru);
@@ -454,7 +454,7 @@ static void dentry_shrink(void)
                 if (victim->parent) {
                     jlos_list_del(&victim->sibling);
                     parent = victim->parent;
-                    victim->parent = NULL;
+                    victim->parent = nullptr;
                 }
             }
         }
@@ -498,11 +498,11 @@ void jlos_vfs_dentry_put(jlos_vfs_dentry_t *dentry)
 jlos_vfs_inode_t *jlos_vfs_inode_alloc(jlos_vfs_super_block_t *sb, uint32_t ino)
 {
     if (!sb || !sb->ops || !sb->ops->alloc_inode) {
-        return NULL;
+        return nullptr;
     }
     jlos_vfs_inode_t *inode = sb->ops->alloc_inode(sb);
     if (!inode) {
-        return NULL;
+        return nullptr;
     }
     inode->ino = ino;
     inode->sb = sb;
@@ -517,14 +517,14 @@ jlos_vfs_dentry_t *jlos_vfs_dentry_alloc(const char *name, jlos_vfs_inode_t *ino
 {
     jlos_vfs_dentry_t *d = jlos_kalloc(sizeof(jlos_vfs_dentry_t));
     if (!d) {
-        return NULL;
+        return nullptr;
     }
     jlos_memset(d, 0, sizeof(*d));
     jlos_list_init(&d->lru);
     jlos_strlcpy(d->name, name, JLOS_VFS_NAME_MAX + 1);
     d->name_len = (uint32_t)jlos_strlen(d->name);
     d->inode = inode;
-    d->parent = NULL;
+    d->parent = nullptr;
     jlos_list_init(&d->child_list);
     jlos_list_init(&d->sibling);
     jlos_atomic_set(&d->ref_count, 1);

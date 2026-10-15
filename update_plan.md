@@ -1,6 +1,10 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v4.0 | 日期: 2026-10-13 | 作者: JohnLove
+版本: v4.2 | 日期: 2026-10-15 | 作者: JohnLove
+
+> v4.2 变更：C23 标准升级完成（-std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删除 types.h 冲突定义）；slab per-CPU partial 跨核 free 损坏修复（per-CPU lock + limbo 哨兵 + owner 字段，SLUB 风格加锁版）+ reap_all_zombies 无限循环修复（prev_task 占用检查）；清理诊断 printk + 删除废弃 atomic64 代码。54/54 全 PASS。
+
+> v4.1 变更：确立项目核心愿景——"基于现代计算机世界全面成果，一气呵成、优雅、充分利用近几十年计算机发展成果的内核"（非 Linux 复制品）。后续路线更新：C23 标准升级（先于 64 位化——语言基础设施先于架构变更，64 位化重写代码时直接用现代语法避免返工）；64 位化（P1）采用同目录 + #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64，同时支持 32/64 位，嵌入式场景保留 32 位）。
 
 > v4.0 变更：SMP 8 步全部完成——per-CPU 基础 + LAPIC + ACPI/AP 启动 + 中断改造 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC。衡生竞态修复 3 项：时间系统 SMP 竞态（s_ticks 4 倍速 + monotonic_ns 竞态）、fork 子进程生命周期竞态（rq_enqueue 延后）、zombie reaping 竞态（per-CPU prev_task 防跨核释放）。VMware 4 核 54/54 测试全 PASS。
 
@@ -86,6 +90,8 @@
 | printk 宽度修饰 | flags(-/0) + width 解析 + printk_fmt_uint/int + emit_padded | 汇总表格列对齐 |
 | SMP 多核支持 | per-CPU 基础 + LAPIC + ACPI/AP 启动 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC | VMware 4 核 54/54 全 PASS |
 | SMP 竞态修复 | 时间系统（s_ticks 4 倍速 + monotonic_ns 竞态）+ fork 子进程生命周期（enqueue 延后）+ zombie reaping（per-CPU prev_task） | 54/54 全 PASS |
+| C23 标准升级 | -std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删 types.h 冲突定义 + \_\_typeof\_\_→typeof + NULL→nullptr + \_\_attribute\_\_((noreturn))→[[noreturn]] + \_Static\_assert→static_assert | 54/54 全 PASS |
+| slab per-CPU 加锁修复 | per-CPU lock 串行化 pop/push + limbo 哨兵（owner=-2）转移中页 + s_slab_lock→cs->lock 锁序 + reap_all_zombies prev_task 占用检查防无限循环 | 54/54 全 PASS |
 
 ***
 
@@ -193,14 +199,14 @@ graph TD
 | MT-SlotIdx  | **slot\_idx 维护 UAF 修复**：free 紧凑删除（末尾搬到被删位置）未更新被搬任务的 slot\_idx → 该任务 slot\_idx 失效 → schedule fallback 失败 → 越界写入错误位置 → tasks\[] stale 指针 → UAF。加 `tasks[idx]==task` 校验 + 搬移后更新被搬任务 slot\_idx                                                             | ✅      | multitask.c               |
 | MT-RqUB     | **rq\_dequeue** **`__builtin_ctz(0)`** **UB 修复**：先 ctz 后判空, GCC 在 UB 假设下可能优化掉判空 → runqueue 真空时 ctz 返回垃圾值 → `rq[l]` 越界 → `first=&head`（自指）→ `list_del(head)` 删 head 自己 → runqueue 彻底损坏 → schedule `return cpustate` 死循环卡死。调换为先判空再 ctz                        | ✅      | multitask.c               |
 | MT-ForkList | **fork 浅拷贝链表节点修复**：`*child=*parent` 复制了 `rq_node`/`zombie_node`（指向 parent 节点地址, 非 child 自己）只重置了 `pid_hash_node` → `task_on_rq(child)` enqueue 前误判 true + `jlos_task_free` 误判 child 在 zombie 链表。补 `jlos_list_init` 重置两个链表节点                                        | ✅      | multitask.c               |
-| MT-TF | **exit 泄漏全局 syscall trapframe（严重 Bug）**：`jlos_process_exit` 经 syscall 路径永不返回 → `s_x86_syscall_entry` 尾部清空 `g_hal_syscall_trapframe` 永不执行 → 全局残留指向已释放栈的死 trapframe → 下一个内核任务 exec 误走 via-trapframe 分支（写死帧 + 返回 0）→ 调用方从 naked stub 掉落 → triple fault（vmplayer 禁用 CPU）。修复：exit 开头补 `g_hal_syscall_trapframe = NULL` | ✅      | multitask.c + arch/x86/kernel_syscall.c |
+| MT-TF | **exit 泄漏全局 syscall trapframe（严重 Bug）**：`jlos_process_exit` 经 syscall 路径永不返回 → `s_x86_syscall_entry` 尾部清空 `g_hal_syscall_trapframe` 永不执行 → 全局残留指向已释放栈的死 trapframe → 下一个内核任务 exec 误走 via-trapframe 分支（写死帧 + 返回 0）→ 调用方从 naked stub 掉落 → triple fault（vmplayer 禁用 CPU）。修复：exit 开头补 `g_hal_syscall_trapframe = nullptr` | ✅      | multitask.c + arch/x86/kernel_syscall.c |
 | MT-Cleanup  | **冗余字段/死代码清理**：删 `jlos_task_t.fds_size`（边界检查全用 `JLOS_TASK_FDS_NUM` 常量, 该字段仅写不读）+ 删 `set_blocked`/`set_waiting` 中 `yield=true` 死赋值（两函数同时改 status, 进不了 schedule 的 RUNNING 分支读 yield）。`yield` 字段本身保留（`syscall_yield`/`need_resched`/降优先级判断真实使用） | ✅      | multitask.h + multitask.c |
 
 ### 设计决策
 
 | 决策                                         | 理由                                                                                        |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 NULL，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
+| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 nullptr，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
 | task struct 仅加 1 个字段 (`next_hash`)      | 不加 `parent`/`children_head`/`next_sibling`/`prev_sibling`，将来加信号系统时再补           |
 | 保持 swap-with-last O(1) 删除                | 倒序遍历 + swap 不会跳过元素（已确认正确）                                                  |
 
@@ -354,7 +360,7 @@ graph TD
 | # | 问题 | 修复 | 文件 |
 | --- | --- | --- | --- |
 | BC-1 | Backspace scancode 0x0E 缺失 | 添加 `case 0x0E: key_down('\b')` | drivers/keyboard.c |
-| BC-2 | `handles[i] = NULL` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
+| BC-2 | `handles[i] = nullptr` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
 | BC-3 | syscall initcall 与 IRQ manager 同级，handles 清零覆盖 | syscall 从 SUBSYS 改为 DEVICE | kernel/syscall.c |
 | BC-4 | 用户栈 VMA end 不含栈顶 `0xBFFFF000` | 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE` (= `0xC0000000`) | kernel/multitask.c |
 
@@ -394,7 +400,7 @@ graph TD
 | execve 方案 A | ✅ | 经典做法：复用内核栈，修改 trapframe（eip/cs/user\_esp/user\_ss/eflags），正常 return 由 iret 到新程序 |
 | trapframe 修改 | ✅ | `jlos\_cpu\_state\_set\_user\_entry`（hal/cpu\_state.h + arch/x86/cpu\_state.c） |
 | 全局 trapframe | ✅ | `g\_hal\_syscall\_trapframe`（hal/kernel\_syscall.c）在 syscall entry 设置/清除 |
-| argv/envp 栈布局 | ✅ | System V ABI x86 32-bit 经典栈布局：环境字符串 → 参数字符串 → NULL → envp\[\] → NULL → argv\[\] → argc |
+| argv/envp 栈布局 | ✅ | System V ABI x86 32-bit 经典栈布局：环境字符串 → 参数字符串 → nullptr → envp\[\] → nullptr → argv\[\] → argc |
 | 用户空间拷贝 | ✅ | `syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈 |
 
 ### 8.4 用户态子项目（jlcy/）
@@ -462,7 +468,7 @@ multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf
 | 接收路径改造 | ✅ | NIC 收帧 alloc_skb+memcpy → 各层 on_received 改 skb + skb_pull 跳过头部 + send_back in-place 回送 |
 | csum_partial + csum_fold | ✅ | 替换 check_sum：csum_partial 分段累加 + csum_fold 折叠取反；TCP 用栈上 pseudo header + 分段累加，零临时 kalloc |
 | skb_push bug 修复 | ✅ | 删除错误的 `tail -= len`，push 只动 data 不动 tail（否则 skb_len 不随 push 增加，NIC 发包缺头部） |
-| TCP 崩溃修复 | ✅ | `arch/x86/lib/memcpy.s` + `memset.s` 入口加 size=0 早期返回（原汇编版无检查，jlos_memcpy(dst,NULL,0) 解引用 NULL → triple fault） |
+| TCP 崩溃修复 | ✅ | `arch/x86/lib/memcpy.s` + `memset.s` 入口加 size=0 早期返回（原汇编版无检查，jlos_memcpy(dst,nullptr,0) 解引用 nullptr → triple fault） |
 | 阶段 5 推迟 | ⏸ | 队列（backlog/发送）+ clone 在当前架构无消费者（无 softirq/packet socket，NIC 同步发送），推迟至需求出现时 |
 | 验证 | ✅ | DHCP/ARP/ICMP/UDP/TCP 全通：三次握手 + HTTP GET/响应 + 四次挥手；所有内核测试全绿 |
 
@@ -555,14 +561,14 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**1（P1）**~~ | ~~F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持~~ | **已完成**：open/close/read/write/lseek/unlink syscall + fat32 write/create/unlink + file\_test（write/read match、lseek、unlink+reopen-fail）ALL PASSED | Phase 8 ✅ |
 | ~~**2（P1）**~~ | ~~5.1/5.4 接口收尾：PAG-7 + PFA-5~~ | **已完成**：PAG-7 `s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 化（arch/x86/paging.c）；PFA-5 `jlos_page_frame_alloc_n/free_n` 统一多帧 API，mm/paging/测试全量切换 | 无 |
 | ~~**3（P1/P2）**~~ | ~~F7 signal/kill + F11 mmap/munmap（匿名映射）~~ | **已完成**：F7 signal/kill（signal\_test ALL PASSED）+ F11 mmap/munmap（mmap\_test ALL PASSED）+ F8 fork/clone（COW + ret\_from\_fork）压测通过 | 批次 2 ✅ |
-| ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init NULL/fork clear），exit 经 kfree 隐式回收 | 无 |
+| ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init nullptr/fork clear），exit 经 kfree 隐式回收 | 无 |
 | ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
 | ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
 | ~~**6（P0）**~~ | ~~SMP 实现（Step 1-8：per-CPU + LAPIC + ACPI/AP + 中断改造 + IPI + 调度器 SMP + 锁优化 + IOAPIC）~~ | **已完成**：8 步全部落地 + 3 项衡生竞态修复（时间/fork/zombie reaping），VMware 4 核 54/54 全 PASS | 批次 5 ✅ |
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-SMP 8 步已全部完成，后续进入多架构（ARM/RISC-V）+ 用户态运行时 + 网络栈深化阶段。
+SMP 8 步 + C23 升级已全部完成，后续进入 64 位化（P1）阶段。
 
 ***
 
@@ -668,20 +674,89 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 - `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
 - `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
 
-### 后续规划（v4.0 路线，基于项目核心子系统扫描）
+### 后续规划（v4.1 路线，基于项目核心子系统扫描）
+
+#### 项目核心愿景
+
+**JLOS 不是 Linux 的复制品。** 目标是做一个基于现代计算机世界全面成果的内核——一气呵成、优雅、充分利用近几十年来计算机发展的成果和经验。相比 Linux 因长期发展而累积的历史包袱，JLOS 从设计之初就采用现代最佳实践：现代 C 标准（C23）、现代硬件特性（64 位/SMP/现代中断控制器）、现代内核设计理念（HAL 分层/经典数据结构/生产级正确性）。
 
 NTP 同步走用户空间守护进程路线（经典做法），内核只提供 syscall。以下按依赖与收益排序：
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
 | ~~**高**~~ | ~~SMP 实现~~ | ~~APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化~~ | — | **已完成**：8 步全部落地 + 3 项竞态修复，54/54 全 PASS |
+| ~~**高**~~ | ~~C23 标准升级~~ | ~~[[attribute]] + nullptr + constexpr + typeof + 数字分隔符 + 二进制字面量 + enum : type~~ | SMP ✅ | **已完成**：-std=gnu2x + 核心特性落地（nullptr/[[noreturn]]/static_assert/typeof），其余特性（constexpr/[[maybe_unused]]/[[fallthrough]] 等）写新代码时自然采用 |
+| **高** | 64 位化（P1） | x86-64 long mode：4 级页表 + 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64 同时支持 32/64 位） | C23 ✅ | 8 步计划：引导切换→4 级页表→GDT/IDT/TSS→中断入口→上下文切换→syscall→SMP 适配→ELF/用户态。嵌入式场景保留 32 位 |
 | 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
 | 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP ✅ | |
-| 低 | 多架构 | ARM/RISC-V 架构支持（HAL 层已就位） | SMP ✅ | 长期目标 |
+| 低 | 多架构（P2） | ARM64/RISC-V64 架构支持（HAL 层已就位，每架构只 64 位） | 64 位化 ✅ | 长期目标，独立目录 arch/arm64/、arch/riscv64/ |
+
+#### C23 标准升级特性分析（基于 JLOS freestanding 实际情况）
+
+**实际约束**：`-nostdlib -fno-builtin -ffreestanding`，不链接 libc/libgcc，不包含标准头文件（`common/types.h` 自定义所有类型）。内核已有自己的 `jlos_memset`/`jlos_memcpy`/`jlos_strlen`/`jlos_popcount32`（查表法）等实现。
+
+**GCC 版本结论**：GCC 13.3 `-std=gnu2x` 已覆盖 JLOS 需要的全部 C23 特性，**暂不升级 GCC**。唯一缺失的 `#embed`（需 GCC 15+）是便利特性非核心，当前手动 C 数组能工作。`-std=gnu2x`（草案名）与 `-std=gnu23`（最终标准名，需 GCC 14+）语义基本相同。硬件兼容性无差异——GCC 版本不影响目标架构（`-m32`/`-m64` 均支持）。
+
+**判断标准**：前置条件=无副作用+不会带来安全问题；使用好处=提升代码阅读清晰度 / 让内核更优雅、安全、提升性能、简化冗余。
+
+**表 1：必须用在内核内的 C23 新特性**（GCC 13.3 `-std=gnu2x` 全部 ✅）
+
+| 特性 | 说明 | 好处 |
+|------|------|------|
+| `nullptrptr` | 类型安全空指针常量（独立类型 `nullptrptr_t`） | 消除 `nullptr` 被定义为 `((void*)0)` 的整数/指针歧义，类型安全 |
+| `constexpr` | 编译期常量对象 | 比 `#define` 有类型信息且调试器可见；比 `static const` 明确编译期求值；可用于数组维度、位域宽度 |
+| `typeof`/`typeof_unqual` | 标准化类型推断 | `container_of` 宏从依赖 GCC `__typeof__` 扩展变为标准 C，多架构可移植 |
+| `[[noreturn]]` | 函数不返回 | 替代 `_Noreturn`/`[[noreturn]]`，标准化属性语法 |
+| `[[maybe_unused]]` | 抑制未使用警告 | 条件编译中未使用的变量/参数，明确标注意图 |
+| `[[fallthrough]]` | switch 穿透标注 | 替代 `/* fall through */` 注释，编译器认可，消除 `-Wimplicit-fallthrough` 警告 |
+| `[[nodiscard]]` | 返回值不可忽略 | 忽略返回值时编译警告，安全检查（如 `jlos_paging_map` 返回错误码被忽略） |
+| `[[deprecated]]` | 标记弃用 | 弃用 API 时编译警告，迁移引导 |
+| 数字分隔符 `'` | `1'000'000` / `0xFFFF'FFFF` | 长数字可读性大幅提升，内核页表/地址常量受益 |
+| 二进制字面量 `0b` | `0b1010'1010` | 位掩码比十六进制更直观，内核中断/页表标志位受益 |
+| `enum : type` | 枚举显式底层类型 | `enum irq_level : uint8_t {...}` 明确内存布局，避免枚举溢出，控制结构体大小 |
+| `#elifdef`/`#elifndef` | 简化条件编译 | `#elifdef CONFIG_X86_64` 比 `#elif defined(CONFIG_X86_64)` 简洁，配合 32/64 位 #ifdef |
+| `__VA_OPT__` | 可变参数宏优化 | `#define LOG(fmt, ...) kprintf(fmt __VA_OPT__(,) __VA_ARGS__)` 消除 `## __VA_ARGS__` GCC 扩展 hack |
+| 空初始化器 `{}` | 零初始化 | `jlos_pde_t pde = {};` 比 `= {0}` 语义更明确 |
+| `static_assert`（无消息） | 编译期断言 | `static_assert(sizeof(jlos_task_t) <= 64);` 比 `_Static_assert(..., "msg")` 简洁 |
+| `alignas`/`alignof` | 对齐关键字 | `alignas(64) char cache_line[64];` 比 `_Alignas(64)` 简洁，不再需要 `<stdalign.h>` |
+
+**表 2：不能用在内核里的 C23 新特性**
+
+| 特性 | 不能用的原因 |
+|------|-------------|
+| `#embed` | GCC 13.3 不支持（需 15+）。特性本身无副作用，当前工具链不可用，将来 GCC 15+ 后再评估 |
+| `_BitInt(N)` | GCC 13.3 不支持（需 14+）。且 freestanding 无 libgcc，算术运算可能回退调用 libgcc，有链接失败风险 |
+| `[[unsequenced]]`/`[[reproducible]]` | GCC 13.3 识别但忽略（`-Wattributes` 警告）。标注错误会导致未定义行为——安全风险大于优化收益 |
+| `<stdbit.h>` | freestanding 不引用标准头文件。且 `stdc_leading_zeros` 等可能回退调用 libgcc，已有查表法 `jlos_popcount32` 替代 |
+| `<stdckdint.h>` | freestanding 不引用标准头文件。`ckd_add` 等虽是内建不依赖 libgcc，但需包含标准头，与自包含类型系统冲突 |
+| `<stdatomic.h>` | freestanding 不引用标准头文件。已有 `hal/atomic.h` 用 GCC `__atomic` 内建，功能完整 |
+| `thread_local` | 内核不用 C 线程模型。用 `DEFINE_PER_CPU` + GS 段实现 per-CPU 变量，语义不同（per-CPU 非 per-thread） |
+| `memccpy`/`strdup`/`strndup` | freestanding 不使用标准库。已有 `jlos_strlcpy`/`jlos_strlen`/`jlos_strcmp` 等自己的实现 |
+
+**表 3：必须覆盖 C11 的 C23 特性**（C11 做法 → C23 替代）
+
+| C11 做法 | C23 替代 | JLOS 当前用法 |
+|----------|----------|--------------|
+| `#define nullptr ((void*)0)` | `nullptrptr` | `common/types.h:24` |
+| `typedef unsigned char bool` + `#define true/false` | `bool`/`true`/`false` 关键字 | `common/types.h:21-23` |
+| `__typeof__((type *)0)->member)` | `typeof(...)` | `common/types.h:48` container_of |
+| `_Static_assert(cond, "msg")` | `static_assert(cond)` | JLOS 已有 `_Static_assert` 用法 |
+| `_Alignas(64)`/`_Alignof(type)` | `alignas(64)`/`alignof(type)` | JLOS 用 `__attribute__((aligned(64)))` |
+| `_Noreturn` | `[[noreturn]]` | JLOS 用 `[[noreturn]]` |
+| `#define CONST 4096` | `constexpr int CONST = 4096` | JLOS 大量用 `#define` 常量 |
+| `int arr[4] = {0}` | `int arr[4] = {}` | JLOS 有 `= {0}` 用法 |
+| `## __VA_ARGS__` hack | `__VA_OPT__(,)` | 消除 GCC 扩展 hack |
+| K&R 函数声明 | 移除（C23 强制原型） | JLOS 应已全部用原型声明 |
+| 隐式函数声明（C11 警告） | 错误（C23） | `-Wall -Wextra` 已捕获 |
+| VLA（C11 必须） | VLA 可选（C23） | 可禁用 VLA，消除栈溢出风险 |
+
+**注意**：C23 标准属性**不包含** `packed`/`aligned`/`section`/`weak`/`noinline` 等 GCC 专属属性，这些仍需 `__attribute__((...))`——内核中大量使用，无法完全替代。`bool` 关键字类型是 `_Bool`（1 字节），与当前 `unsigned char` 一致，无 ABI 影响。`size_t` 仍需自己定义（不包含 `<stddef.h>`），64 位化时改为 `typedef uint64_t size_t`。
+
+**升级方式**：~~Makefile `-std=gnu11` → `-std=gnu2x`（内核 + jlcy），删除 `common/types.h` 中被 C23 关键字取代的 `bool`/`true`/`false`/`nullptr` 定义（避免与关键字冲突），逐步采用 C23 特性。~~ **已完成（2026-10-15）**：-std=gnu2x 落地 + nullptr/[[noreturn]]/static_assert/typeof 核心特性采用 + types.h 冲突定义删除。constexpr/[[maybe_unused]]/[[fallthrough]]/[[nodiscard]]/enum : type/数字分隔符/二进制字面量/alignas 等为编码风格层面，写新代码时自然采用，不作为升级步骤批量改造。
 
 ### 实施优先级（历史，已被批次规划取代）
 

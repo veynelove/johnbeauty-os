@@ -240,14 +240,14 @@ void jlos_irq_manager_activate(void)
 void jlos_irq_manager_deactivate(jlos_irq_manager_t* self)
 {
     if (jlos_active_irq_manager == self) {
-        jlos_active_irq_manager = NULL;
+        jlos_active_irq_manager = nullptr;
         __asm__("cli");
     }
 }
 
 uint32_t jlos_irq_manager_handle(uint8_t interrupt, uint32_t esp)
 {
-    if (jlos_active_irq_manager != NULL) {
+    if (jlos_active_irq_manager != nullptr) {
         return jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
     }
     return esp;
@@ -306,7 +306,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
     }
 
     if (interrupt < 0x20 && interrupt != 0x07 && interrupt != 0x00 && interrupt != 0x02 &&
-        self->handles[interrupt + self->hardware_interrupt_offset] == NULL) {
+        self->handles[interrupt + self->hardware_interrupt_offset] == nullptr) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
         uint32_t err = cpu->error;   /* offset 32 = CPU 压入的真实 error code */
         jlos_task_t *current_task = jlos_hal_current_task();
@@ -342,7 +342,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
         vector = interrupt + self->hardware_interrupt_offset;
     }
 
-    if (self->handles[vector] != NULL) {
+    if (self->handles[vector] != nullptr) {
         jlos_irq_handler_t *handler = (jlos_irq_handler_t*)self->handles[vector];
         esp = handler->handle_interrupt(handler, esp);
     }

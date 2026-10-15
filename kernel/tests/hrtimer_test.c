@@ -22,7 +22,7 @@ JLOS_TEST(hrtimer, lifecycle)
     jlos_hrtimer_base_t base;
     jlos_hrtimer_base_init(&base);
     jlos_hrtimer_t timer;
-    jlos_hrtimer_init(&timer, test_callback, NULL);
+    jlos_hrtimer_init(&timer, test_callback, nullptr);
     JLOS_TEST_FALSE(timer.active);
     JLOS_TEST_EQ(timer.expires, 0);
     jlos_hrtimer_start(&base, &timer, 1000000, 0, JLOS_HRTIMER_MODE_REL);
@@ -38,7 +38,7 @@ JLOS_TEST(hrtimer, periodic)
     jlos_hrtimer_base_t base;
     jlos_hrtimer_base_init(&base);
     jlos_hrtimer_t timer;
-    jlos_hrtimer_init(&timer, test_callback, NULL);
+    jlos_hrtimer_init(&timer, test_callback, nullptr);
     jlos_hrtimer_start(&base, &timer, 1000000, 500000, JLOS_HRTIMER_MODE_REL);
     JLOS_TEST_EQ(timer.interval, 500000);
     jlos_hrtimer_cancel(&base, &timer);
@@ -49,9 +49,9 @@ JLOS_TEST(hrtimer, ordering)
     jlos_hrtimer_base_t base;
     jlos_hrtimer_base_init(&base);
     jlos_hrtimer_t t1, t2, t3;
-    jlos_hrtimer_init(&t1, test_callback, NULL);
-    jlos_hrtimer_init(&t2, test_callback, NULL);
-    jlos_hrtimer_init(&t3, test_callback, NULL);
+    jlos_hrtimer_init(&t1, test_callback, nullptr);
+    jlos_hrtimer_init(&t2, test_callback, nullptr);
+    jlos_hrtimer_init(&t3, test_callback, nullptr);
     jlos_hrtimer_start(&base, &t1, 300000000, 0, JLOS_HRTIMER_MODE_REL);
     jlos_hrtimer_start(&base, &t2, 100000000, 0, JLOS_HRTIMER_MODE_REL);
     jlos_hrtimer_start(&base, &t3, 500000000, 0, JLOS_HRTIMER_MODE_REL);

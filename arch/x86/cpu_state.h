@@ -27,6 +27,6 @@ typedef struct
     uint32_t user_ss;
 } __attribute__((packed)) jlos_x86_regs_t;
 
-_Static_assert(sizeof(jlos_cpu_state_t) >= sizeof(jlos_x86_regs_t), "cpu_state opaque too small for x86\n");
+static_assert(sizeof(jlos_cpu_state_t) >= sizeof(jlos_x86_regs_t), "cpu_state opaque too small for x86\n");
 
 #endif

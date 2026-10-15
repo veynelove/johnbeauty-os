@@ -7,7 +7,7 @@
 #include <hal/diag.h>
 #include <drivers/ata.h>
 
-_Static_assert(sizeof(jlos_ata_t) <= JLOS_HAL_BLOCK_PRIV_SIZE, "block priv too small for ata");
+static_assert(sizeof(jlos_ata_t) <= JLOS_HAL_BLOCK_PRIV_SIZE, "block priv too small for ata");
 
 static jlos_ata_t *block_ata(jlos_hal_block_dev_t *self)
 {

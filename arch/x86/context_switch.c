@@ -53,7 +53,7 @@ bool jlos_hal_is_task_in_use(jlos_task_t *task)
     return false;
 }
 
-__attribute__((noreturn)) void jlos_task_do_exit(void)
+[[noreturn]] void jlos_task_do_exit(void)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     __asm__ __volatile__("cli");

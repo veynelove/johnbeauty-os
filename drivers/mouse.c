@@ -88,7 +88,7 @@ uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t 
         return esp;
     }
     mouse->buffer[mouse->offset] = jlos_io8_read(&mouse->dataport);
-    if (mouse->handler == NULL) {
+    if (mouse->handler == nullptr) {
         return esp;
     }
     if (mouse->offset == 0 && !(mouse->buffer[0] & 0x08)) {

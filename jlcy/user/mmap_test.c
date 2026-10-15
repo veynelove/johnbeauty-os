@@ -12,7 +12,7 @@
 static int test_anon_rw(void)
 {
     uint32_t len = 2 * PAGE_SIZE;
-    void *p = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    void *p = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if ((int32_t)p < 0) {
         printf("mmap_test: anon map FAIL ret=%d\n", (int32_t)p);
         return 0;
@@ -42,8 +42,8 @@ static int test_anon_rw(void)
 
 static int test_multi_fixed(void)
 {
-    void *a = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    void *b = mmap(NULL, 3 * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    void *a = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    void *b = mmap(nullptr, 3 * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if ((int32_t)a < 0 || (int32_t)b < 0) {
         printf("mmap_test: multi map FAIL a=%u b=%u\n", (uint32_t)a, (uint32_t)b);
         return 0;

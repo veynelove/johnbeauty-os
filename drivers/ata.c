@@ -179,7 +179,7 @@ void jlos_ata_flush(jlos_ata_t* self)
 
 jlos_hal_block_dev_t *jlos_ata_get_primary_dev(void)
 {
-    return s_ata_primary_ready ? &s_ata_primary_dev : NULL;
+    return s_ata_primary_ready ? &s_ata_primary_dev : nullptr;
 }
 
 static void jlos_ata_block_dev_init(void)

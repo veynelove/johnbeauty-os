@@ -78,14 +78,14 @@ JLOS_TEST(rbtree, ordered_traversal)
     }
     uint32_t expected = 0;
     jlos_rbtree_node_t *node;
-    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
+    for (node = jlos_rbtree_first(&tree); node != nullptr; node = jlos_rbtree_next(&tree, node)) {
         test_entry_t *e = jlos_rbtree_entry(node, test_entry_t, node);
         JLOS_TEST_EQ(e->key, expected);
         expected++;
     }
     JLOS_TEST_EQ(expected, 32);
     expected = 31;
-    for (node = jlos_rbtree_last(&tree); node != NULL; node = jlos_rbtree_prev(&tree, node)) {
+    for (node = jlos_rbtree_last(&tree); node != nullptr; node = jlos_rbtree_prev(&tree, node)) {
         test_entry_t *e = jlos_rbtree_entry(node, test_entry_t, node);
         JLOS_TEST_EQ(e->key, expected);
         expected--;
@@ -170,7 +170,7 @@ JLOS_TEST(rbtree, random_insert_remove)
     JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
     uint32_t count = 0;
     jlos_rbtree_node_t *node;
-    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
+    for (node = jlos_rbtree_first(&tree); node != nullptr; node = jlos_rbtree_next(&tree, node)) {
         count++;
     }
     JLOS_TEST_EQ(count, RBTREE_TEST_COUNT);
@@ -181,7 +181,7 @@ JLOS_TEST(rbtree, random_insert_remove)
     }
     JLOS_TEST_TRUE(rbtree_verify_properties(&tree));
     count = 0;
-    for (node = jlos_rbtree_first(&tree); node != NULL; node = jlos_rbtree_next(&tree, node)) {
+    for (node = jlos_rbtree_first(&tree); node != nullptr; node = jlos_rbtree_next(&tree, node)) {
         count++;
     }
     JLOS_TEST_EQ(count, RBTREE_TEST_COUNT - removed);

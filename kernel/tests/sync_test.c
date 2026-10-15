@@ -20,15 +20,15 @@ static jlos_task_t *sync_spawn(void (*fn)(void), const char *name)
     jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_task_t *t = (jlos_task_t *)jlos_kalloc(sizeof(*t));
     if (!t) {
-        return NULL;
+        return nullptr;
     }
     if (jlos_task_init(t, mmu, fn, name) < 0) {
         jlos_kfree(t);
-        return NULL;
+        return nullptr;
     }
     if (!jlos_task_manager_add_task(s_mgr, t)) {
         jlos_task_free(s_mgr, t);
-        return NULL;
+        return nullptr;
     }
     jlos_task_manager_enqueue(s_mgr, t);
     return t;
@@ -36,18 +36,7 @@ static jlos_task_t *sync_spawn(void (*fn)(void), const char *name)
 
 static void sync_reap_zombies(void)
 {
-    for (int i = s_mgr->num_tasks - 1; i > 0; i--) {
-        jlos_task_t *t = s_mgr->tasks[i];
-        if (!t || t == s_mgr->idle_task[0]) {
-            continue;
-        }
-        if (t->status == JLOS_TASK_ZOMBIE) {
-            if (!jlos_list_empty(&t->zombie_node)) {
-                jlos_list_del_init(&t->zombie_node);
-            }
-            jlos_task_free(s_mgr, t);
-        }
-    }
+    jlos_task_reap_all_zombies(s_mgr);
 }
 
 static void sync_task_exit(void)

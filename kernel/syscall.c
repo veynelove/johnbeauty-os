@@ -44,7 +44,7 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         len += 1;
     }
     uint8_t stack_buf[256];
-    uint8_t *buf = NULL;
+    uint8_t *buf = nullptr;
     uint32_t alloc_len = len;
     if (alloc_len <= sizeof(stack_buf)) {
         buf = stack_buf;
@@ -115,7 +115,7 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
         uint8_t stack_buf[256];
-        uint8_t *buf = NULL;
+        uint8_t *buf = nullptr;
         if (len <= sizeof(stack_buf)) {
             buf = stack_buf;
         } else {
@@ -139,7 +139,7 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (fd_entry->type == JLOS_TASK_FD_FILE) {
         jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
         uint8_t stack_buf[256];
-        uint8_t *buf = NULL;
+        uint8_t *buf = nullptr;
         if (len <= sizeof(stack_buf)) {
             buf = stack_buf;
         } else {
@@ -399,6 +399,7 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     (void)arg2;
     (void)arg3;
+
     struct {
         uint32_t addr;
         uint32_t len;
@@ -447,12 +448,14 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!jlos_vma_add(mm, addr, addr + len, vma_flags, JLOS_VMA_TYPE_ANON)) {
         return -SYSCALL_ENOMEM;
     }
+
     return (int32_t)addr;
 }
 
 static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     (void)arg3;
+
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task || !current_task->mm) {
         return -SYSCALL_ENOMEM;
@@ -463,6 +466,7 @@ static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENINVAL;
     }
     jlos_vma_remove_range(current_task->mm, addr, addr + len);
+
     return 0;
 }
 
@@ -473,7 +477,7 @@ static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char
     }
     *count = 0;
     for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
-        kernel_ptrs[i] = NULL;
+        kernel_ptrs[i] = nullptr;
     }
     for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
         uint32_t user_str;
@@ -724,32 +728,27 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
 {
     uint32_t target_pid = arg1;
     int32_t *exit_code = (int32_t *)arg2;
+    (void)arg3;
 
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_t *target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
-    if (!target || target->parent_pid != current_task->pid) {
-        return -SYSCALL_ENINVAL;
-    }
-    while (target->status != JLOS_TASK_ZOMBIE) {
-        JLOS_TASK_SET_WAITING(current_task, target_pid);
-        jlos_task_manager_schedule(g_task_manager_ptr);
-        target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
-        if (!target) {
+    for (;;) {
+        int32_t code = 0;
+        int32_t ret = jlos_task_wait_or_reap(g_task_manager_ptr, target_pid, current_task, &code);
+        if (ret > 0) {
+            if (exit_code && !jlos_copy_to_user(exit_code, &code, sizeof(int32_t))) {
+                return -SYSCALL_EFAULT;
+            }
+            return ret;
+        }
+        if (ret == -TASK_ERR_NOT_FOUND || ret == -TASK_ERR_NO_CHILD) {
             return -SYSCALL_ENINVAL;
         }
+        jlos_task_manager_schedule(g_task_manager_ptr);
     }
-    if (exit_code && !jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
-            return -SYSCALL_EFAULT;
-    }
-    (void)arg3;
-    uint32_t reaped_pid = target->pid;
-
-    jlos_task_free(g_task_manager_ptr, target);
-
-    return (int32_t)reaped_pid;
+    return 0;
 }
 
 static int32_t syscall_signal(uint32_t arg1, uint32_t arg2, uint32_t arg3)

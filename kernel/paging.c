@@ -16,7 +16,7 @@
 
 void jlos_paging_context_init(jlos_paging_context_t *self)
 {
-    self->root = NULL;
+    self->root = nullptr;
     self->num_page_tables = 0;
     jlos_spinlock_init(&self->lock);
 }
@@ -198,7 +198,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
 
     jlos_task_t *task = current_task;
     jlos_paging_context_t *ctx = task->mm->pc;
-
+    
     if (!present) {
         if (jlos_vma_demand_map(task->mm, fault_addr)) {
             return;

@@ -16,7 +16,7 @@ endif
 
 # 实际编译用的完整参数
 CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
-		-fno-leading-underscore -std=gnu11 \
+		-fno-leading-underscore -std=gnu2x \
 		-ffreestanding -fno-stack-protector \
 		-fno-pic -fno-pie \
 		-Wall -Wextra -Wno-address-of-packed-member \

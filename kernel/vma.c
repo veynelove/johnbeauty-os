@@ -45,12 +45,12 @@ jlos_mm_t *jlos_mm_create(void)
 {
     jlos_mm_t *mm = (jlos_mm_t *)jlos_memory_slab_cache_alloc(s_mm_cache);
     if (!mm) {
-        return NULL;
+        return nullptr;
     }
     mm->pc = (jlos_paging_context_t *)jlos_memory_slab_cache_alloc(s_pctx_cache);
     if (!mm->pc) {
         jlos_kfree(mm);
-        return NULL;
+        return nullptr;
     }
     jlos_paging_context_init(mm->pc);
     jlos_rbtree_init(&mm->vma_tree);
@@ -118,33 +118,33 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)
 jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr)
 {
     if (!mm) {
-        return NULL;
+        return nullptr;
     }
     jlos_rbtree_node_t *node = jlos_rbtree_find_key_le(&mm->vma_tree, &addr, jlos_vma_cmp_addr);
     if (!node) {
-        return NULL;
+        return nullptr;
     }
     jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
     if (addr < vma->end) {
         return vma;
     }
-    return NULL;
+    return nullptr;
 }
 
 jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t flags, jlos_vma_type_t type)
 {
     if (!mm || end <= start) {
-        return NULL;
+        return nullptr;
     }
     jlos_vma_t *vma = (jlos_vma_t *)jlos_memory_slab_cache_alloc(s_vma_cache);
     if (!vma) {
-        return NULL;
+        return nullptr;
     }
     vma->start = JLOS_PAGE_ALIGN_DOWN(start);
     vma->end = JLOS_PAGE_ALIGN_UP(end);
     vma->flags = flags;
     vma->type = type;
-    vma->file = NULL;
+    vma->file = nullptr;
     vma->offset = 0;
     jlos_rbtree_insert(&mm->vma_tree, &vma->rb_node, jlos_vma_compare);
     return vma;
@@ -197,7 +197,7 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
 jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uint32_t start, uint32_t new_end, uint32_t flags, jlos_vma_type_t type)
 {
     if (!mm || new_end <= start) {
-        return NULL;
+        return nullptr;
     }
     start = JLOS_PAGE_ALIGN_DOWN(start);
     new_end = JLOS_PAGE_ALIGN_UP(new_end);
@@ -264,6 +264,7 @@ bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr)
         jlos_page_frame_free(frame);
         return false;
     }
+
     return true;
 }
 
@@ -284,7 +285,7 @@ uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, u
                     node = jlos_rbtree_next(&mm->vma_tree, node);
                 }
             }
-            jlos_vma_t *vma = node ? jlos_rbtree_entry(node, jlos_vma_t, rb_node) : NULL;
+            jlos_vma_t *vma = node ? jlos_rbtree_entry(node, jlos_vma_t, rb_node) : nullptr;
             if (!vma || vma->start >= h + len) {
                 return h;
             }
@@ -317,9 +318,9 @@ uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, u
 
 static void jlos_vma_caches_init(void)
 {
-    s_vma_cache = jlos_memory_slab_cache_create("jlos_vma", sizeof(jlos_vma_t), sizeof(void *), 0, NULL, NULL);
-    s_mm_cache = jlos_memory_slab_cache_create("jlos_mm", sizeof(jlos_mm_t), sizeof(void *), 0, NULL, NULL);
-    s_pctx_cache = jlos_memory_slab_cache_create("jlos_pctx", sizeof(jlos_paging_context_t), sizeof(void *), 0, NULL, NULL);
+    s_vma_cache = jlos_memory_slab_cache_create("jlos_vma", sizeof(jlos_vma_t), sizeof(void *), 0, nullptr, nullptr);
+    s_mm_cache = jlos_memory_slab_cache_create("jlos_mm", sizeof(jlos_mm_t), sizeof(void *), 0, nullptr, nullptr);
+    s_pctx_cache = jlos_memory_slab_cache_create("jlos_pctx", sizeof(jlos_paging_context_t), sizeof(void *), 0, nullptr, nullptr);
 }
 
 JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_vma_caches_init);

@@ -60,7 +60,7 @@ static jlos_acpi_rsdp_t *jlos_acpi_find_rsdp(void)
             return rsdp;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
@@ -74,12 +74,12 @@ static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
         root_phys = rsdp->rsdt_address;
         entry_size = 4;
     } else {
-        return NULL;
+        return nullptr;
     }
 
     jlos_acpi_sdt_header_t *root = (jlos_acpi_sdt_header_t *)jlos_fixmap_map(JLOS_FIXMAP_ACPI_0, root_phys);
     if (!jlos_acpi_sdt_checksum_ok(root)) {
-        return NULL;
+        return nullptr;
     }
     uint32_t entry_count = (root->length - sizeof(jlos_acpi_sdt_header_t)) / entry_size;
     uint8_t *entries = (uint8_t *)root + sizeof(jlos_acpi_sdt_header_t);
@@ -98,7 +98,7 @@ static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
             return (jlos_acpi_madt_t *)sdt;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)

@@ -41,7 +41,7 @@ static const uint8_t *dhcp_find_option(const uint8_t *options, uint16_t max_len,
         }
         i += 2 + len;
     }
-    return NULL;
+    return nullptr;
 }
 
 static void jlos_dhcp_pad_to_min(uint8_t *buffer, uint16_t *total)

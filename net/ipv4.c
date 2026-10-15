@@ -21,7 +21,7 @@ void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self,
 void jlos_internet_protocol_handler_destroy(jlos_internet_protocol_handler_t* self)
 {
     if (self->backend->handlers[self->ip_protocol] == self) {
-        self->backend->handlers[self->ip_protocol] = NULL;
+        self->backend->handlers[self->ip_protocol] = nullptr;
     }
 }
 
@@ -88,7 +88,7 @@ void jlos_internet_protocol_provider_init(jlos_internet_protocol_provider_t* sel
     self->gateway_ip = gateway_ip;
     self->subnet_mask = subnet_mask;
     for (int i = 0; i < 255; i++) {
-        self->handlers[i] = NULL;
+        self->handlers[i] = nullptr;
     }
 }
 
