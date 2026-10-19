@@ -6,7 +6,7 @@
 @echo off
 chcp 65001 >nul
 set BITS=%1
-if "%BITS%"=="" set BITS=32
+if "%BITS%"=="" set BITS=64
 set ISO_SRC=johnkernel.iso
 if "%BITS%"=="64" set ISO_SRC=johnkernel64.iso
 echo ========================================

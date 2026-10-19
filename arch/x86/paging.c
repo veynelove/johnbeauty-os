@@ -48,6 +48,8 @@ static uint32_t pte_prot(uint32_t prot)
     return p;
 }
 
+static jlos_page_table_entry_t *pte_walk(jlos_paging_context_t *ctx, uintptr_t va);
+
 #ifdef CONFIG_X86_64
 /* ============ 64 位：四级页表（PML4→PDPT→PD→PT，每级 512 项，PD 层 2MB 大页） ============ */
 
@@ -135,73 +137,6 @@ static bool map_large_locked(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t
     return true;
 }
 
-bool jlos_arch_pte_present(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    return pte && (*pte & JLOS_PTE_PRESENT);
-}
-
-uintptr_t jlos_arch_pte_phys(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return 0;
-    }
-    return *pte & JLOS_PAGING_ADDR_MASK;
-}
-
-void jlos_arch_pte_set(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte) {
-        *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
-    }
-}
-
-void jlos_arch_pte_set_rw(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte && (*pte & JLOS_PTE_PRESENT)) {
-        *pte |= JLOS_PTE_WRITABLE;
-    }
-}
-
-void jlos_arch_pte_make_ro(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte) {
-        *pte &= ~JLOS_PTE_WRITABLE;
-    }
-}
-
-bool jlos_arch_pte_replace(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return false;
-    }
-    *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
-    return true;
-}
-
-uint32_t jlos_arch_pte_get_prot(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return 0;
-    }
-    uint32_t prot = JLOS_PG_READ;
-    if (*pte & JLOS_PTE_WRITABLE) {
-        prot |= JLOS_PG_WRITE;
-    }
-    if (*pte & JLOS_PTE_USER) {
-        prot |= JLOS_PG_USER;
-    }
-    if (*pte & JLOS_PTE_GLOBAL) {
-        prot |= JLOS_PG_GLOBAL;
-    }
-    return prot;
-}
 
 bool jlos_arch_map_entry(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
 {
@@ -648,73 +583,6 @@ static bool root_ensure(jlos_paging_context_t *ctx)
     return true;
 }
 
-bool jlos_arch_pte_present(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    return pte && (*pte & JLOS_PTE_PRESENT);
-}
-
-uintptr_t jlos_arch_pte_phys(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return 0;
-    }
-    return *pte & JLOS_PAGING_ADDR_MASK;
-}
-
-void jlos_arch_pte_set(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte) {
-        *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
-    }
-}
-
-void jlos_arch_pte_set_rw(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte && (*pte & JLOS_PTE_PRESENT)) {
-        *pte |= JLOS_PTE_WRITABLE;
-    }
-}
-
-void jlos_arch_pte_make_ro(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (pte) {
-        *pte &= ~JLOS_PTE_WRITABLE;
-    }
-}
-
-bool jlos_arch_pte_replace(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return false;
-    }
-    *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
-    return true;
-}
-
-uint32_t jlos_arch_pte_get_prot(jlos_paging_context_t *ctx, uintptr_t va)
-{
-    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
-    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
-        return 0;
-    }
-    uint32_t prot = JLOS_PG_READ;
-    if (*pte & JLOS_PTE_WRITABLE) {
-        prot |= JLOS_PG_WRITE;
-    }
-    if (*pte & JLOS_PTE_USER) {
-        prot |= JLOS_PG_USER;
-    }
-    if (*pte & JLOS_PTE_GLOBAL) {
-        prot |= JLOS_PG_GLOBAL;
-    }
-    return prot;
-}
 
 static bool map_4mb_locked(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t pte_flags)
 {
@@ -1090,6 +958,76 @@ void jlos_arch_paging_print_states(jlos_paging_context_t *ctx)
 }
 
 #endif
+
+/* ============ PTE 底层操作（架构无关，只依赖 pte_walk） ============ */
+
+bool jlos_arch_pte_present(jlos_paging_context_t *ctx, uintptr_t va)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    return pte && (*pte & JLOS_PTE_PRESENT);
+}
+
+uintptr_t jlos_arch_pte_phys(jlos_paging_context_t *ctx, uintptr_t va)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
+        return 0;
+    }
+    return *pte & JLOS_PAGING_ADDR_MASK;
+}
+
+void jlos_arch_pte_set(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (pte) {
+        *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
+    }
+}
+
+void jlos_arch_pte_set_rw(jlos_paging_context_t *ctx, uintptr_t va)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (pte && (*pte & JLOS_PTE_PRESENT)) {
+        *pte |= JLOS_PTE_WRITABLE;
+    }
+}
+
+void jlos_arch_pte_make_ro(jlos_paging_context_t *ctx, uintptr_t va)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (pte) {
+        *pte &= ~JLOS_PTE_WRITABLE;
+    }
+}
+
+bool jlos_arch_pte_replace(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
+        return false;
+    }
+    *pte = (pa & JLOS_PAGING_ADDR_MASK) | pte_prot(prot);
+    return true;
+}
+
+uint32_t jlos_arch_pte_get_prot(jlos_paging_context_t *ctx, uintptr_t va)
+{
+    jlos_page_table_entry_t *pte = pte_walk(ctx, va);
+    if (!pte || !(*pte & JLOS_PTE_PRESENT)) {
+        return 0;
+    }
+    uint32_t prot = JLOS_PG_READ;
+    if (*pte & JLOS_PTE_WRITABLE) {
+        prot |= JLOS_PG_WRITE;
+    }
+    if (*pte & JLOS_PTE_USER) {
+        prot |= JLOS_PG_USER;
+    }
+    if (*pte & JLOS_PTE_GLOBAL) {
+        prot |= JLOS_PG_GLOBAL;
+    }
+    return prot;
+}
 
 void jlos_arch_paging_free_boot_tables(void)
 {
