@@ -20,7 +20,7 @@ DECLARE_PER_CPU(void *,         jlos_cpu_kernel_stack);
 DECLARE_PER_CPU(void *,         jlos_cpu_kernel_stack_bottom);
 DECLARE_PER_CPU(uint32_t,       jlos_cpu_kernel_stack_size);
 DECLARE_PER_CPU(bool,           jlos_cpu_online);
-DECLARE_PER_CPU(uint32_t,       jlos_cpu_tlb_flush_va);
+DECLARE_PER_CPU(uintptr_t,    jlos_cpu_tlb_flush_va);
 DECLARE_PER_CPU(bool,           jlos_cpu_tlb_flush_done);
 DECLARE_PER_CPU(bool,           jlos_cpu_need_resched);
 

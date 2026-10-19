@@ -24,6 +24,17 @@ struct jlos_irq_manager {
     jlos_io8_slow_t         pic_slave_data;
 };
 
+#ifdef CONFIG_X86_64
+typedef struct {
+    uint16_t    handle_address_low_bits;
+    uint16_t    gdt_codeSegmentSelector;
+    uint8_t     reserved;
+    uint8_t     access;
+    uint16_t    handle_address_mid_bits;
+    uint32_t    handle_address_high_bits;
+    uint32_t    reserved2;
+} __attribute__((packed)) jlos_gate_descriptor_t;
+#else
 typedef struct {
     uint16_t    handle_address_low_bits;
     uint16_t    gdt_codeSegmentSelector;
@@ -31,6 +42,7 @@ typedef struct {
     uint8_t     access;
     uint16_t    handle_address_high_bits;
 } __attribute__((packed)) jlos_gate_descriptor_t;
+#endif
 
 void jlos_handle_exception0x00();
 void jlos_handle_exception0x01();

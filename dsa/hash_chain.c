@@ -133,7 +133,7 @@ uint32_t jlos_hash_uint32(const void *key)
 
 uint32_t jlos_hash_ptr(const void *key)
 {
-    return (uint32_t)key;
+    return (uint32_t)(uintptr_t)key;
 }
 
 uint32_t jlos_hash_str(const void *key)

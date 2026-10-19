@@ -39,21 +39,37 @@ jlos_gate_descriptor_t          jlos_interrupt_descriptor_table[JLOS_IDT_ENTRIES
 static uint8_t                  s_pic_master_mask = 0xFA;  /* 1111 1010 — 默认开 IRQ0(PIT) 和 IRQ2(cascade) */
 static uint8_t                  s_pic_slave_mask  = 0xFF;  /* 1111 1111 — 默认关 slave 全部（IRQ8~15） */
 
+#ifdef CONFIG_X86_64
+typedef struct {
+    uint16_t size;
+    uint64_t base;
+} __attribute__((packed)) jlos_idt_pointer_t;
+#else
 typedef struct {
     uint16_t size;
     uint32_t base;
 } __attribute__((packed)) jlos_idt_pointer_t;
+#endif
 
 static void jlos_set_interrupt_descriptor_table_entry(uint8_t interrupt_number,
     uint16_t code_segment_selector_offset, void (*handler)(), uint8_t descriptor_privilege_level,
     uint8_t descriptor_type)
 {
     const uint8_t IDT_DESC_PRESENT = 0x80;
-    
+    uintptr_t handler_addr = (uintptr_t)handler;
+
     jlos_interrupt_descriptor_table[interrupt_number].handle_address_low_bits =
-        ((uint32_t)handler) & 0xFFFF;
+        handler_addr & 0xFFFF;
+#ifdef CONFIG_X86_64
+    jlos_interrupt_descriptor_table[interrupt_number].handle_address_mid_bits =
+        (handler_addr >> 16) & 0xFFFF;
     jlos_interrupt_descriptor_table[interrupt_number].handle_address_high_bits =
-        (((uint32_t)handler) >> 16) & 0xFFFF;
+        (handler_addr >> 32) & 0xFFFFFFFF;
+    jlos_interrupt_descriptor_table[interrupt_number].reserved2 = 0;
+#else
+    jlos_interrupt_descriptor_table[interrupt_number].handle_address_high_bits =
+        (handler_addr >> 16) & 0xFFFF;
+#endif
     jlos_interrupt_descriptor_table[interrupt_number].gdt_codeSegmentSelector =
         code_segment_selector_offset;
     jlos_interrupt_descriptor_table[interrupt_number].access = (IDT_DESC_PRESENT | descriptor_type
@@ -94,7 +110,7 @@ void jlos_irq_handler_init(jlos_irq_handler_t* self, jlos_irq_manager_t *interru
     jlos_irq_pic_unmask(interrupt_manager, interrupt_number); /* 注册即 unmask */
 }
 
-uint32_t jlos_irq_handler_handle_interrupt(jlos_irq_handler_t* self, uint32_t esp)
+uintptr_t jlos_irq_handler_handle_interrupt(jlos_irq_handler_t* self, uintptr_t esp)
 {
     return esp;
     (void)self;
@@ -228,7 +244,7 @@ void jlos_arch_irq_load_idt(void)
 {
     jlos_idt_pointer_t idt;
     idt.size = JLOS_IDT_ENTRIES * sizeof(jlos_gate_descriptor_t) - 1;
-    idt.base = (uint32_t)jlos_interrupt_descriptor_table;
+    idt.base = (uintptr_t)jlos_interrupt_descriptor_table;
     __asm__ __volatile__("lidt %0" : : "m" (idt));
 }
 
@@ -245,7 +261,7 @@ void jlos_irq_manager_deactivate(jlos_irq_manager_t* self)
     }
 }
 
-uint32_t jlos_irq_manager_handle(uint8_t interrupt, uint32_t esp)
+uintptr_t jlos_irq_manager_handle(uint8_t interrupt, uintptr_t esp)
 {
     if (jlos_active_irq_manager != nullptr) {
         return jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
@@ -258,7 +274,7 @@ uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)
     return self->hardware_interrupt_offset;
 }
 
-static void jlos_signal_deliver_check(uint32_t esp)
+static void jlos_signal_deliver_check(uintptr_t esp)
 {
     jlos_task_t *curr = jlos_hal_current_task();
     if (!curr || !curr->is_user_process) {
@@ -271,7 +287,7 @@ static void jlos_signal_deliver_check(uint32_t esp)
     jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)cpu);
 }
 
-uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uint32_t esp)
+uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uintptr_t esp)
 {
     /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
     if (interrupt == 0x0E) {
@@ -308,9 +324,9 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
     if (interrupt < 0x20 && interrupt != 0x07 && interrupt != 0x00 && interrupt != 0x02 &&
         self->handles[interrupt + self->hardware_interrupt_offset] == nullptr) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
-        uint32_t err = cpu->error;   /* offset 32 = CPU 压入的真实 error code */
+        uint32_t err = cpu->error;
         jlos_task_t *current_task = jlos_hal_current_task();
-        printk_err("exception num=0x%x err=0x%x eip=0x%x cs=0x%x efl=0x%x uesp=0x%x uss=0x%x pid=%u\n",
+        printk_err("exception num=0x%x err=0x%x eip=0x%lx cs=0x%lx efl=0x%lx uesp=0x%lx uss=0x%lx pid=%u\n",
                interrupt, err, cpu->eip, cpu->cs, cpu->eflags,
                cpu->user_esp, cpu->user_ss,
                current_task ? current_task->pid : 0);
@@ -348,7 +364,7 @@ uint32_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt,
     }
     else if (interrupt >= 16) {
         jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)esp;
-        printk_err("unhandled interrupt 0x%x err=0x%x eip=0x%x cs=0x%x eflags=0x%x\n",
+        printk_err("unhandled interrupt 0x%x err=0x%x eip=0x%lx cs=0x%lx eflags=0x%lx\n",
             interrupt, cpu->error, cpu->eip, cpu->cs, cpu->eflags);
     }
 
@@ -378,7 +394,7 @@ void jlos_irq_manager_register(jlos_irq_manager_t* self, uint8_t interrupt, jlos
     jlos_irq_pic_unmask(self, interrupt);  /* 注册即 unmask */
 }
 
-void jlos_irq_context_init(jlos_irq_context_t *context, uint32_t arch_state_ptr)
+void jlos_irq_context_init(jlos_irq_context_t *context, uintptr_t arch_state_ptr)
 {
     jlos_x86_regs_t *cpu = (jlos_x86_regs_t *)arch_state_ptr;
     context->error = cpu->error;

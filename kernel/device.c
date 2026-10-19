@@ -18,11 +18,11 @@ const multiboot_info_t *jlos_device_multiboot_info = nullptr;
 void jlos_device_init(const multiboot_info_t *mb)
 {
     jlos_device_multiboot_info = mb;
-    uint32_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
-    uint32_t phys_end = phys_start;
+    uintptr_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
+    uintptr_t phys_end = phys_start;
     if (!(mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
         printk_warn("mmap not available, using mem_upper\n");
-        phys_end = phys_start + mb->mem_upper * 1024;
+        phys_end = phys_start + (uintptr_t)mb->mem_upper * 1024;
         if (phys_end > KERNEL_PHYSICAL_MAX) {
             phys_end = KERNEL_PHYSICAL_MAX;
         }

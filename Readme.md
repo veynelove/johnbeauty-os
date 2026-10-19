@@ -2,7 +2,7 @@
 
 > 公主平安开心 🌸
 
-> 基于c23语言的多架构多处理器的类unix内核，内嵌agi权限模块的封闭内核
+> this is an operating system by c.
 
 ### 环境依赖
 

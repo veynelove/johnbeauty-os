@@ -1,8 +1,3 @@
-/**
- * Copyright 2026 veyne.
- * SPDX-License-Identifier: Apache-2.0
- */
-
 /* multiboot.h - Multiboot header file.
  * Copyright (C) 1999,2003,2007,2008,2009  Free Software Foundation, Inc.
  *
@@ -105,7 +100,7 @@ typedef struct multiboot_mmap_entry {
     uint64_t base_addr;
     uint64_t length;
     uint32_t type;
-} multiboot_mmap_entry_t;
+} __attribute__((packed)) multiboot_mmap_entry_t;
 
 #pragma pack(push, 1)
 typedef struct {

@@ -29,7 +29,7 @@
 
 uint32_t jlos_hal_get_cpu_id(void);
 uint32_t jlos_hal_num_cpus(void);
-uint32_t jlos_smp_per_cpu_offset(uint32_t cpu);
+uintptr_t jlos_smp_per_cpu_offset(uint32_t cpu);
 
 bool jlos_hal_need_resched(void);
 void jlos_hal_set_need_resched(bool val);

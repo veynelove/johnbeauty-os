@@ -10,6 +10,9 @@
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 
+#define JLOS_KERNEL_LOG_SUBSYS "fpu"
+#include <kernel/printk.h>
+
 static jlos_task_t      *s_fpu_owner = nullptr;
 static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
 static bool             s_init_template_done = false;
@@ -51,12 +54,21 @@ void jlos_arch_task_ext_destroy(jlos_task_t *task)
 
 void jlos_arch_task_ext_switch(void)
 {
+#ifdef CONFIG_X86_64
+    __asm__ __volatile__(
+        "movq %%cr0, %%rax\n\t"
+        "orl $8, %%eax\n\t"
+        "movq %%rax, %%cr0\n\t"
+        ::: "rax", "memory"
+    );
+#else
     __asm__ __volatile__(
         "mov %%cr0, %%eax\n\t"
         "or $8, %%eax\n\t"
         "mov %%eax, %%cr0\n\t"
         ::: "eax", "memory"
     );
+#endif
 }
 
 void jlos_arch_task_ext_trap_body(void)

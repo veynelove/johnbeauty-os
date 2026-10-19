@@ -194,7 +194,7 @@ static void jlos_page_frame_mark_reserve(uint32_t frame)
 
 void jlos_page_frame_allocator_init(void)
 {
-    uint32_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
+    uintptr_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
     uint32_t phys_end = jlos_device_physical_memory_end;
     const multiboot_info_t *mb = jlos_device_multiboot_info;
 
@@ -219,12 +219,12 @@ void jlos_page_frame_allocator_init(void)
         jlos_atomic_set(&pg->refcount, 0);
     }
 
-    uint32_t kernel_frames = ((uint32_t)&_kernel_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t kernel_frames = ((uintptr_t)&_kernel_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
     for (uint32_t i = 0; i < kernel_frames && i < s_total_frames; i++) {
         jlos_page_frame_mark_reserve(i);
     }
     
-    uint32_t boot_frames = ((uint32_t)&_boot_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
+    uint32_t boot_frames = ((uintptr_t)&_boot_end_phys - phys_start) / JLOS_PAGE_FRAME_SIZE;
     for (uint32_t i = kernel_frames; i < boot_frames && i < s_total_frames; i++) {
         jlos_page_frame_mark_recycle(i);
     }

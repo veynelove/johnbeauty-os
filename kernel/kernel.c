@@ -18,7 +18,7 @@
 #define JLOS_KERNEL_LOG_SUBSYS "boot"
 #include <kernel/printk.h>
 
-void john_beauty_main(const multiboot_info_t *multiboot_structure, uint32_t kernel_end)
+void john_beauty_main(const multiboot_info_t *multiboot_structure, uintptr_t kernel_end)
 {
     jlos_hal_arch_init();
     jlos_printk_init();

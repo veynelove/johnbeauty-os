@@ -16,28 +16,38 @@ bool jlos_cpu_state_is_user_mode(jlos_cpu_state_t *s)
 void jlos_cpu_state_init(jlos_cpu_state_t *s)
 {
     jlos_x86_regs_t *r = (jlos_x86_regs_t *)s;
-    r->eax = 0; r->ebx = 0; r->ecx = 0; r->edx = 0;
-    r->esi = 0; r->edi = 0; r->ebp = 0;
-    r->error = 0; r->error = 0; r->eip = 0; r->cs = 0;
-    r->eflags = 0x200; r->user_esp = 0; r->user_ss = 0;
+    jlos_memset(r, 0, sizeof(jlos_x86_regs_t));
+    r->eflags = 0x200;
 }
 
 uint32_t jlos_cpu_state_get_syscall_num(jlos_cpu_state_t *s)
 {
+#ifdef CONFIG_X86_64
+    return (uint32_t)((jlos_x86_regs_t *)s)->rax;
+#else
     return ((jlos_x86_regs_t *)s)->eax;
+#endif
 }
 
 void jlos_cpu_state_set_retval(jlos_cpu_state_t *s, int32_t val)
 {
+#ifdef CONFIG_X86_64
+    ((jlos_x86_regs_t *)s)->rax = (uint64_t)(int64_t)val;
+#else
     ((jlos_x86_regs_t *)s)->eax = val;
+#endif
 }
 
 int32_t jlos_cpu_state_get_retval(jlos_cpu_state_t *s)
 {
+#ifdef CONFIG_X86_64
+    return (int32_t)((jlos_x86_regs_t *)s)->rax;
+#else
     return ((jlos_x86_regs_t *)s)->eax;
+#endif
 }
 
-void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uint32_t entry, uint32_t stack_top)
+void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uintptr_t entry, uintptr_t stack_top)
 {
     jlos_x86_regs_t *r = (jlos_x86_regs_t *)s;
     r->eip = entry;
@@ -50,6 +60,6 @@ void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uint32_t entry, uint32_t
 void jlos_cpu_state_record_user_stack(jlos_cpu_state_t *curr_cpu, jlos_cpu_state_t *cpu)
 {
     jlos_x86_regs_t *curr_c = (jlos_x86_regs_t *)curr_cpu;
-    curr_c->user_esp = (uint32_t)cpu + 48;
+    curr_c->user_esp = (uintptr_t)cpu + offsetof(jlos_x86_regs_t, user_esp);
     curr_c->user_ss  = 0;
 }

@@ -73,7 +73,7 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     uint64_t MAC4 = mac_port4 % 256;
     uint64_t MAC5 = mac_port4 / 256;
 
-    uint8_t *init_block_raw = (uint8_t*)((((uint32_t)&self->init_block_memory[0]) + 31) & ~((uint32_t)0x1F));
+    uint8_t *init_block_raw = (uint8_t*)((((uintptr_t)&self->init_block_memory[0]) + 31) & ~((uintptr_t)0x1F));
     self->init_block = (jlos_amd_init_block_t*)init_block_raw;
 
     self->init_block->mode = 0x0430;
@@ -100,8 +100,8 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
         self->init_block->logical_address[i] = 0;
     }
 
-    self->send_buffer_descr = (jlos_amd_buffer_descriptor_t *)(((uint32_t)(&self->send_buffer_desc_memory[0]) + 15) & ~((uint32_t)0xF));
-    self->recv_buffer_descr = (jlos_amd_buffer_descriptor_t *)(((uint32_t)(&self->recv_buffer_desc_memory[0]) + 15) & ~((uint32_t)0xF));
+    self->send_buffer_descr = (jlos_amd_buffer_descriptor_t *)(((uintptr_t)(&self->send_buffer_desc_memory[0]) + 15) & ~((uintptr_t)0xF));
+    self->recv_buffer_descr = (jlos_amd_buffer_descriptor_t *)(((uintptr_t)(&self->recv_buffer_desc_memory[0]) + 15) & ~((uintptr_t)0xF));
 
     jlos_memset(self->send_buffer_descr, 0, NUM_SEND_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t));
     jlos_memset(self->recv_buffer_descr, 0, NUM_RECV_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t));
@@ -109,8 +109,8 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     self->init_block->recv_buffer_descr_address = VIRT_TO_PHYS(self->recv_buffer_descr);
     self->init_block->send_buffer_descr_address = VIRT_TO_PHYS(self->send_buffer_descr);
 
-    uint32_t send_buffers_base = (((uint32_t)&self->send_buffers[0][0]) + 0x7FF) & ~((uint32_t)0x7FF);
-    uint32_t recv_buffers_base = (((uint32_t)&self->recv_buffers[0][0]) + 0x7FF) & ~((uint32_t)0x7FF);
+    uintptr_t send_buffers_base = (((uintptr_t)&self->send_buffers[0][0]) + 0x7FF) & ~((uintptr_t)0x7FF);
+    uintptr_t recv_buffers_base = (((uintptr_t)&self->recv_buffers[0][0]) + 0x7FF) & ~((uintptr_t)0x7FF);
     (void)send_buffers_base;
     (void)recv_buffers_base;
 
@@ -199,7 +199,7 @@ void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self)
     printk_info("activation complete\n");
 }
 
-uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_t esp)
+uintptr_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uintptr_t esp)
 {
     jlos_amd_am79c973_t* eth = container_of(handler, jlos_amd_am79c973_t, base_handler);
 

@@ -74,7 +74,7 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
 void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self);
 
 void jlos_amd_am79c973_activate(jlos_amd_am79c973_t* self);
-uint32_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uint32_t esp);
+uintptr_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uintptr_t esp);
 
 void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size);
 void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self);

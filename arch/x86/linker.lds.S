@@ -3,11 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-ENTRY(loader)
+#ifdef CONFIG_X86_64
+OUTPUT_FORMAT(elf64-x86-64)
+OUTPUT_ARCH(i386:x86-64)
+KERNEL_VIRTUAL_BASE = 0xFFFFFFFF80000000;
+#else
 OUTPUT_FORMAT(elf32-i386)
 OUTPUT_ARCH(i386:i386)
-
 KERNEL_VIRTUAL_BASE = 0xC0000000;
+#endif
+
+ENTRY(loader)
 
 PHDRS
 {
@@ -57,13 +63,19 @@ SECTIONS
     {
         _data_start = .;
         *(.data)
-        . = ALIGN(4);
+        . = ALIGN(16);
         __initcall0_start = .; KEEP(*(.initcall0))  __initcall0_end = .;
+        . = ALIGN(16);
         __initcall1_start = .; KEEP(*(.initcall1))  __initcall1_end = .;
+        . = ALIGN(16);
         __initcall2_start = .; KEEP(*(.initcall2))  __initcall2_end = .;
+        . = ALIGN(16);
         __initcall3_start = .; KEEP(*(.initcall3))  __initcall3_end = .;
+        . = ALIGN(16);
         __initcall4_start = .; KEEP(*(.initcall4))  __initcall4_end = .;
+        . = ALIGN(16);
         __initcall5_start = .; KEEP(*(.initcall5))  __initcall5_end = .;
+        . = ALIGN(16);
         __jlos_test_start = .; KEEP(*(.jlos_test))  __jlos_test_end = .;
         . = ALIGN(64);
         __per_cpu_start = .;
@@ -74,6 +86,8 @@ SECTIONS
         _data_end = .;
     } :data
     __phys_dot = LOADADDR(.data) + SIZEOF(.data);
+
+    _bss_start_phys = __phys_dot;
 
     .bss : AT(__phys_dot)
     {

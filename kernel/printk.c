@@ -338,7 +338,7 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
                     break;
                 }
                 case 'p': {
-                    unsigned int value = va_arg(ap, unsigned int);
+                    uintptr_t value = va_arg(ap, uintptr_t);
                     char buf[32];
                     buf[0] = '0';
                     buf[1] = 'x';

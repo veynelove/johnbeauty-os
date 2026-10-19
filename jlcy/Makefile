@@ -5,15 +5,27 @@
 ARCH := x86
 OBJ_DIR := obj
 
-CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
+BITS ?= 64
+
+ifeq ($(BITS), 64)
+BITS_CFLAGS  = -m64
+BITS_DEFINE = -DCONFIG_X86_64
+LDPARAMS    = -melf_x86_64
+LINKER_LD   = user_linker64.ld
+else
+BITS_CFLAGS  = -m32
+BITS_DEFINE = -DCONFIG_X86_32
+LDPARAMS    = -melf_i386
+LINKER_LD   = user_linker.ld
+endif
+
+CPARAMS = $(BITS_CFLAGS) $(BITS_DEFINE) -I. -nostdlib -fno-builtin -fno-exceptions \
     -fno-leading-underscore -std=gnu2x \
     -ffreestanding -fno-stack-protector \
     -fno-pic -fno-pie \
     -Wall -Wextra -Wno-address-of-packed-member \
     -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx \
     -O2 -g
-
-LDPARAMS = -melf_i386
 
 LIB_C_SRCS := $(shell find lib -type f -name "*.c")
 LIB_ASM_SRCS := $(shell find lib -type f -name "*.S")
@@ -38,8 +50,8 @@ $(OBJ_DIR)/%.o: %.S
 	@mkdir -p $(@D)
 	@gcc $(CPARAMS) -o $@ -c $<
 
-user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/user_linker.ld
-	@ld $(LDPARAMS) -T user/$(ARCH)/user_linker.ld -o $@ $< $(LIB_OBJS)
+user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/$(LINKER_LD)
+	@ld $(LDPARAMS) -T user/$(ARCH)/$(LINKER_LD) -o $@ $< $(LIB_OBJS)
 
 # ==================磁盘镜像生成==================
 DISK_VMDK := ../disk.vmdk

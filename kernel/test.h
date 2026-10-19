@@ -26,7 +26,7 @@ extern jlos_test_stats_t g_jlos_test_stats;
 #define JLOS_TEST(suite, name) \
     static void jlos_test_fn_##suite##_##name(void); \
     static const jlos_test_case_t \
-        __attribute__((used, section(".jlos_test"))) \
+        __attribute__((used, section(".jlos_test"), aligned(sizeof(void *)))) \
         jlos_test_##suite##_##name = { #suite, #name, jlos_test_fn_##suite##_##name }; \
     static void jlos_test_fn_##suite##_##name(void)
 

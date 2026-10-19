@@ -19,19 +19,19 @@
 
 typedef struct jlos_syscall_handler jlos_syscall_handler_t;
 
-typedef int32_t (*jlos_syscall_func_t)(uint32_t arg1, uint32_t arg2, uint32_t arg3);
-typedef uint32_t (*jlos_syscall_handle_interrupt_func_t)(jlos_syscall_handler_t*, uint32_t);
+typedef int32_t (*jlos_syscall_func_t)(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+typedef uintptr_t (*jlos_syscall_handle_interrupt_func_t)(jlos_syscall_handler_t*, uintptr_t);
 
 struct jlos_syscall_handler {
     uint8_t interrupt_number;
     jlos_irq_manager_t *interrupt_manager;
-    uint32_t (*handle_interrupt)(jlos_syscall_handler_t*, uint32_t);
+    uintptr_t (*handle_interrupt)(jlos_syscall_handler_t*, uintptr_t);
     jlos_syscall_func_t dispatch[JLOS_SYSCALL_MAX];
 };
 
 void jlos_syscall_handler_init(void);
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self);
-int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uint32_t arg1, uint32_t arg2, uint32_t arg3);
+int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
 bool jlos_syscall_need_resched(void);
 
 bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n);

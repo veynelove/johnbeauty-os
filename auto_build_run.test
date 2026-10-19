@@ -5,6 +5,10 @@
 
 @echo off
 chcp 65001 >nul
+set BITS=%1
+if "%BITS%"=="" set BITS=32
+set ISO_SRC=johnkernel.iso
+if "%BITS%"=="64" set ISO_SRC=johnkernel64.iso
 echo ========================================
 echo  自动化构建与启动流程
 echo ========================================
@@ -19,7 +23,7 @@ timeout /t 3 /nobreak >nul
 
 echo.
 echo [1/5] 正在远程编译 Ubuntu 项目...
-ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make"
+ssh -t veyne@192.168.159.128 "cd ~/johnbeauty-os/ && make clean && make BITS=%BITS%"
 if errorlevel 1 (
     echo.
     echo [错误] 编译失败
@@ -29,7 +33,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/5] 正在下载 ISO 文件到 Windows 桌面...
-scp veyne@192.168.159.128:~/johnbeauty-os/johnkernel.iso C:\Users\johnbeauty\Desktop\johnkernel.iso
+scp veyne@192.168.159.128:~/johnbeauty-os/%ISO_SRC% C:\Users\johnbeauty\Desktop\johnkernel.iso
 if errorlevel 1 (
     echo.
     echo [错误] ISO 下载失败

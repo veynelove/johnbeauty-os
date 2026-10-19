@@ -9,7 +9,8 @@ void printf(const char *fmt, ...)
 {
     char buf[256];
     int pos = 0;
-    uint32_t *args = (uint32_t *)&fmt + 1;
+    __builtin_va_list args;
+    __builtin_va_start(args, fmt);
 
     for (int i = 0; fmt[i] && pos < (int)sizeof(buf) - 1; i++) {
         if (fmt[i] == '%') {
@@ -17,7 +18,7 @@ void printf(const char *fmt, ...)
             if (!fmt[i]) break;
             switch (fmt[i]) {
             case 'd': {
-                int32_t val = (int32_t)*args++;
+                int32_t val = __builtin_va_arg(args, int32_t);
                 char tmp[12];
                 int tpos = 11;
                 tmp[tpos] = '\0';
@@ -37,7 +38,7 @@ void printf(const char *fmt, ...)
                 break;
             }
             case 'u': {
-                uint32_t val = *args++;
+                uint32_t val = __builtin_va_arg(args, uint32_t);
                 char tmp[12];
                 int tpos = 11;
                 tmp[tpos] = '\0';
@@ -53,14 +54,14 @@ void printf(const char *fmt, ...)
                 break;
             }
             case 's': {
-                const char *s = (const char *)*args++;
+                const char *s = __builtin_va_arg(args, const char *);
                 while (*s && pos < (int)sizeof(buf) - 1) {
                     buf[pos++] = *s++;
                 }
                 break;
             }
             case 'c': {
-                char c = (char)*args++;
+                char c = (char)__builtin_va_arg(args, int);
                 if (pos < (int)sizeof(buf) - 1) buf[pos++] = c;
                 break;
             }
@@ -72,5 +73,6 @@ void printf(const char *fmt, ...)
             buf[pos++] = fmt[i];
         }
     }
+    __builtin_va_end(args);
     write(TASK_FD_STD_OUT, buf, pos);
 }

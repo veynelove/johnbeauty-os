@@ -5,35 +5,19 @@
 
 #include <arch/x86/tss.h>
 
-void jlos_x86_tss_init(jlos_x86_tss_t *self, uint32_t esp0, uint16_t ss0)
+void jlos_x86_tss_init(jlos_x86_tss_t *self, uintptr_t stack0, uint16_t ss0)
 {
-    self->back_link = 0;
-    self->esp0 = esp0;
+#ifdef CONFIG_X86_64
+    (void)ss0;
+    jlos_memset(self, 0, sizeof(jlos_x86_tss_t));
+    self->rsp0 = stack0;
+    self->io_map_base = sizeof(jlos_x86_tss_t);
+#else
+    jlos_memset(self, 0, sizeof(jlos_x86_tss_t));
+    self->esp0 = (uint32_t)stack0;
     self->ss0 = ss0;
-    self->esp1 = 0;
-    self->ss1 = 0;
-    self->esp2 = 0;
-    self->ss2 = 0;
-    self->cr3 = 0;
-    self->eip = 0;
-    self->eflags = 0;
-    self->eax = 0;
-    self->ecx = 0;
-    self->edx = 0;
-    self->ebx = 0;
-    self->esp = 0;
-    self->ebp = 0;
-    self->esi = 0;
-    self->edi = 0;
-    self->es = 0;
-    self->cs = 0;
-    self->ss = 0;
-    self->ds = 0;
-    self->fs = 0;
-    self->gs = 0;
-    self->ldt_segment = 0;
-    self->trap_flag = 0;
-    self->io_map_base = 104;
+    self->io_map_base = offsetof(jlos_x86_tss_t, io_map_base);
+#endif
 }
 
 void jlos_x86_tss_load(uint16_t selector)

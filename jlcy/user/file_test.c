@@ -120,7 +120,7 @@ static int check_unlink(void)
 static int test_mmap_anon(void)
 {
     uint32_t *p = mmap(0, 8192, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if ((int32_t)p <= 0) {
+    if ((intptr_t)p <= 0) {
         printf("file_test: mmap failed\n");
         return 0;
     }
@@ -138,7 +138,7 @@ static int test_mmap_anon(void)
     }
     /* 解除后重映射: first-fit 复用原空洞, 应得到全新零页 */
     uint32_t *q = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if ((int32_t)q <= 0 || q[0] != 0 || q[1023] != 0) {
+    if ((intptr_t)q <= 0 || q[0] != 0 || q[1023] != 0) {
         printf("file_test: mmap remap-zero FAIL\n");
         return 0;
     }

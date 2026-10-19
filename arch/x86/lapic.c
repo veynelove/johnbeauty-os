@@ -20,8 +20,8 @@
 #define JLOS_PIT_CMD_PORT       0x43
 #define JLOS_PIT_CALIB_DIVISOR  11932
 
-static uint32_t s_lapic_base;
-static uint32_t s_lapic_timer_freq;
+static uintptr_t s_lapic_base;
+static uint32_t  s_lapic_timer_freq;
 
 static uint32_t jlos_arch_lapic_mmio_read(uint32_t offset)
 {

@@ -68,7 +68,7 @@ static jlos_driver_t *pci_network_controller_handle(jlos_hal_pci_controller_t *s
                     printk_debug("allocating amd am79c973 driver structure\n");
                     driver = (jlos_driver_t *)jlos_kalloc(sizeof(jlos_amd_am79c973_t));
                     if (driver) {
-                        printk_debug("amd am79c9973 driver allocated at: 0x%x\n", (uint32_t)driver);
+                        printk_debug("amd am79c9973 driver allocated at: 0x%lx\n", (uintptr_t)driver);
                         jlos_amd_am79c973_init((jlos_amd_am79c973_t *)driver, &dev, interrupts);
                         return driver;
                     }
@@ -139,14 +139,14 @@ jlos_hal_pci_bar_t jlos_hal_pci_get_base_address_register(jlos_hal_pci_controlle
         uint32_t bar_size = (~size_value) + 1;
         result.size = bar_size;
         jlos_hal_pci_config_write32(self, bus, dev, func, 0x10 + 4 * bar, bar_value);
-        result.address = (uint8_t *)(bar_value & ~0x3);
+        result.address = (uint8_t *)(uintptr_t)(bar_value & ~0x3);
         result.prefetchable = false;
     } else {
         size_value &= ~0xF;
         uint32_t bar_size = (~size_value) + 1;
         result.size = bar_size;
         jlos_hal_pci_config_write32(self, bus, dev, func, 0x10 + 4 * bar, bar_value);
-        result.address = (uint8_t *)(bar_value & ~0xF);
+        result.address = (uint8_t *)(uintptr_t)(bar_value & ~0xF);
         result.prefetchable = (bar_value & 0x8) != 0;
     }
     return result;
@@ -166,7 +166,7 @@ void jlos_hal_pci_enumerate_and_bind_drivers(void)
                 for (int bar_num = 0; bar_num < 6; bar_num++) {
                     jlos_hal_pci_bar_t bar = jlos_hal_pci_get_base_address_register(self, bus, device, function, bar_num);
                     if (bar.address && (bar.type == JLOS_HAL_PCI_INPUT_OUTPUT)) {
-                        dev.port_base = (uint32_t)bar.address;
+                        dev.port_base = (uint32_t)(uintptr_t)bar.address;
                     }
                 }
                 jlos_driver_t *driver = pci_get_driver(self, dev, jlos_active_irq_manager);

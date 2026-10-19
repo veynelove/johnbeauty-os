@@ -31,7 +31,7 @@ static int jlos_vma_compare(const jlos_rbtree_node_t *a, const jlos_rbtree_node_
 static int jlos_vma_cmp_addr(const jlos_rbtree_node_t *node, const void *key)
 {
     const jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
-    uint32_t addr = *(const uint32_t *)key;
+    uintptr_t addr = *(const uintptr_t *)key;
     if (vma->start < addr) {
         return -1;
     }
@@ -115,7 +115,7 @@ bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src)
     return true;
 }
 
-jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr)
+jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uintptr_t addr)
 {
     if (!mm) {
         return nullptr;
@@ -131,7 +131,7 @@ jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr)
     return nullptr;
 }
 
-jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t flags, jlos_vma_type_t type)
+jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uintptr_t start, uintptr_t end, uint32_t flags, jlos_vma_type_t type)
 {
     if (!mm || end <= start) {
         return nullptr;
@@ -150,7 +150,7 @@ jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t f
     return vma;
 }
 
-bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
+bool jlos_vma_remove_range(jlos_mm_t *mm, uintptr_t start, uintptr_t end)
 {
     if (!mm || !mm->pc || end <= start) {
         return false;
@@ -165,9 +165,9 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
             break;
         }
         if (vma->end > start) {
-            uint32_t ov_s = (vma->start > start) ? vma->start : start;
-            uint32_t ov_e = (vma->end < end) ? vma->end : end;
-            for (uint32_t i = ov_s; i < ov_e; i += JLOS_PAGE_FRAME_SIZE) {
+            uintptr_t ov_s = (vma->start > start) ? vma->start : start;
+            uintptr_t ov_e = (vma->end < end) ? vma->end : end;
+            for (uintptr_t i = ov_s; i < ov_e; i += JLOS_PAGE_FRAME_SIZE) {
                 jlos_paging_unmap(mm->pc, i);
             }
             if (ov_s <= vma->start && ov_e >= vma->end) {
@@ -194,7 +194,7 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end)
     return true;
 }
 
-jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uint32_t start, uint32_t new_end, uint32_t flags, jlos_vma_type_t type)
+jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uintptr_t start, uintptr_t new_end, uint32_t flags, jlos_vma_type_t type)
 {
     if (!mm || new_end <= start) {
         return nullptr;
@@ -212,7 +212,7 @@ jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uint32_t start, uint32_t new_end, 
     return jlos_vma_add(mm, start, new_end, flags, type);
 }
 
-bool jlos_vma_shrink_tail(jlos_mm_t *mm, uint32_t new_end, jlos_vma_type_t type)
+bool jlos_vma_shrink_tail(jlos_mm_t *mm, uintptr_t new_end, jlos_vma_type_t type)
 {
     if (!mm || !mm->pc) {
         return false;
@@ -223,13 +223,13 @@ bool jlos_vma_shrink_tail(jlos_mm_t *mm, uint32_t new_end, jlos_vma_type_t type)
         jlos_vma_t *vma = jlos_rbtree_entry(node, jlos_vma_t, rb_node);
         if (vma->type == type) {
             if (new_end <= vma->start) {
-                for (uint32_t i = vma->start; i < vma->end; i += JLOS_PAGE_FRAME_SIZE) {
+                for (uintptr_t i = vma->start; i < vma->end; i += JLOS_PAGE_FRAME_SIZE) {
                     jlos_paging_unmap(mm->pc, i);
                 }
                 jlos_rbtree_remove(&mm->vma_tree, node);
                 jlos_kfree(vma);
             } else if (new_end < vma->end) {
-                for (uint32_t i = new_end; i < vma->end; i += JLOS_PAGE_FRAME_SIZE) {
+                for (uintptr_t i = new_end; i < vma->end; i += JLOS_PAGE_FRAME_SIZE) {
                     jlos_paging_unmap(mm->pc, i);
                 }
                 vma->end = new_end;
@@ -241,26 +241,26 @@ bool jlos_vma_shrink_tail(jlos_mm_t *mm, uint32_t new_end, jlos_vma_type_t type)
     return false;
 }
 
-bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr)
+bool jlos_vma_demand_map(jlos_mm_t *mm, uintptr_t fault_addr)
 {
     if (!mm || !mm->pc) {
         return false;
     }
     jlos_vma_t *vma = jlos_vma_find(mm, fault_addr);
     if (!vma) {
-        printk_err("no vma addr=0x%x\n", fault_addr);
+        printk_err("no vma addr=0x%lx\n", fault_addr);
         return false;
     }
-    uint32_t page = JLOS_PAGE_ALIGN_DOWN(fault_addr);
+    uintptr_t page = JLOS_PAGE_ALIGN_DOWN(fault_addr);
     uint32_t flags = (vma->flags & JLOS_VMA_WRITE) ? JLOS_PG_USER_RW : JLOS_PG_USER_RO;
     void *frame = jlos_page_frame_malloc();
     if (!frame) {
-        printk_err("oom addr=0x%x\n", fault_addr);
+        printk_err("oom addr=0x%lx\n", fault_addr);
         return false;
     }
     jlos_memset(frame, 0, JLOS_PAGE_FRAME_SIZE);
     if (!jlos_paging_map(mm->pc, page, VIRT_TO_PHYS(frame), flags)) {
-        printk_err("map fail page=0x%x flags=0x%x\n", page, flags);
+        printk_err("map fail page=0x%lx flags=0x%x\n", page, flags);
         jlos_page_frame_free(frame);
         return false;
     }
@@ -268,13 +268,13 @@ bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr)
     return true;
 }
 
-uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, uint32_t hint, uint32_t len)
+uintptr_t jlos_vma_find_free_area(jlos_mm_t *mm, uintptr_t base, uintptr_t limit, uintptr_t hint, uintptr_t len)
 {
     if (!mm || !len) {
         return 0;
     }
     if (hint >= base && hint < limit) {
-        uint32_t h = JLOS_PAGE_ALIGN_UP(hint);
+        uintptr_t h = JLOS_PAGE_ALIGN_UP(hint);
         if (h < limit && len <= limit - h) {
             jlos_rbtree_node_t *node = jlos_rbtree_find_key_le(&mm->vma_tree, &h, jlos_vma_cmp_addr);
             if (!node) {
@@ -291,7 +291,7 @@ uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, u
             }
         }
     }
-    uint32_t candidate = base;
+    uintptr_t candidate = base;
     jlos_rbtree_node_t *node = jlos_rbtree_find_key_le(&mm->vma_tree, &candidate, jlos_vma_cmp_addr);
     if (!node) {
         node = jlos_rbtree_first(&mm->vma_tree);

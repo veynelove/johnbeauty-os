@@ -24,7 +24,7 @@ extern jlos_task_manager_t      *g_task_manager_ptr;
 static jlos_syscall_handler_t   s_syscall_handler;
 jlos_syscall_handler_t          *s_syscall_handler_ptr = &s_syscall_handler;
 
-static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_write(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     void *user_buf = (void *)arg2;
@@ -99,7 +99,7 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return -SYSCALL_ENINVAL;
 }
 
-static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_read(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     void *user_buf = (void *)arg2;
@@ -169,7 +169,7 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return -SYSCALL_ENINVAL;
 }
 
-static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_create_pipe(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task || !current_task->fds) {
@@ -212,7 +212,7 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_task_fd_close(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     jlos_task_t *current_task = jlos_hal_current_task();
@@ -242,7 +242,7 @@ static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
-static int32_t syscall_open(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_open(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task || !current_task->fds) {
@@ -284,7 +284,7 @@ static int32_t syscall_open(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return fd;
 }
 
-static int32_t syscall_lseek(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_lseek(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     jlos_task_t *current_task = jlos_hal_current_task();
@@ -303,7 +303,7 @@ static int32_t syscall_lseek(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return result;
 }
 
-static int32_t syscall_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_fork(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
@@ -323,7 +323,7 @@ static int32_t syscall_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)child->pid;
 }
 
-static int32_t syscall_clone(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clone(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint32_t clone_flags = arg1;
     uint32_t child_stack = arg2;
@@ -344,7 +344,7 @@ static int32_t syscall_clone(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)child->pid;
 }
 
-static int32_t syscall_unlink(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_unlink(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     if (!jlos_hal_current_task()) {
         return -SYSCALL_ENOMEM;
@@ -367,7 +367,7 @@ static int32_t syscall_unlink(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_task_brk(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task || !current_task->mm) {
@@ -395,13 +395,13 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)new_brk;
 }
 
-static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_mmap(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
 
     struct {
-        uint32_t addr;
+        uintptr_t addr;
         uint32_t len;
         uint32_t prot;
         uint32_t flags;
@@ -424,7 +424,7 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     uint32_t len = JLOS_PAGE_ALIGN_UP(args.len);
     jlos_mm_t *mm = current_task->mm;
 
-    uint32_t addr;
+    uintptr_t addr;
     if (args.flags & JLOS_MMAP_FIXED) {
         if (args.addr & (JLOS_PAGE_FRAME_SIZE - 1)) {
             return -SYSCALL_ENINVAL;
@@ -435,7 +435,7 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         addr = args.addr;
         jlos_vma_remove_range(mm, addr, addr + len);
     } else {
-        uint32_t hint = args.addr ? args.addr : 0;
+        uintptr_t hint = args.addr ? args.addr : 0;
         addr = jlos_vma_find_free_area(mm, JLOS_TASK_USER_MMAP_BASE, JLOS_TASK_USER_MMAP_LIMIT, hint, len);
         if (!addr) {
             return -SYSCALL_ENOMEM;
@@ -449,10 +449,11 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENOMEM;
     }
 
+
     return (int32_t)addr;
 }
 
-static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_munmap(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
 
@@ -480,8 +481,8 @@ static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char
         kernel_ptrs[i] = nullptr;
     }
     for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
-        uint32_t user_str;
-        if (!jlos_copy_from_user(&user_str, (const void *)(user_ptr_arr + i * sizeof(uint32_t)), sizeof(uint32_t))) {
+        uintptr_t user_str;
+        if (!jlos_copy_from_user(&user_str, (const void *)(user_ptr_arr + i * sizeof(uintptr_t)), sizeof(uintptr_t))) {
             return - SYSCALL_EFAULT;
         }
         if (user_str == 0) {
@@ -507,7 +508,7 @@ static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char
     return 0;
 }
 
-static int32_t syscall_execve(uint32_t path, uint32_t argv, uint32_t envp)
+static int32_t syscall_execve(uintptr_t path, uintptr_t argv, uintptr_t envp)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task) {
@@ -545,7 +546,7 @@ static int32_t syscall_execve(uint32_t path, uint32_t argv, uint32_t envp)
     return ret;
 }
 
-static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_exit(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task) {
@@ -557,7 +558,7 @@ static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_yield(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_yield(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task) {
@@ -570,7 +571,7 @@ static int32_t syscall_yield(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_get_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_pid(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task) {
@@ -582,7 +583,7 @@ static int32_t syscall_get_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return current_task->pid;
 }
 
-static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_sleep(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     if (!jlos_hal_current_task()) {
         return -SYSCALL_ENOMEM;
@@ -593,7 +594,7 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_nanosleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_nanosleep(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
@@ -612,7 +613,7 @@ static int32_t syscall_nanosleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_errno(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (!current_task) {
@@ -624,7 +625,7 @@ static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return current_task->errno;
 }
 
-static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_ticks(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
@@ -632,7 +633,7 @@ static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)jlos_timek_get_ticks();
 }
 
-static int32_t syscall_gettimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_gettimeofday(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint64_t ns = jlos_timek_get_realtime_ns();
     uint32_t tv[2];
@@ -646,7 +647,7 @@ static int32_t syscall_gettimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clock_gettime(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint64_t ns;
     if (arg1 == 0) {
@@ -664,7 +665,7 @@ static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
-static int32_t syscall_settimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_settimeofday(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
@@ -683,7 +684,7 @@ static int32_t syscall_settimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_clock_settime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clock_settime(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
     if (arg1 != 0) {
@@ -704,7 +705,7 @@ static int32_t syscall_clock_settime(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
-static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_tasks_info(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     if (!g_task_manager_ptr) {
         return - SYSCALL_ENOMEM;
@@ -724,7 +725,7 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
     return 0;
 }
 
-static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_wait_pid(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint32_t target_pid = arg1;
     int32_t *exit_code = (int32_t *)arg2;
@@ -751,7 +752,7 @@ static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_signal(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_signal(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
     jlos_task_t *current_task = jlos_hal_current_task();
@@ -762,12 +763,12 @@ static int32_t syscall_signal(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (sig == 0 || sig >= JLOS_SIGNAL_NUM) {
         return -SYSCALL_ENINVAL;
     }
-    uint32_t old = current_task->signal_handlers[sig];
+    uintptr_t old = current_task->signal_handlers[sig];
     current_task->signal_handlers[sig] = arg2;
     return (int32_t)old;
 }
 
-static int32_t syscall_kill(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_kill(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
     if (!g_task_manager_ptr) {
@@ -785,7 +786,7 @@ static int32_t syscall_kill(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return jlos_signal_send(target, sig);
 }
 
-static int32_t syscall_sigreturn(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_sigreturn(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
@@ -806,12 +807,12 @@ void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
     s_syscall_handler_ptr->dispatch[num] = handler;
 }
 
-static int32_t s_syscall_dispatch(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3)
+static int32_t s_syscall_dispatch(uint32_t num, uintptr_t a1, uintptr_t a2, uintptr_t a3)
 {
     return jlos_syscall_do_dispatch(s_syscall_handler_ptr, num, a1, a2, a3);
 }
 
-static uint32_t s_syscall_resched_do(uint32_t ctx)
+static uintptr_t s_syscall_resched_do(uintptr_t ctx)
 {
     jlos_task_t *current_task = jlos_hal_current_task();
     if (current_task) {
@@ -872,8 +873,8 @@ void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
     (void)self;
 }
 
-int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uint32_t arg1, uint32_t arg2,
-    uint32_t arg3)
+int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uintptr_t arg1, uintptr_t arg2,
+    uintptr_t arg3)
 {
     int32_t result = - SYSCALL_ENOSYS;
     if (syscall_num < JLOS_SYSCALL_MAX && self->dispatch[syscall_num]) {
@@ -908,7 +909,7 @@ bool jlos_access_ok(const void *addr, size_t n)
     jlos_task_t *current_task = jlos_hal_current_task();
     jlos_paging_context_t *ctx =
         current_task && current_task->mm ? current_task->mm->pc : jlos_hal_paging_get_active_context();
-    return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
+    return jlos_paging_is_user_accessible(ctx, (uintptr_t)addr, n);
 }
 
 bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)

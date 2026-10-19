@@ -79,9 +79,9 @@ void jlos_mouse_driver_activate(jlos_mouse_driver_t* self)
     jlos_io8_read(&self->dataport);
 }
 
-uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t esp)
+uintptr_t jlos_mouse_driver_handle_interrupt(jlos_irq_handler_t* self, uintptr_t esp)
 {
-    jlos_mouse_driver_t* mouse = container_of((jlos_irq_handler_t *)self, jlos_mouse_driver_t, base_handler);
+    jlos_mouse_driver_t* mouse = container_of(self, jlos_mouse_driver_t, base_handler);
 
     uint8_t status = jlos_io8_read(&mouse->commandport);
     if (!(status & 0x20)) {  // 检查 bit 5：鼠标数据可用

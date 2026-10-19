@@ -21,15 +21,15 @@ extern uint16_t jlos_mmu_user_data_selector(jlos_mmu_t *self);
 extern jlos_mmu_t *jlos_mmu_get_kernel(void);
 
 typedef struct {
-  uint32_t text_start;
-  uint32_t text_end;
-  uint32_t rodata_start;
-  uint32_t rodata_end;
-  uint32_t data_start;
-  uint32_t data_end;
-  uint32_t bss_start;
-  uint32_t bss_end;
-  uint32_t kernel_end;
+  uintptr_t text_start;
+  uintptr_t text_end;
+  uintptr_t rodata_start;
+  uintptr_t rodata_end;
+  uintptr_t data_start;
+  uintptr_t data_end;
+  uintptr_t bss_start;
+  uintptr_t bss_end;
+  uintptr_t kernel_end;
 } jlos_hal_kernel_segments_t;
 
 const jlos_hal_kernel_segments_t *jlos_hal_get_kernel_segments(void);

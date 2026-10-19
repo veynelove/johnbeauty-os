@@ -1,6 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v4.2 | 日期: 2026-10-15 | 作者: JohnLove
+版本: v4.3 | 日期: 2026-10-19 | 作者: JohnLove
+
+> v4.3 变更：64 位化 8 步全部完成 + 运行时验证 54/54 全 PASS。关键修复：fork 子进程 rax 返回值（64 位分支遗漏设 0）、signal_handlers uintptr_t 升级、syscall ABI 64 位化（jlcy syscall() 参数 uintptr_t + mmap_arg_struct_t.addr uintptr_t）、中断处理链返回类型 uintptr_t、TSS 104 字节布局、GDT 语义化宏、signal frame 偏移量 sizeof(uintptr_t)。双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS。
 
 > v4.2 变更：C23 标准升级完成（-std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删除 types.h 冲突定义）；slab per-CPU partial 跨核 free 损坏修复（per-CPU lock + limbo 哨兵 + owner 字段，SLUB 风格加锁版）+ reap_all_zombies 无限循环修复（prev_task 占用检查）；清理诊断 printk + 删除废弃 atomic64 代码。54/54 全 PASS。
 
@@ -92,6 +94,8 @@
 | SMP 竞态修复 | 时间系统（s_ticks 4 倍速 + monotonic_ns 竞态）+ fork 子进程生命周期（enqueue 延后）+ zombie reaping（per-CPU prev_task） | 54/54 全 PASS |
 | C23 标准升级 | -std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删 types.h 冲突定义 + \_\_typeof\_\_→typeof + NULL→nullptr + \_\_attribute\_\_((noreturn))→[[noreturn]] + \_Static\_assert→static_assert | 54/54 全 PASS |
 | slab per-CPU 加锁修复 | per-CPU lock 串行化 pop/push + limbo 哨兵（owner=-2）转移中页 + s_slab_lock→cs->lock 锁序 + reap_all_zombies prev_task 占用检查防无限循环 | 54/54 全 PASS |
+| 64 位化升级 | x86-64 long mode：4 级页表（PML4/PDPT/PD/PT）+ 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef（CONFIG_X86_32/CONFIG_X86_64）+ jlcy syscall ABI 64 位化 | 双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS |
+| 64 位化运行时修复 | fork 子进程 rax 返回值（64 位分支遗漏设 0）+ signal_handlers uintptr_t 升级 + mmap_arg_struct_t.addr uintptr_t + 中断处理链返回类型 uintptr_t + signal frame 偏移 sizeof(uintptr_t) | 54/54 全 PASS |
 
 ***
 
@@ -568,7 +572,7 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-SMP 8 步 + C23 升级已全部完成，后续进入 64 位化（P1）阶段。
+SMP 8 步 + C23 升级 + 64 位化已全部完成，后续进入用户态运行时 / socket syscall / 调度器优化阶段。
 
 ***
 
@@ -686,7 +690,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | --- | --- | --- | --- | --- |
 | ~~**高**~~ | ~~SMP 实现~~ | ~~APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化~~ | — | **已完成**：8 步全部落地 + 3 项竞态修复，54/54 全 PASS |
 | ~~**高**~~ | ~~C23 标准升级~~ | ~~[[attribute]] + nullptr + constexpr + typeof + 数字分隔符 + 二进制字面量 + enum : type~~ | SMP ✅ | **已完成**：-std=gnu2x + 核心特性落地（nullptr/[[noreturn]]/static_assert/typeof），其余特性（constexpr/[[maybe_unused]]/[[fallthrough]] 等）写新代码时自然采用 |
-| **高** | 64 位化（P1） | x86-64 long mode：4 级页表 + 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64 同时支持 32/64 位） | C23 ✅ | 8 步计划：引导切换→4 级页表→GDT/IDT/TSS→中断入口→上下文切换→syscall→SMP 适配→ELF/用户态。嵌入式场景保留 32 位 |
+| ~~**高**~~ | ~~64 位化（P1）~~ | ~~x86-64 long mode：4 级页表 + 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64 同时支持 32/64 位）~~ | C23 ✅ | **已完成**：8 步全部落地 + 运行时验证 54/54 全 PASS。关键修复：fork 子进程 rax、signal_handlers uintptr_t、syscall ABI 64 位化、中断处理链返回类型、TSS 104 字节布局、GDT 语义化宏、signal frame 偏移。嵌入式场景保留 32 位 |
 | 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
@@ -776,6 +780,57 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | → 批次 3 |
 | **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成；SMP 实现 → 批次 6 已完成 |
 | **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | ✅ 已完成（v3.3） |
+
+***
+
+## Phase 9: 64 位化升级（x86-64 long mode）✅ 已完成（2026-10-19，v4.3）
+
+x86-64 long mode 8 步全部落地，同目录 + #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64）同时支持 32/64 位，嵌入式场景保留 32 位。
+
+### 9.1 八步实施
+
+| 步骤 | 内容 | 状态 |
+| ---- | ---- | ---- |
+| Step 1 | 引导切换：bootloader 检测 CPUID + long mode 支持 → 进入 long mode（CR0.PG + CR4.PAE + EFER.LME + EFER.LME→LMA） | ✅ |
+| Step 2 | 4 级页表：PML4/PDPT/PD/PT + 64 位内存布局（PML4[0] 用户区 / PML4[256] direct map 0xFFFF800000000000 / PML4[511] kernel 0xFFFFFFFF80000000 + heap 0xFFFFFFFF00000000） | ✅ |
+| Step 3 | 64 位 GDT/IDT/TSS：GDT 语义化宏（非 magic number）+ TSS 104 字节布局 + IDT 64 位 gate | ✅ |
+| Step 4 | 中断入口：64 位中断入口/出口（interrupts_asm.S）+ 中断处理链返回类型 uintptr_t | ✅ |
+| Step 5 | 上下文切换：64 位 trapframe（jlos_x86_regs_t 176B = 15 GPR + vector + error + rip + cs + eflags + user_esp + user_ss）+ swtch 汇编 64 位 | ✅ |
+| Step 6 | syscall：syscall/sysret 指令 + 参数截断 + jlcy syscall ABI 64 位化 | ✅ |
+| Step 7 | SMP 适配：per-CPU GDT/TSS 64 位 + AP 启动 long mode + IPI 64 位 | ✅ |
+| Step 8 | ELF/用户态：ELF64 加载器 + jlcy 用户库 64 位 + signal frame 偏移 sizeof(uintptr_t) | ✅ |
+
+### 9.2 关键运行时修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| BIT64-1 | **fork 子进程 rax 返回值**（严重 Bug）：64 位 `jlos_arch_task_copy_thread` 中子进程 rax 设为 `pregs->rax`（=SYSCALL_FORK syscall number），而 32 位正确设为 0 → 子进程 fork() 返回非零 → 不进入 `pid==0` 分支 → fork_test/signal_test FAIL | `top[14] = 0` | arch/x86/context_switch.c |
+| BIT64-2 | **signal_handlers 类型升级**：`uint32_t signal_handlers[]` → `uintptr_t signal_handlers[]`（64 位指针截断） | signal_handlers 字段 + syscall.c/multitask.c 局部变量 | kernel/multitask.h + kernel/syscall.c + kernel/multitask.c |
+| BIT64-3 | **syscall ABI 64 位化**：jlcy `syscall()` 参数 `uint32_t` → `uintptr_t`，返回值 `int32_t` → `intptr_t`，所有 wrapper `(uint32_t)ptr` → `(uintptr_t)ptr` + `mmap_arg_struct_t.addr` `uint32_t` → `uintptr_t` | 消除全部 pointer-to-int-cast 警告 | jlcy/include/types.h + jlcy/lib/x86/syscall.c + jlcy/lib/syscall.h + jlcy/include/syscall_abi.h + kernel/syscall.c + jlcy/user/mmap_test.c + jlcy/user/file_test.c |
+| BIT64-4 | **中断处理链返回类型**：uintptr_t 升级 | 中断处理函数返回类型 | arch/x86/ |
+| BIT64-5 | **TSS 104 字节布局**：64 位 TSS 104 字节布局对齐 | TSS 结构 + GDT 语义化宏 | arch/x86/ |
+| BIT64-6 | **GDT 语义化宏**：硬编码用宏替代（非 magic number） | GDT entry 定义 | arch/x86/ |
+| BIT64-7 | **signal frame 偏移**：`sizeof(uint32_t)` → `sizeof(uintptr_t)`（64 位信号栈帧偏移） | signal frame setup/restore | arch/x86/signal.c |
+
+### 9.3 64 位内存布局
+
+```
+PML4[0]:     用户区      0x0000000000000000 - 0x000007FFFFFFFFFF
+PML4[256]:   direct map  0xFFFF800000000000
+PML4[511]:   kernel text/data 0xFFFFFFFF80000000
+             kernel heap      0xFFFFFFFF00000000
+```
+
+- `KERNEL_DIRECT_MAP_BASE = 0xFFFF800000000000`
+- `KERNEL_VIRTUAL_BASE = 0xFFFFFFFF80000000`
+- 用户栈顶 `JLOS_TASK_USER_STACK_TOP = 0xBFFFF000`（< 4GB，用户代码低地址）
+
+### 9.4 验证
+
+```
+双架构编译：0 警告 0 错误（make BITS=32 / make BITS=64）
+VMware 4 核：54 passed / 0 failed
+```
 
 ***
 

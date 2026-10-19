@@ -33,17 +33,18 @@ static void jlos_ap_tsc_delay(uint32_t cycles)
     } while ((now - start) < cycles);
 }
 
-static void jlos_ap_setup_trampoline(uint32_t ap_stack_top)
+static void jlos_ap_setup_trampoline(uintptr_t ap_stack_top)
 {
     uint8_t *dst = (uint8_t *)PHYS_TO_VIRT(JLOS_X86_AP_TRAMPOLINE_PHYS);
-    uint32_t size = (uint32_t)(jlos_x86_trampoline_end - jlos_x86_trampoline_start);
+    size_t size = (size_t)(jlos_x86_trampoline_end - jlos_x86_trampoline_start);
     jlos_memcpy(dst, jlos_x86_trampoline_start, size);
+
 
     /* GDT 描述符 base: trampoline 内 GDT 的物理地址 */
     uint32_t gdt_phys = JLOS_X86_AP_TRAMPOLINE_PHYS +
         (uint32_t)(jlos_x86_trampoline_gdt - jlos_x86_trampoline_start);
     *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_gdt_desc -
-        jlos_x86_trampoline_start) + 2) = gdt_phys;
+        jlos_x86_trampoline_start) + offsetof(jlos_gdt_segment_descriptor_t, base_lo)) = gdt_phys;
 
     /* far_ptr offset: prot32 的物理地址 (16 位实模式远跳) */
     uint32_t prot32_phys = JLOS_X86_AP_TRAMPOLINE_PHYS +
@@ -51,24 +52,51 @@ static void jlos_ap_setup_trampoline(uint32_t ap_stack_top)
     *(uint16_t *)(dst + (uint32_t)(jlos_x86_trampoline_far_ptr -
         jlos_x86_trampoline_start)) = (uint16_t)prot32_phys;
 
-    /* high_ptr offset: jlos_ap_main 虚拟地址 (32 位高半核远跳) */
-    *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_high_ptr -
-        jlos_x86_trampoline_start)) = (uint32_t)jlos_ap_main;
-
-    /* CR4: BSP 的 CR4 (PSE|OSFXSR|PGE 等), AP 必须在开 PG 前设好 */
+    /* CR4: BSP 的 CR4, AP 必须在开 PG 前设好 */
+#ifdef CONFIG_X86_64
+    uint64_t cr4;
+    __asm__ __volatile__("movq %%cr4, %0" : "=r"(cr4));
+#else
     uint32_t cr4;
     __asm__ __volatile__("movl %%cr4, %0" : "=r"(cr4));
+#endif
     *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_cr4 -
-        jlos_x86_trampoline_start)) = cr4;
+        jlos_x86_trampoline_start)) = (uint32_t)cr4;
+
+#ifdef CONFIG_X86_64
+    /* far64_ptr offset: prot64 的物理地址 (32 位兼容模式远跳 64 位代码段) */
+    uint32_t prot64_phys = JLOS_X86_AP_TRAMPOLINE_PHYS +
+        (uint32_t)(jlos_x86_trampoline_prot64 - jlos_x86_trampoline_start);
+    *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_far64_ptr -
+        jlos_x86_trampoline_start)) = prot64_phys;
+
+    /* high_ptr: jlos_ap_main 虚拟地址 (8 字节) */
+    *(uint64_t *)(dst + (uint32_t)(jlos_x86_trampoline_high_ptr -
+        jlos_x86_trampoline_start)) = (uint64_t)(uintptr_t)jlos_ap_main;
+
+    /* CR3: 内核 PML4 物理地址 (8 字节) */
+    *(uint64_t *)(dst + (uint32_t)(jlos_x86_trampoline_cr3 -
+        jlos_x86_trampoline_start)) =
+        (uint64_t)VIRT_TO_PHYS((uintptr_t)s_kernel_paging_context.root);
+
+    /* AP 内核栈顶 (8 字节) */
+    *(uint64_t *)(dst + (uint32_t)(jlos_x86_trampoline_stack -
+        jlos_x86_trampoline_start)) = (uint64_t)ap_stack_top;
+
+#else
+    /* high_ptr offset: jlos_ap_main 虚拟地址 (32 位高半核远跳) */
+    *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_high_ptr -
+        jlos_x86_trampoline_start)) = (uint32_t)(uintptr_t)jlos_ap_main;
 
     /* CR3: 内核页目录物理地址 */
     *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_cr3 -
         jlos_x86_trampoline_start)) =
-        VIRT_TO_PHYS((uint32_t)s_kernel_paging_context.root);
+        VIRT_TO_PHYS((uintptr_t)s_kernel_paging_context.root);
 
     /* AP 内核栈顶 */
     *(uint32_t *)(dst + (uint32_t)(jlos_x86_trampoline_stack -
-        jlos_x86_trampoline_start)) = ap_stack_top;
+        jlos_x86_trampoline_start)) = (uint32_t)ap_stack_top;
+#endif
 }
 
 static void jlos_ap_send_init_sipi(uint32_t apic_id)
@@ -119,9 +147,13 @@ void jlos_hal_smp_boot_aps(void)
     jlos_smp_alloc_percpu_areas();
 
     /* Identity-map trampoline 页: AP 开 PG 后仍在此低地址执行, 直到 ljmp 高半核 */
-    jlos_arch_map_entry(&s_kernel_paging_context, JLOS_X86_AP_TRAMPOLINE_PHYS,
+    bool map_ok = jlos_arch_map_entry(&s_kernel_paging_context, JLOS_X86_AP_TRAMPOLINE_PHYS,
         JLOS_X86_AP_TRAMPOLINE_PHYS, JLOS_PG_KERNEL_RW);
     jlos_hal_paging_flush_all_tlb();
+    if (!map_ok) {
+        printk_err("boot_aps: FATAL identity map failed\n");
+        return;
+    }
 
     for (uint32_t cpu = 1; cpu < num_cpus; cpu++) {
         uint32_t apic_id = jlos_arch_smp_cpu_apic_id(cpu);
@@ -131,7 +163,7 @@ void jlos_hal_smp_boot_aps(void)
             printk_err("AP %u: stack alloc failed\n", cpu);
             continue;
         }
-        uint32_t stack_top = (uint32_t)stack_va + JLOS_PAGE_SIZE;
+        uintptr_t stack_top = (uintptr_t)stack_va + JLOS_PAGE_SIZE;
 
         per_cpu_write_cpu(jlos_cpu_id, cpu, cpu);
         per_cpu_write_cpu(jlos_cpu_kernel_stack, cpu, (void *)stack_top);

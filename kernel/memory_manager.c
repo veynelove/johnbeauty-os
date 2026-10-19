@@ -124,8 +124,8 @@ void jlos_memory_manager_init_main(void)
                 jlos_hal_halt();
             }
         }
-        uint32_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
-        uint32_t phys = (uint32_t)VIRT_TO_PHYS(pf);
+        uintptr_t va = KERNEL_HEAP_VIRT_BASE + i * JLOS_PAGE_FRAME_SIZE;
+        uintptr_t phys = (uintptr_t)VIRT_TO_PHYS(pf);
         if (!jlos_paging_map(jlos_hal_paging_get_active_context(), va, phys, JLOS_PG_KERNEL_RW)) {
             printk_err("out of memory: paging map failed at page %u\n", i);
             jlos_page_frame_free(pf);
@@ -180,9 +180,9 @@ static jlos_memory_chunk_t *jlos_memory_manager_expand_heap(jlos_memory_manager_
     if (!vframe) {
         return nullptr;
     }
-    uint32_t phys = (uint32_t)VIRT_TO_PHYS(vframe);
+    uintptr_t phys = VIRT_TO_PHYS(vframe);
     size_t map_size = pages_needed * JLOS_PAGE_SIZE;
-    if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uint32_t)new_heap_start, phys, map_size, JLOS_PG_KERNEL_RW)) {
+    if (!jlos_paging_map_range(jlos_hal_paging_get_active_context(), (uintptr_t)new_heap_start, phys, map_size, JLOS_PG_KERNEL_RW)) {
         jlos_page_frame_free_n(vframe, (uint32_t)pages_needed);
         return nullptr;
     }
@@ -337,7 +337,7 @@ void jlos_kvfree(void *ptr)
     if (!ptr) {
         return;
     }
-    uint32_t va = (uint32_t)ptr;
+    uintptr_t va = (uintptr_t)ptr;
     if (va >= KERNEL_VIRTUAL_BASE && va < KERNEL_VIRTUAL_BASE + KERNEL_DIRECT_MAP_SIZE) {
         uint32_t phys = JLOS_ALIGN_DOWN(VIRT_TO_PHYS(va), JLOS_PAGE_FRAME_SIZE);
         jlos_page_frame_type_t t = jlos_page_frame_get_type(phys);
@@ -497,11 +497,11 @@ static jlos_memory_slab_page_t *slab_page_alloc(jlos_memory_slab_cache_t *cache)
     size_t offset = (size_t)cache->colour_next * cache->cacheline_size;
     cache->colour_next = (cache->colour_next + 1) % (cache->colour + 1);
 
-    uint32_t start = JLOS_ALIGN_UP((uint32_t)page + sizeof(jlos_memory_slab_page_t) + offset, cache->align);
-    uint32_t end = (uint32_t)page + JLOS_PAGE_FRAME_SIZE;
+    uintptr_t start = JLOS_ALIGN_UP((uintptr_t)page + sizeof(jlos_memory_slab_page_t) + offset, cache->align);
+    uintptr_t end = (uintptr_t)page + JLOS_PAGE_FRAME_SIZE;
     void *fhead = nullptr;
     uint32_t count = 0;
-    for (uint32_t p = start; p + cache->obj_size <= end; p += cache->obj_size) {
+    for (uintptr_t p = start; p + cache->obj_size <= end; p += cache->obj_size) {
         if (cache->ctor) {
             cache->ctor((void *)p);
         }
@@ -632,7 +632,7 @@ void jlos_memory_slab_cache_free(jlos_memory_slab_cache_t *cache, const void *ob
     if (!cache || !obj) {
         return;
     }
-    uint32_t page_base = JLOS_ALIGN_DOWN(obj, JLOS_PAGE_FRAME_SIZE);
+    uintptr_t page_base = JLOS_ALIGN_DOWN((uintptr_t)obj, JLOS_PAGE_FRAME_SIZE);
     jlos_memory_slab_page_t *sp = (jlos_memory_slab_page_t *)page_base;
 
     uint32_t cpu = jlos_hal_get_cpu_id();

@@ -14,6 +14,7 @@
 #include <hal/smp.h>
 #include <hal/context.h>
 #include <hal/spinlock.h>
+#include <hal/paging.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
 #include <dsa/timer_wheel.h>
@@ -50,11 +51,10 @@
 #define JLOS_TASK_USER_MMAP_BASE    0x40000000
 #define JLOS_TASK_USER_MMAP_LIMIT   0xBFF00000
 
-#define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
-#define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
-#define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_U32OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
-                                     (JLOS_KERN_U32OF(p) + (sz) >  JLOS_KERN_U32OF(p)) && \
-                                     (JLOS_KERN_U32OF(p) + (sz) <= 0xFFFFFFFFu) )
+#define JLOS_KERN_WRITABLE_MIN   KERNEL_DIRECT_MAP_BASE
+#define JLOS_KERN_ADDR_OF(p)     ((uintptr_t)(p))
+#define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_ADDR_OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
+                                     (JLOS_KERN_ADDR_OF(p) + (sz) >  JLOS_KERN_ADDR_OF(p)) )
 
 #define JLOS_TASK_PID_HASH_SIZE     256
 
@@ -119,7 +119,7 @@ typedef struct jlos_task {
     jlos_arch_ext_state_t   ext_state;
     jlos_cpu_state_t        *syscall_tf;
     uint32_t                signal_pending;
-    uint32_t                signal_handlers[JLOS_SIGNAL_NUM];
+    uintptr_t               signal_handlers[JLOS_SIGNAL_NUM];
     uint32_t                cpu;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
@@ -210,6 +210,6 @@ void jlos_sched_init_cpu(void);
 #define JLOS_EXECVE_MAX_STRLEN  256
 
 int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *const argv[], char *const envp[]);
-void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top);
+void jlos_arch_exec_return(jlos_paging_context_t *pc, uintptr_t entry, uintptr_t stack_top);
 
 #endif

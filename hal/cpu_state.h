@@ -8,14 +8,18 @@
 
 #include <common/types.h>
 
+#ifdef CONFIG_X86_64
+#define JLOS_CPU_STATE_SIZE 176
+#else
 #define JLOS_CPU_STATE_SIZE 64
+#endif
 
 typedef struct {
     uint8_t raw[JLOS_CPU_STATE_SIZE];
 } jlos_cpu_state_t;
 
 typedef struct {
-    uint32_t value;
+    uintptr_t value;
 } jlos_arch_sp_t;
 
 void jlos_cpu_state_init(jlos_cpu_state_t *s);
@@ -26,7 +30,7 @@ uint32_t jlos_cpu_state_get_syscall_num(jlos_cpu_state_t *s);
 void jlos_cpu_state_set_retval(jlos_cpu_state_t *s, int32_t val);
 int32_t jlos_cpu_state_get_retval(jlos_cpu_state_t *s);
 
-void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uint32_t entry, uint32_t stack_top);
+void jlos_cpu_state_set_user_entry(jlos_cpu_state_t *s, uintptr_t entry, uintptr_t stack_top);
 void jlos_cpu_state_record_user_stack(jlos_cpu_state_t *curr_cpu, jlos_cpu_state_t *cpu);
 
 #endif

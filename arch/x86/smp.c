@@ -25,11 +25,11 @@ DEFINE_PER_CPU(void *,         jlos_cpu_kernel_stack);
 DEFINE_PER_CPU(void *,         jlos_cpu_kernel_stack_bottom);
 DEFINE_PER_CPU(uint32_t,       jlos_cpu_kernel_stack_size);
 DEFINE_PER_CPU(bool,           jlos_cpu_online);
-DEFINE_PER_CPU(uint32_t,       jlos_cpu_tlb_flush_va);
+DEFINE_PER_CPU(uintptr_t,    jlos_cpu_tlb_flush_va);
 DEFINE_PER_CPU(bool,           jlos_cpu_tlb_flush_done);
 DEFINE_PER_CPU(bool,           jlos_cpu_need_resched);
 
-static uint32_t s_per_cpu_offsets[JLOS_MAX_CPUS];
+static uintptr_t s_per_cpu_offsets[JLOS_MAX_CPUS];
 static uint32_t s_num_cpus = 1;
 static uint32_t s_cpu_apic_ids[JLOS_MAX_CPUS];
 
@@ -55,7 +55,7 @@ uint32_t jlos_hal_num_cpus(void)
     return s_num_cpus;
 }
 
-uint32_t jlos_smp_per_cpu_offset(uint32_t cpu)
+uintptr_t jlos_smp_per_cpu_offset(uint32_t cpu)
 {
     return s_per_cpu_offsets[cpu];
 }
@@ -93,7 +93,7 @@ void jlos_smp_alloc_percpu_areas(void)
             continue;
         }
         jlos_memset(area, 0, JLOS_PAGE_SIZE);
-        s_per_cpu_offsets[cpu] = (uint32_t)((uint8_t *)area - __per_cpu_start);
+        s_per_cpu_offsets[cpu] = (uintptr_t)((uint8_t *)area - __per_cpu_start);
     }
 }
 

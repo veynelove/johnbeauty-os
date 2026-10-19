@@ -12,7 +12,7 @@
 
 typedef struct {
     uint8_t id;
-    uint32_t base;
+    uintptr_t base;
     uint32_t gsi_base;
     uint32_t gsi_count;
 } jlos_ioapic_t;

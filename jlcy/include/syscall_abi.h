@@ -63,7 +63,7 @@
 #define CLOCK_MONOTONIC 1
 
 typedef struct mmap_arg_struct {
-    uint32_t addr;
+    uintptr_t addr;
     uint32_t len;
     uint32_t prot;
     uint32_t flags;

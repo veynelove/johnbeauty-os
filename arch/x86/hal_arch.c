@@ -122,14 +122,24 @@ void jlos_hal_disable_interrupts(void)
 
 uint32_t jlos_hal_irq_save(void)
 {
+#ifdef CONFIG_X86_64
+    uint64_t flags;
+    __asm__ __volatile__("pushfq\n\tpopq %0\n\tcli" : "=r"(flags) :: "memory");
+    return (uint32_t)flags;
+#else
     uint32_t flags;
     __asm__ __volatile__("pushfl\n\tpopl %0\n\tcli" : "=r"(flags) :: "memory");
     return flags;
+#endif
 }
 
 void jlos_hal_irq_restore(uint32_t flags)
 {
+#ifdef CONFIG_X86_64
+    __asm__ __volatile__("pushq %0\n\tpopfq" :: "r"((uint64_t)flags) : "memory", "cc");
+#else
     __asm__ __volatile__("pushl %0\n\tpopfl" :: "r"(flags) : "memory", "cc");
+#endif
 }
 
 void jlos_hal_cpu_relax(void)

@@ -140,10 +140,9 @@ void jlos_hal_arch_display_init_fb(void)
     const multiboot_info_t *mb = jlos_device_multiboot_info;
     jlos_vbe_mode_info_t *vbe = (jlos_vbe_mode_info_t *)PHYS_TO_VIRT(mb->vbe_mode_info);
 
-    uint32_t fb_phys = vbe->phys_base_ptr;
-    uint32_t fb_size = vbe->bytes_per_scanline * vbe->y_resolution;
-
-    uint32_t fb_virt = KERNEL_VIRTUAL_BASE + jlos_device_physical_memory_end;
+    uintptr_t fb_phys = vbe->phys_base_ptr;
+    size_t fb_size = (size_t)vbe->bytes_per_scanline * vbe->y_resolution;
+    uintptr_t fb_virt = KERNEL_VIRTUAL_BASE + jlos_device_physical_memory_end;
     fb_virt = JLOS_ALIGN_UP(fb_virt, 4 * 1024 * 1024);
 
     jlos_paging_map_range(jlos_hal_paging_get_active_context(), fb_virt, fb_phys, fb_size, JLOS_PG_KERNEL_RW);
