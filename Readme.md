@@ -17,6 +17,39 @@ vscode下载clangd插件，禁用microsoft的c/c++插件，运行 `make compdb` 
 
 ```
 
+### 主机是intel芯片，需要调试arm64架构代码，环境配置
+
+```bash
+
+mkdir -p ~/toolchains
+tar -xf arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-elf.tar.xz -C ~/toolchains
+~/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gcc --version
+# 预期: aarch64-none-elf-gcc (Arm GNU Toolchain 13.3.Rel1 ...) 13.3.1
+
+sudo apt install libglib2.0-dev libpixman-1-dev
+
+wget -O ~/qemu-9.2.0.tar.gz https://github.com/qemu/qemu/archive/refs/tags/v9.2.0.tar.gz
+tar -xf ~/qemu-9.2.0.tar.gz -C ~          # 解压出 ~/qemu-9.2.0/
+
+python3 -m venv ~/qemu-build
+~/qemu-build/bin/pip install meson ninja
+export PATH="$HOME/qemu-build/bin:$PATH"   # meson 1.12.1 + ninja 1.13.2
+
+cd ~/qemu-9.2.0
+./configure --target-list=aarch64-softmmu --prefix=$HOME/qemu --disable-werror --disable-docs
+ninja -C build install
+~/qemu/bin/qemu-system-aarch64 --version
+# 预期: QEMU emulator version 9.2.0
+
+# ARM64 交叉编译（工具链加入 PATH 后）
+export PATH="$HOME/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-elf/bin:$PATH"
+make ARCH=arm64
+
+# QEMU 启动（arch/arm64/Makefile 提供 run 目标）
+make ARCH=arm64 run
+
+```
+
 ### 子项目JLCY
 
 1. 该项目是独立项目，不参与内核编译构建，有自己的编译系统。

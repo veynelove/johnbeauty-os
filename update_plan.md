@@ -572,7 +572,7 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-SMP 8 步 + C23 升级 + 64 位化已全部完成，后续进入用户态运行时 / socket syscall / 调度器优化阶段。
+SMP 8 步 + C23 升级 + 64 位化已全部完成。下一阶段：ARM64/AArch64 架构移植（凑 x86-64 + ARM64 两套架构，QEMU qemu-system-aarch64 验证，无真机硬件）；其后陆续展开用户态运行时 / socket syscall / 调度器优化 / TCP 修复 / 中断现代化。
 
 ***
 
@@ -697,7 +697,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
 | 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP ✅ | |
-| 低 | 多架构（P2） | ARM64/RISC-V64 架构支持（HAL 层已就位，每架构只 64 位） | 64 位化 ✅ | 长期目标，独立目录 arch/arm64/、arch/riscv64/ |
+| 低 | 多架构（P2） | ARM64/AArch64 架构支持（先做，凑 x86-64 + ARM64 两套架构；HAL 层已就位，仅 64 位） | 64 位化 ✅ | 长期目标，独立目录 arch/arm64/；无真机硬件，用 QEMU qemu-system-aarch64 虚拟机验证；RISC-V64 暂缓 |
 
 #### C23 标准升级特性分析（基于 JLOS freestanding 实际情况）
 

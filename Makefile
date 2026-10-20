@@ -1,124 +1,133 @@
 # Copyright 2026 veyne.
 # SPDX-License-Identifier: Apache-2.0
 
-# ==================john_kernel=================
-JLOS := johnkernel
-ARCH := x86
+# =========================================================================
+#  JohnSunshine OS 内核编译子系统（JLOS Kernel Build Subsystem）
+# =========================================================================
+#  用法:
+#    make                      # 默认 ARCH=x86 BITS=64
+#    make ARCH=x86 BITS=32     # 32 位 x86
+#    make ARCH=arm64           # ARM64 交叉编译
+#    make V=1                  # 回显完整编译命令（调试）
+#    make run ARCH=arm64       # QEMU 启动（架构片段提供 run 目标）
+#
+#  交叉编译前请将工具链 bin 目录加入 PATH，或命令行覆盖 CROSS_COMPILE。
+# =========================================================================
 
+ARCH ?= x86
 BITS ?= 64
 
-# 磁盘镜像构建开关（1=构建, 0=跳过）
 BUILD_DISK ?= 1
 
-ifeq ($(BITS), 64)
-BITS_CFLAGS 	= -m64 -mcmodel=kernel -mno-red-zone
-BITS_DEFINE		= -DCONFIG_X86_64
-BITS_SSE		= -mgeneral-regs-only
-ASFLAGS_ARCH 	= --64
-LDFLAGS_ARCH 	= -melf_x86_64
-JLOS_BIN		= $(JLOS)64.bin
-JLOS_ISO		= $(JLOS)64.iso
+srctree := $(CURDIR)
+
+ifeq ($(V),1)
+  quiet :=
 else
-BITS_CFLAGS		= -m32
-BITS_DEFINE		= -DCONFIG_X86_32
-BITS_SSE		= -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx
-ASFLAGS_ARCH	= --32
-LDFLAGS_ARCH	= -melf_i386
-JLOS_BIN		= $(JLOS).bin
-JLOS_ISO		= $(JLOS).iso
+  quiet := quiet_
 endif
 
-ifeq ($(BUILD_DISK),1)
-all: $(JLOS_ISO) disk
-else
-all: $(JLOS_ISO)
-endif
+include $(srctree)/arch/$(ARCH)/Makefile
 
-# 实际编译用的完整参数
-CPARAMS = $(BITS_CFLAGS) $(BITS_DEFINE) -I. -nostdlib -fno-builtin -fno-exceptions \
-		-fno-leading-underscore -std=gnu2x \
-		-ffreestanding -fno-stack-protector \
-		-fno-pic -fno-pie \
-		-Wall -Wextra -Wno-address-of-packed-member \
-		$(BITS_SSE) -O2 -g
+.DEFAULT_GOAL := all
 
-# clangd 专用参数（去掉 -fno-leading-underscore，clangd 不认识它）
-CLANGD_CPARAMS = $(filter-out -fno-leading-underscore,$(CPARAMS))
+objtree := build/$(ARCH)-$(JLOS_BITS)
 
-ASPARAMS = $(ASFLAGS_ARCH) -I.
-LDPARAMS = $(LDFLAGS_ARCH)
+CROSS_COMPILE ?=
+CC      := $(CROSS_COMPILE)gcc
+AS      := $(CROSS_COMPILE)as
+LD      := $(CROSS_COMPILE)ld
+OBJCOPY := $(CROSS_COMPILE)objcopy
+OBJDUMP := $(CROSS_COMPILE)objdump
 
-SRC_DIRS := kernel arch/$(ARCH) drivers net fs hal dsa common
-OBJ_DIR := obj
+CFLAGS := -I$(srctree) -nostdlib -ffreestanding -fno-builtin -std=gnu2x -fno-stack-protector -fno-pic -fno-pie -Wall -Wextra -Wno-address-of-packed-member -O2 -g $(ARCH_DEFINE) $(ARCH_CFLAGS)
 
-C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")
-LD_SCRIPT_SRC := arch/$(ARCH)/linker.lds.S
-AS_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.s") $(shell find $(SRC_DIRS) -type f -name "*.S")
-AS_SRCS := $(filter-out $(LD_SCRIPT_SRC),$(AS_SRCS))
-C_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS))
-AS_OBJS := $(patsubst %.s,$(OBJ_DIR)/%.o,$(filter %.s,$(AS_SRCS))) $(patsubst %.S,$(OBJ_DIR)/%.o,$(filter %.S,$(AS_SRCS)))
-OBJS := $(C_OBJS) $(AS_OBJS)
+LDFLAGS := $(ARCH_LDFLAGS)
 
-# 实际编译用 CPARAMS（完整参数）
-$(OBJ_DIR)/%.o: %.c
+src-dirs := kernel arch/$(ARCH) drivers net fs hal dsa common
+
+C_SRCS   := $(shell find $(src-dirs) -type f -name '*.c')
+ASM_SRCS := $(shell find $(src-dirs) -type f -name '*.S')
+ASM_SRCS := $(filter-out $(LDSCRIPT),$(ASM_SRCS))
+
+C_OBJS   := $(patsubst %.c,$(objtree)/%.o,$(C_SRCS))
+ASM_OBJS := $(patsubst %.S,$(objtree)/%.o,$(ASM_SRCS))
+OBJS     := $(C_OBJS) $(ASM_OBJS)
+
+LDSCRIPT_BIN := $(objtree)/linker.lds
+
+quiet_cmd_cc_o_c =  CC      $@
+      cmd_cc_o_c = $(CC) $(CFLAGS) -c -o $@ $<
+
+quiet_cmd_as_o_S =  AS      $@
+      cmd_as_o_S = $(CC) $(CFLAGS) -x assembler-with-cpp -c -o $@ $<
+
+quiet_cmd_lds    =  LDS     $@
+      cmd_lds    = $(CC) $(ARCH_DEFINE) -E -P -x assembler-with-cpp -o $@ $<
+
+quiet_cmd_link   =  LD      $@
+      cmd_link   = $(LD) $(LDFLAGS) -T $(LDSCRIPT_BIN) -o $@ $(OBJS)
+
+cmd = @set -e; \
+	$(if $($(quiet)cmd_$(1)), echo '  $($(quiet)cmd_$(1))';) \
+	$(cmd_$(1))
+
+all: banner
+	@t0=$$(date +%s); \
+	$(MAKE) -s --no-print-directory $(TARGET_BIN) $(EXTRA_TARGETS) && \
+		{ echo '  ============================================================'; \
+		  echo "  BUILD OK    : $$(($$(date +%s)-t0))s"; \
+		  echo '  ============================================================'; } || \
+		{ echo '  ============================================================'; \
+		  echo "  BUILD FAIL  : $$(($$(date +%s)-t0))s"; \
+		  echo '  ============================================================'; exit 1; }
+
+.PHONY: banner
+banner:
+	@echo ''
+	@echo '  ============================================================'
+	@echo '  JohnSunshine OS Kernel  (JLOS)'
+	@echo '  ============================================================'
+	@echo "   TARGET   : $(TARGET_BIN)"
+	@echo "   ARCH     : $(ARCH)  ($(JLOS_BITS)-bit)"
+	@echo "   CC       : $(shell $(CC) --version | head -n 1)"
+	@echo "   CFLAGS   : $(CFLAGS)"
+	@echo '  ============================================================'
+	@echo ''
+
+$(LDSCRIPT_BIN): $(LDSCRIPT)
 	@mkdir -p $(@D)
-	@gcc $(CPARAMS) -o $@ -c $<
+	$(call cmd,lds)
 
-$(OBJ_DIR)/%.o: %.s
+$(objtree)/%.o: %.c
 	@mkdir -p $(@D)
-	@as $(ASPARAMS) -o $@ $<
+	$(call cmd,cc_o_c)
 
-$(OBJ_DIR)/%.o: %.S
+$(objtree)/%.o: %.S
 	@mkdir -p $(@D)
-	@gcc $(CPARAMS) -x assembler-with-cpp -o $@ -c $<
+	$(call cmd,as_o_S)
 
-$(OBJ_DIR)/linker.lds: arch/$(ARCH)/linker.lds.S
-	@mkdir -p $(@D)
-	@gcc $(BITS_DEFINE) -E -P -x assembler-with-cpp -o $@ $<
+$(TARGET_BIN): $(LDSCRIPT_BIN) $(OBJS)
+	$(call cmd,link)
 
-$(JLOS_BIN): $(OBJ_DIR)/linker.lds $(OBJS)
-	@ld $(LDPARAMS) -T $(OBJ_DIR)/linker.lds -o $(JLOS_BIN) $(OBJS)
-
-install: $(JLOS_BIN)
-	@sudo cp $< /boot/$(JLOS_BIN)
-
-$(JLOS_ISO): $(JLOS_BIN)
-	@rm -rf iso
-	@mkdir -p iso/boot/grub
-	@cp $< iso/boot/$(JLOS_BIN)
-	@echo 'set timeout=0' > iso/boot/grub/grub.cfg
-	@echo 'set default=0' >> iso/boot/grub/grub.cfg
-	@echo '' >> iso/boot/grub/grub.cfg
-	@echo 'menuentry "johnlove operating system" {' >> iso/boot/grub/grub.cfg
-	@echo ' multiboot /boot/$(JLOS_BIN)' >> iso/boot/grub/grub.cfg
-	@echo ' boot' >> iso/boot/grub/grub.cfg
-	@echo '}' >> iso/boot/grub/grub.cfg
-	@grub-mkrescue --output=$(JLOS_ISO) iso
-	@rm -rf iso
-
-# ==================用户态程序（jlcy 子项目）==================
-.PHONY: disk
-disk:
-	@$(MAKE) -C jlcy disk BITS=$(BITS)
-
+.PHONY: clean
 clean:
-	@rm -rf $(OBJ_DIR) $(JLOS).bin $(JLOS)64.bin $(JLOS).iso $(JLOS)64.iso
+	@echo '  CLEAN   build/'
+	@rm -rf build iso
+	@rm -f johnkernel-*.bin johnkernel-*.iso
 	@$(MAKE) -C jlcy clean
-	@echo 'clean success.'
 
-# ==================clangd 支持==================
-# 生成 compile_commands.json 到 build/ 目录（使用 CLANGD_CPARAMS，去掉了不支持的参数）
+.PHONY: install
+install: $(TARGET_BIN)
+	@sudo cp $(TARGET_BIN) /boot/$(TARGET_BIN)
+
 .PHONY: compdb
 compdb:
+	@echo '  GEN     build/compile_commands.json'
 	@mkdir -p build
-	@echo "[" > build/compile_commands.json
+	@echo '[' > build/compile_commands.json
 	@for f in $(C_SRCS); do \
-		echo "  {" >> build/compile_commands.json; \
-		echo "    \"directory\": \"$(shell pwd)\"," >> build/compile_commands.json; \
-		echo "    \"command\": \"gcc $(CLANGD_CPARAMS) -c $$f -o /dev/null\"," >> build/compile_commands.json; \
-		echo "    \"file\": \"$$f\"" >> build/compile_commands.json; \
-		echo "  }," >> build/compile_commands.json; \
+		echo '  { "directory": "$(srctree)", "command": "$(CC) $(CFLAGS) -c $$f -o /dev/null", "file": "$$f" },' >> build/compile_commands.json; \
 	done
 	@sed -i '$$ s/,$$//' build/compile_commands.json
-	@echo "]" >> build/compile_commands.json
-	@echo "compile_commands.json generated in build/ directory"
+	@echo ']' >> build/compile_commands.json
