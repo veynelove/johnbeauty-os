@@ -31,7 +31,7 @@ include $(srctree)/arch/$(ARCH)/Makefile
 
 .DEFAULT_GOAL := all
 
-objtree := build/$(ARCH)-$(JLOS_BITS)
+objtree := out/$(ARCH)-$(JLOS_BITS)
 
 CROSS_COMPILE ?=
 CC      := $(CROSS_COMPILE)gcc
@@ -112,8 +112,8 @@ $(TARGET_BIN): $(LDSCRIPT_BIN) $(OBJS)
 
 .PHONY: clean
 clean:
-	@echo '  CLEAN   build/'
-	@rm -rf build iso
+	@echo '  CLEAN   out/'
+	@rm -rf out iso
 	@rm -f johnkernel-*.bin johnkernel-*.iso
 	@$(MAKE) -C jlcy clean
 

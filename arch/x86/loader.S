@@ -213,7 +213,7 @@ _stop_bad_magic:
 #ifdef CONFIG_X86_64
 /* ---- 64 位入口（仍在 .boot 段，物理地址，恒等映射执行） ---- */
 .code64
-.extern john_beauty_main
+.extern john_sunshine_main
 .extern _kernel_end
 .global kernel_entry64
 kernel_entry64:
@@ -237,7 +237,7 @@ kernel_entry64:
     movq  $_kernel_end, %rsi        /* arg2 = kernel_end VA */
 
     /* 绝对间接调用（PC-relative 无法从 .boot 物理地址直达高半核） */
-    movq  $john_beauty_main, %rax
+    movq  $john_sunshine_main, %rax
     call  *%rax
 
 1:
@@ -255,7 +255,7 @@ kernel_stack:
 #else
 /* ---- 32 位 high_half（链接在 .text 高半核） ---- */
 .section .text
-.extern john_beauty_main
+.extern john_sunshine_main
 .extern _kernel_end
 .extern _bss_start
 .extern _bss_end
@@ -284,7 +284,7 @@ high_half:
 
     pushl $_kernel_end
     pushl %ebx
-    call  john_beauty_main
+    call  john_sunshine_main
 
 1:
     cli

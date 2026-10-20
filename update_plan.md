@@ -322,7 +322,7 @@ graph TD
 | 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall5` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
 | `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 6 个段执行 |
 | 删除 `call_constructors` | ✅ | `loader.s` 删除调用 + `kernel.c` 删除函数定义 + `linker.ld` 删除 `.init_array` 段 |
-| `john_beauty_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
+| `john_sunshine_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
 
 **Initcall 级别分配：**
 

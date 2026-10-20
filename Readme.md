@@ -1,4 +1,4 @@
-# JohnSunshine OS (JLOS)
+# JohnSunshine OS
 
 > 公主平安开心 🌸
 
@@ -102,9 +102,9 @@ CFLAGS_EXTRA="-DHAL_CONFIG_TRACE_IO=1" make clean all
 
 ```text
 
-[1970-01-01 00:00:00] [I] [boot] [john_beauty_main] princess yihan is safe and happy!
+[1970-01-01 00:00:00] [I] [boot] [john_sunshine_main] princess yihan is safe and happy!
 [1970-01-01 00:00:00] [I] [dev] [jlos_device_init] mmap: 11 entries, max ram end = 0x10000000, total available = 261630 KB
-[1970-01-01 00:00:00] [I] [boot] [john_beauty_main] paging initialized
+[1970-01-01 00:00:00] [I] [boot] [john_sunshine_main] paging initialized
 [1970-01-01 00:00:00] [I] [mm] [jlos_memory_manager_init_main] init_main: first=0xffffffff00000000 size=4194256 heap=[0xffffffff00000000,0xffffffff00400000) current=0xffffffff00400000
 [1970-01-01 00:00:00] [I] [lapic] [jlos_arch_lapic_init] lapic id = 0, base = 0xfee00000
 [1970-01-01 00:00:00] [D] [acpi] [jlos_acpi_init] xsdt = 0xfeee923 len = 36 oem = 50544c544420 ext = 0xd3

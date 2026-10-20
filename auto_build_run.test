@@ -7,8 +7,8 @@
 chcp 65001 >nul
 set BITS=%1
 if "%BITS%"=="" set BITS=64
-set ISO_SRC=johnkernel.iso
-if "%BITS%"=="64" set ISO_SRC=johnkernel64.iso
+set ISO_SRC=johnkernel-x86_64.iso
+if "%BITS%"=="32" set ISO_SRC=johnkernel-x86_32.iso
 echo ========================================
 echo  自动化构建与启动流程
 echo ========================================

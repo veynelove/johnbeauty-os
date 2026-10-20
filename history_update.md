@@ -338,7 +338,7 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 #### 2026-09-17（v2.11）
 
-- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_beauty_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
+- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_sunshine_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
 
 - **Framebuffer Console 完成**：`loader.s` 启用 `MULTIBOOT_VIDEO_MODE`（1024×768×32），`common/multiboot.h` 添加 `jlos_vbe_mode_info_t`。`arch/x86/font_8x16.h`/`.c` 256 字符 × 16 字节点阵。`arch/x86/fb_console.c` 完整实现 putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at，软件光标 erase/draw 分离模式（反转字符底部 2 行），鼠标光标反转整个字符块（`visible` 标志防首次 erase）。framebuffer 映射用 write-back 缓存（去掉 CACHE\_DISABLE）。`hal/display.h` 中 `GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor`。`kernel/console.c` 改为 erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall（DEVICE 级）。
 
