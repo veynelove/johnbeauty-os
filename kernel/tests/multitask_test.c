@@ -13,6 +13,7 @@
 #include <hal/hal.h>
 #include <hal/context.h>
 
+
 #define JLOS_KERNEL_LOG_SUBSYS "t_sched"
 #include <kernel/printk.h>
 
@@ -313,6 +314,7 @@ JLOS_TEST(multitask, sleep_until_cascade)
     s_mgr = g_task_manager_ptr;
     g_sleep_cascade_done = 0;
     uint32_t t0 = jlos_timek_get_ticks();
+
     JLOS_ASSERT_NOT_NULL(spawn_kernel_task(sleep_cascade_entry, "mt_sleep_c"));
 
     while (!g_sleep_cascade_done && jlos_timek_get_ticks() - t0 < 1000) {

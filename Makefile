@@ -31,7 +31,7 @@ include $(srctree)/arch/$(ARCH)/Makefile
 
 .DEFAULT_GOAL := all
 
-objtree := out/$(ARCH)-$(JLOS_BITS)
+objtree := out/$(ARCH)$(OBJTREE_SUFFIX)
 
 CROSS_COMPILE ?=
 CC      := $(CROSS_COMPILE)gcc
@@ -112,22 +112,30 @@ $(TARGET_BIN): $(LDSCRIPT_BIN) $(OBJS)
 
 .PHONY: clean
 clean:
-	@echo '  CLEAN   out/'
+	@echo 'clean artifacts'
 	@rm -rf out iso
-	@rm -f johnkernel-*.bin johnkernel-*.iso
-	@$(MAKE) -C jlcy clean
+	@rm -f johnkernel-*.bin johnkernel-*.iso johnkernel-*.elf johnkernel-*.img
+	@rm -f disk-arm64.img disk.img disk.vmdk disk-flat.vmdk
+	@$(MAKE) -s --no-print-directory -C jlcy clean ARCH=$(ARCH) BITS=$(JLOS_BITS)
 
 .PHONY: install
 install: $(TARGET_BIN)
 	@sudo cp $(TARGET_BIN) /boot/$(TARGET_BIN)
 
+COMPDB_DIR := build/$(ARCH)$(OBJTREE_SUFFIX)
+
 .PHONY: compdb
 compdb:
-	@echo '  GEN     build/compile_commands.json'
-	@mkdir -p build
-	@echo '[' > build/compile_commands.json
-	@for f in $(C_SRCS); do \
-		echo '  { "directory": "$(srctree)", "command": "$(CC) $(CFLAGS) -c $$f -o /dev/null", "file": "$$f" },' >> build/compile_commands.json; \
-	done
-	@sed -i '$$ s/,$$//' build/compile_commands.json
-	@echo ']' >> build/compile_commands.json
+	@echo '  GEN     $(COMPDB_DIR)/compile_commands.json'
+	@mkdir -p $(COMPDB_DIR)
+	@{ \
+		echo '['; \
+		first=1; \
+		for f in $(C_SRCS); do \
+			if [ $$first -eq 1 ]; then first=0; else echo ','; fi; \
+			printf '  { "directory": "%s", "command": "%s %s %s -c %s -o /dev/null", "file": "%s" }\n' \
+				"$(srctree)" "$(CC)" "$(CFLAGS)" "$(JLOS_COMPDB_TARGET)" "$$f" "$$f"; \
+		done; \
+		echo ']'; \
+	} > $(COMPDB_DIR)/compile_commands.json
+	@echo '  DONE    clangd database ready'

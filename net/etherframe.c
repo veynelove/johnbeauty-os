@@ -70,8 +70,14 @@ static void uint64_to_mac(uint64_t mac_be, uint8_t *dest)
     }
 }
 
-static void jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_provider_t* self, jlos_net_sk_buff_t *skb)
+static void jlos_ether_frame_provider_on_raw_data_received(void *context, uint8_t *buffer, uint32_t size)
 {
+    jlos_ether_frame_provider_t *self = (jlos_ether_frame_provider_t *)context;
+    jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(size);
+    if (!skb) {
+        return;
+    }
+    jlos_memcpy(jlos_net_skb_put(skb, size), buffer, size);
     if (jlos_net_skb_len(skb) < sizeof(jlos_ether_frame_header_t)) {
         printk_debug("frame too small\n");
         jlos_net_skb_free(skb);
@@ -79,7 +85,7 @@ static void jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_prov
     }
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)skb->data;
     uint8_t my_mac[6];
-    uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), my_mac);
+    uint64_to_mac(jlos_hal_net_get_mac_address(self->dev), my_mac);
     if (mac_address_is_broadcast(frame->dstMAC) || mac_address_eq(frame->dstMAC, my_mac)) {
         jlos_hash_node_t *node = jlos_hash_chain_see(&self->handlers, &frame->etherType_BE);
         if (node) {
@@ -91,8 +97,8 @@ static void jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_prov
                 for (int i = 0; i < 6; i++) {
                     eh->dstMAC[i] = eh->srcMAC[i];
                 }
-                uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), eh->srcMAC);
-                jlos_amd_am79c973_send(self->base_handler.backend, skb->data, jlos_net_skb_len(skb));
+                uint64_to_mac(jlos_hal_net_get_mac_address(self->dev), eh->srcMAC);
+                jlos_hal_net_send(self->dev, skb->data, jlos_net_skb_len(skb));
             }
         }
         else {
@@ -105,35 +111,36 @@ static void jlos_ether_frame_provider_on_raw_data_received(jlos_ether_frame_prov
     jlos_net_skb_free(skb);
 }
 
-void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_amd_am79c973_t *backend)
+void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_hal_net_dev_t *dev)
 {
-    jlos_rawdata_handler_init(&self->base_handler, backend);
-    self->base_handler.on_raw_data_received = (void (*)(jlos_rawdata_handler_t *, jlos_net_sk_buff_t *))jlos_ether_frame_provider_on_raw_data_received;
+    self->dev = dev;
+    jlos_hal_net_set_receive(dev, jlos_ether_frame_provider_on_raw_data_received, self);
     jlos_hash_chain_init(&self->handlers, JLOS_NET_HASH_CHAIN_NUM, jlos_hash_uint16, ether_frame_cmp);
 }
 
 void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self)
 {
     jlos_hash_chain_destroy(&self->handlers);
-    jlos_rawdata_handler_destroy(&self->base_handler);
+    jlos_hal_net_set_receive(self->dev, nullptr, nullptr);
 }
 
 void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t etherType_BE, jlos_net_sk_buff_t *skb)
 {
+
     jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)jlos_net_skb_push(skb, sizeof(jlos_ether_frame_header_t));
     uint64_to_mac(dstMAC_BE, frame->dstMAC);
-    uint64_to_mac(jlos_amd_am79c973_get_mac_address(self->base_handler.backend), frame->srcMAC);
+    uint64_to_mac(jlos_hal_net_get_mac_address(self->dev), frame->srcMAC);
     frame->etherType_BE = etherType_BE;
-    jlos_amd_am79c973_send(self->base_handler.backend, skb->data, jlos_net_skb_len(skb));
+    jlos_hal_net_send(self->dev, skb->data, jlos_net_skb_len(skb));
     jlos_net_skb_free(skb);
 }
 
 uint64_t jlos_ether_frame_provider_get_mac_address(jlos_ether_frame_provider_t* self)
 {
-    return jlos_amd_am79c973_get_mac_address(self->base_handler.backend);
+    return jlos_hal_net_get_mac_address(self->dev);
 }
 
 uint32_t jlos_ether_frame_provider_get_ip_address(jlos_ether_frame_provider_t* self)
 {
-    return jlos_amd_am79c973_get_ip_address(self->base_handler.backend);
+    return jlos_hal_net_get_ip_address(self->dev);
 }

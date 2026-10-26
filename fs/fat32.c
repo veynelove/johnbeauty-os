@@ -1158,7 +1158,7 @@ static jlos_vfs_super_block_t *fat32_mount(jlos_hal_block_dev_t *dev, void *data
     }
     sb->root_dentry = root_dentry;
 
-    printk_debug("cluster = %u, root = %u\n", sbi->total_clusters, sbi->root_cluster);
+
     return sb;
 }
 

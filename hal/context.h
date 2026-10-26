@@ -12,9 +12,9 @@
 
 typedef struct jlos_task jlos_task_t;
 
-extern __attribute__((naked)) void jlos_task_entry_stub(void);
-extern __attribute__((naked)) void jlos_task_user_entry_stub(void);
-extern __attribute__((naked)) void jlos_task_ret_from_fork_stub(void);
+extern void jlos_task_entry_stub(void);
+extern void jlos_task_user_entry_stub(void);
+extern void jlos_task_ret_from_fork_stub(void);
 
 extern void jlos_arch_task_init_arch(jlos_cpu_state_t *cpustate, jlos_mmu_t *mmu, void (*entrypoint)(void),
                 uint8_t *stack, uint32_t stack_size);

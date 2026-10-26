@@ -241,7 +241,7 @@ static int32_t jlos_task_create_user_stack(jlos_task_t *self)
     self->user_stack = (uint8_t *)stack_base;
     self->user_stack_size = JLOS_TASK_USER_STACK_SIZE;
     jlos_vma_add(self->mm, stack_base,
-        JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER, JLOS_VMA_TYPE_STACK);
+        JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE, JLOS_VMA_WRITE | JLOS_VMA_USER | JLOS_VMA_EXEC, JLOS_VMA_TYPE_STACK);
     return 0;
 }
 
@@ -933,6 +933,7 @@ static void wake_waiter_locked(jlos_task_manager_t *self, uint32_t exited_pid)
 
 [[noreturn]] void jlos_process_exit(jlos_task_t *task, uint32_t exit_code)
 {
+
     if (!task || !g_task_manager_ptr) {
         goto halt;
     }
@@ -1133,6 +1134,7 @@ void jlos_task_sleep_until(jlos_task_manager_t *self, uint32_t wake_tick)
         jlos_timer_wheel_add(&self->sleep_wheel, &current_task->sleep_node);
         jlos_spin_unlock_irqrestore(&self->manager_lock, flags);
     }
+
     jlos_task_manager_schedule(self);
 }
 
@@ -1157,6 +1159,7 @@ const char *jlos_task_status_map_str(uint32_t status)
 
 void jlos_task_wakeup(jlos_task_t *task)
 {
+
     if (task->sleeping) {
         task->sleeping = false;
         if (g_task_manager_ptr) {
@@ -1206,12 +1209,13 @@ static uintptr_t jlos_exec_setup_user_stack(jlos_task_t *task, int argc, char *c
         if (!frame) {
             return 0;
         }
-        if (!jlos_paging_map(task->mm->pc, addr, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW)) {
+        if (!jlos_paging_map(task->mm->pc, addr, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW | JLOS_PG_EXEC)) {
             jlos_page_frame_free(frame);
             return 0;
         }
     }
     jlos_paging_switch(task->mm->pc);
+    jlos_hal_uaccess_begin();
     uintptr_t sp = JLOS_TASK_USER_STACK_TOP;
     uintptr_t envp_addrs[JLOS_EXECVE_MAX_ARGS];
     int envc = 0;
@@ -1253,6 +1257,7 @@ static uintptr_t jlos_exec_setup_user_stack(jlos_task_t *task, int argc, char *c
     sp -= ptr_size;
     *(int *)sp = eff_argc;
 
+    jlos_hal_uaccess_end();
     return sp;
 }
 
@@ -1336,11 +1341,13 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
             }
         }
     }
-    jlos_mmu_t *mmu = jlos_mmu_get_kernel();
     jlos_cpu_state_init(&task->cpustate);
-    jlos_arch_task_init_arch_user(&task->cpustate,
-        mmu, (void(*)(void))entry, task->stack, task->stack_size, user_stack_top);
-    
+    if (task != jlos_hal_current_task()) {
+        jlos_mmu_t *mmu = jlos_mmu_get_kernel();
+        jlos_arch_task_init_arch_user(&task->cpustate,
+            mmu, (void(*)(void))entry, task->stack, task->stack_size, user_stack_top);
+    }
+
     if (g_task_manager_ptr) {
         uint32_t flags = jlos_spin_lock_irqsave(&g_task_manager_ptr->manager_lock);
         jlos_hash_chain_insert(&g_task_manager_ptr->pid_hash, &task->pid, &task->pid_hash_node);
@@ -1351,6 +1358,7 @@ int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *c
         jlos_cpu_state_set_user_entry(task->syscall_tf, entry, user_stack_top);
         return 0;
     }
+
     jlos_arch_exec_return(task->mm->pc, entry, user_stack_top);
     return 0;
 }

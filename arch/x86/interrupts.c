@@ -24,6 +24,8 @@
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
 #include <kernel/printk.h>
 
+#define JLOS_IRQ_PIC_IRQ_COUNT 16
+
 extern void jlos_arch_tss_init_for_asm(void);
 
 static jlos_irq_manager_t       s_interrupt_manager;
@@ -77,10 +79,10 @@ static void jlos_set_interrupt_descriptor_table_entry(uint8_t interrupt_number,
     jlos_interrupt_descriptor_table[interrupt_number].reserved = 0;
 }
 
-static void jlos_irq_pic_unmask(jlos_irq_manager_t* self, uint8_t vector)
+static void jlos_irq_pic_unmask(jlos_irq_manager_t* self, uint32_t vector)
 {
     uint16_t base = self->hardware_interrupt_offset;
-    if (vector < base || vector >= base + 16) {
+    if (vector < base || vector >= (uint32_t)base + JLOS_IRQ_PIC_IRQ_COUNT) {
         return; /* 非 PIC IRQ 范围，不管 */
     }
     uint8_t irq = vector - base;
@@ -101,7 +103,7 @@ static void jlos_irq_pic_unmask(jlos_irq_manager_t* self, uint8_t vector)
     }
 }
 
-void jlos_irq_handler_init(jlos_irq_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint8_t interrupt_number)
+void jlos_irq_handler_init(jlos_irq_handler_t* self, jlos_irq_manager_t *interrupt_manager, uint32_t interrupt_number)
 {
     self->interrupt_number = interrupt_number;
     self->interrupt_manager = interrupt_manager;
@@ -261,7 +263,7 @@ void jlos_irq_manager_deactivate(jlos_irq_manager_t* self)
     }
 }
 
-uintptr_t jlos_irq_manager_handle(uint8_t interrupt, uintptr_t esp)
+uintptr_t jlos_irq_manager_handle(uint32_t interrupt, uintptr_t esp)
 {
     if (jlos_active_irq_manager != nullptr) {
         return jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
@@ -287,7 +289,7 @@ static void jlos_signal_deliver_check(uintptr_t esp)
     jlos_signal_check_deliver(curr, (jlos_cpu_state_t *)cpu);
 }
 
-uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt, uintptr_t esp)
+uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint32_t interrupt, uintptr_t esp)
 {
     /* page fault 必须在 IRQ 向量转换之前处理，否则 0x0E 被偏移成 0x2E */
     if (interrupt == 0x0E) {
@@ -388,7 +390,7 @@ uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint8_t interrupt
     return esp;
 }
 
-void jlos_irq_manager_register(jlos_irq_manager_t* self, uint8_t interrupt, jlos_irq_handler_t* handler)
+void jlos_irq_manager_register(jlos_irq_manager_t* self, uint32_t interrupt, jlos_irq_handler_t* handler)
 {
     self->handles[interrupt] = handler;
     jlos_irq_pic_unmask(self, interrupt);  /* 注册即 unmask */

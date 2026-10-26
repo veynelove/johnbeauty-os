@@ -57,6 +57,11 @@ static bool http_tcp_handler_handle_tcp_message(jlos_tcp_handler_t *self, jlos_t
 
 JLOS_TEST(http, server_listen)
 {
+    /* 无网络栈（无网卡）时 g_network_stack 为 nullptr，不可解引用 */
+    if (!g_network_stack) {
+        printk_info("skip: no network stack\n");
+        return;
+    }
     jlos_tcp_provider_t *tcp = &g_network_stack->tcp;
     http_tcp_handler_t *tcphandler = jlos_kalloc(sizeof(http_tcp_handler_t));
     JLOS_ASSERT_NOT_NULL(tcphandler);

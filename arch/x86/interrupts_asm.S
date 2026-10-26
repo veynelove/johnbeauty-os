@@ -1,8 +1,9 @@
-#ifndef CONFIG_X86_64
 /**
  * Copyright 2026 veyne.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#ifndef CONFIG_X86_64
 
 .text
 .global jlos_irq_ignore_request
@@ -458,5 +459,5 @@ ring3_finish64:
     POP_GPRS64
     addq $16, %rsp
     iretq
-.section .note.GNU-stack,"",%progbits
 #endif
+.section .note.GNU-stack,"",%progbits

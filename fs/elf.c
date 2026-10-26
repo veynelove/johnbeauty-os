@@ -34,10 +34,14 @@ static uint32_t elf_flags_to_vma_flags(uint32_t flags)
 
 static uint32_t elf_flags_to_pte_flags(uint32_t flags)
 {
+    uint32_t prot = JLOS_PG_READ | JLOS_PG_USER;
     if (flags & JLOS_ELF_PF_W) {
-        return JLOS_PG_USER_RW;
+        prot |= JLOS_PG_WRITE;
     }
-    return JLOS_PG_USER_RO;
+    if (flags & JLOS_ELF_PF_X) {
+        prot |= JLOS_PG_EXEC;
+    }
+    return prot;
 }
 
 static bool elf_load_segment(jlos_mm_t *mm, jlos_vfs_file_t *file,
@@ -78,7 +82,7 @@ static bool elf_load_segment(jlos_mm_t *mm, jlos_vfs_file_t *file,
 
 bool jlos_elf_load(jlos_mm_t *mm, jlos_vfs_file_t *file, uintptr_t *entry)
 {
-#ifdef CONFIG_X86_64
+#if defined(CONFIG_X86_64) || defined(CONFIG_ARM64)
     jlos_elf64_ehdr_t ehdr;
     jlos_vfs_lseek(file, 0, JLOS_VFS_SEEK_SET);
     if (jlos_vfs_read(file, (uint8_t *)&ehdr, sizeof(ehdr)) != (int32_t)sizeof(ehdr)) {
@@ -93,10 +97,18 @@ bool jlos_elf_load(jlos_mm_t *mm, jlos_vfs_file_t *file, uintptr_t *entry)
         printk_err("not executable\n");
         return false;
     }
+#if defined(CONFIG_ARM64)
+    if (ehdr.machine != JLOS_ELF_EM_AARCH64) {
+        printk_err("not aarch64\n");
+        return false;
+    }
+#else
     if (ehdr.machine != JLOS_ELF_EM_X86_64) {
         printk_err("not x86_64\n");
         return false;
     }
+#endif
+
     for (uint16_t i = 0; i < ehdr.phnum; i++) {
         jlos_elf64_phdr_t phdr;
         jlos_vfs_lseek(file, ehdr.phoff + i * ehdr.phentsize, JLOS_VFS_SEEK_SET);
@@ -113,6 +125,7 @@ bool jlos_elf_load(jlos_mm_t *mm, jlos_vfs_file_t *file, uintptr_t *entry)
         }
     }
     *entry = ehdr.entry;
+
 #else
     jlos_elf32_ehdr_t ehdr;
     jlos_vfs_lseek(file, 0, JLOS_VFS_SEEK_SET);

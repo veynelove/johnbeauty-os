@@ -5,14 +5,13 @@
 
 #include <net/network.h>
 #include <net/skbuff.h>
+#include <hal/net.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
 #include <kernel/printk.h>
-
-extern void jlos_amd_am79c973_activate(jlos_amd_am79c973_t*);
 
 network_stack_t *g_network_stack = nullptr;
 
@@ -25,22 +24,16 @@ void network_init(void)
     }
 
     jlos_net_skb_init();
-    jlos_amd_am79c973_t *eth0 = nullptr;
-    for (int i = 0; i < g_driver_manager_ptr->num_drivers; i++) {
-        jlos_driver_t *drv = g_driver_manager_ptr->drivers[i];
-        if (drv != nullptr && drv->activate == (void (*)(jlos_driver_t*))jlos_amd_am79c973_activate) {
-            eth0 = (jlos_amd_am79c973_t *)drv;
-            break;
-        }
-    }
+    jlos_hal_net_dev_t *eth0 = jlos_hal_net_primary_dev();
     if (eth0 == nullptr) {
-        printk_warn("AMD AM79C973 ethernet driver not found, skipping network stack init\n");
+        printk_warn("no network device, skipping network stack init\n");
+        g_network_stack = nullptr;
         return;
     }
     
     jlos_memset(&g_network_stack->config, 0, sizeof(g_network_stack->config));
     printk_info("initializing network stack (unconfigured)\n");
-    jlos_amd_am79c973_set_ip_address(eth0, g_network_stack->config.ip);
+    jlos_hal_net_set_ip_address(eth0, g_network_stack->config.ip);
 
     jlos_ether_frame_provider_init(&g_network_stack->etherframe, eth0);
 
@@ -72,8 +65,7 @@ void network_init(void)
 
 void jlos_network_apply_config(void)
 {
-    jlos_amd_am79c973_t *eth0 = g_network_stack->etherframe.base_handler.backend;
-    jlos_amd_am79c973_set_ip_address(eth0, g_network_stack->config.ip);
+    jlos_hal_net_set_ip_address(jlos_hal_net_primary_dev(), g_network_stack->config.ip);
     g_network_stack->ipv4.gateway_ip = g_network_stack->config.gateway;
     g_network_stack->ipv4.subnet_mask = g_network_stack->config.subnet_mask;
 }
@@ -90,4 +82,4 @@ static void jlos_network_dhcp_start(void)
 }
 
 JLOS_INITCALL(JLOS_INITCALL_POST, jlos_network_dhcp_start);
-JLOS_INITCALL(JLOS_INITCALL_DEVICE, network_init);
+JLOS_INITCALL(JLOS_INITCALL_LATE, network_init);

@@ -234,6 +234,10 @@ kernel_entry64:
     addq  %rcx, %rax
     movq  %rax, %rdi                /* arg1 = mbinfo VA */
 
+    movq  $jlos_x86_boot_info_from, %rax
+    call  *%rax                     /* rax = jlos_hal_boot_info_t * */
+
+    movq  %rax, %rdi                /* arg1 = boot_info */
     movq  $_kernel_end, %rsi        /* arg2 = kernel_end VA */
 
     /* 绝对间接调用（PC-relative 无法从 .boot 物理地址直达高半核） */
@@ -282,8 +286,12 @@ high_half:
     movl  boot_mbinfo_pa, %ebx
     addl  $0xC0000000, %ebx
 
-    pushl $_kernel_end
     pushl %ebx
+    call  jlos_x86_boot_info_from    /* eax = jlos_hal_boot_info_t * */
+    addl  $4, %esp
+
+    pushl $_kernel_end
+    pushl %eax
     call  john_sunshine_main
 
 1:

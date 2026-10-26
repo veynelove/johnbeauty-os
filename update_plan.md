@@ -1,6 +1,8 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v4.3 | 日期: 2026-10-19 | 作者: JohnLove
+版本: v4.4 | 日期: 2026-10-26 | 作者: JohnLove
+
+> v4.4 变更：**ARM64/AArch64 架构移植完成**（多架构目标 P2 落地）——启动链（boot.S EL2→EL1 + 早期页表 + FDT + PL011）/ 真实分页 / 中断异常 / 信号 / syscall / 惰性 FPU / 通用 NIC 抽象 + virtio-net（udp/http 真实跑通）全通，单核 54/54；**ARM64 SMP 完成**（PSCI AP 启动 + GIC per-CPU + SGI IPI + TLB shootdown + per-CPU tick，`-smp 4` 54/54；QEMU virt/gic-v3 验证，无真机）。关键根因：`.data..percpu` 段被 linker `.data.*` 通配符吞致 per-CPU 机制失效（多核总根因）、ESR 翻译 WnR 漏判 CEL、AP per-CPU 继承 BSP 运行时状态、AP 启动栈/idle 栈共用、AP 自建 identity、GIC SGI 未使能（详见 Phase 10.1）。另完成 arm64 A/B 优化（A: FPU owner per-CPU + PAN/uaccess；B: ASID + memcpy/memset 汇编 + 2MB 大页 + IPI 合并，详见 Phase 10.2）。arm64 0 警告，x86-64/32 0 警告 0 错误。
 
 > v4.3 变更：64 位化 8 步全部完成 + 运行时验证 54/54 全 PASS。关键修复：fork 子进程 rax 返回值（64 位分支遗漏设 0）、signal_handlers uintptr_t 升级、syscall ABI 64 位化（jlcy syscall() 参数 uintptr_t + mmap_arg_struct_t.addr uintptr_t）、中断处理链返回类型 uintptr_t、TSS 104 字节布局、GDT 语义化宏、signal frame 偏移量 sizeof(uintptr_t)。双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS。
 
@@ -96,6 +98,9 @@
 | slab per-CPU 加锁修复 | per-CPU lock 串行化 pop/push + limbo 哨兵（owner=-2）转移中页 + s_slab_lock→cs->lock 锁序 + reap_all_zombies prev_task 占用检查防无限循环 | 54/54 全 PASS |
 | 64 位化升级 | x86-64 long mode：4 级页表（PML4/PDPT/PD/PT）+ 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef（CONFIG_X86_32/CONFIG_X86_64）+ jlcy syscall ABI 64 位化 | 双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS |
 | 64 位化运行时修复 | fork 子进程 rax 返回值（64 位分支遗漏设 0）+ signal_handlers uintptr_t 升级 + mmap_arg_struct_t.addr uintptr_t + 中断处理链返回类型 uintptr_t + signal frame 偏移 sizeof(uintptr_t) | 54/54 全 PASS |
+| ARM64 架构移植 | AArch64 启动链（boot.S EL2→EL1 + 早期页表 + FDT/boot-info + PL011）+ 真实分页 + 中断/异常/信号/syscall + 惰性 FPU（用户态 FP 启用）+ 通用 NIC 抽象（hal/net.h）+ virtio-net | 单核 54/54（QEMU virt/gic-v3） |
+| ARM64 SMP | per-CPU 基础设施 + PSCI AP 启动 + GIC per-CPU redistributor + SGI IPI + TLB shootdown + per-CPU tick + AP idle 栈分离 | `-smp 4` 54/54 全 PASS |
+| ARM64 A/B 优化 | A：FPU owner per-CPU + PAN/uaccess；B：ASID + memcpy/memset 汇编 + 2MB 大页 + reschedule IPI 合并 | 单核与 -smp 4 均 54/54 |
 
 ***
 
@@ -572,7 +577,7 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-SMP 8 步 + C23 升级 + 64 位化已全部完成。下一阶段：ARM64/AArch64 架构移植（凑 x86-64 + ARM64 两套架构，QEMU qemu-system-aarch64 验证，无真机硬件）；其后陆续展开用户态运行时 / socket syscall / 调度器优化 / TCP 修复 / 中断现代化。
+SMP 8 步 + C23 升级 + 64 位化 + **ARM64/AArch64 架构移植（含 SMP 与 A/B 优化）** 均已全部完成。下一阶段：用户态运行时 / socket syscall / 调度器优化 / TCP 修复 / 中断现代化。
 
 ***
 
@@ -697,7 +702,7 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
 | 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP ✅ | |
-| 低 | 多架构（P2） | ARM64/AArch64 架构支持（先做，凑 x86-64 + ARM64 两套架构；HAL 层已就位，仅 64 位） | 64 位化 ✅ | 长期目标，独立目录 arch/arm64/；无真机硬件，用 QEMU qemu-system-aarch64 虚拟机验证；RISC-V64 暂缓 |
+| ~~低~~ | ~~多架构（P2）~~ | ~~ARM64/AArch64 架构支持（凑 x86-64 + ARM64 两套架构；HAL 层已就位）~~ | 64 位化 ✅ | **已完成（v4.4）**：`arch/arm64/` 落地，单核 + `-smp 4`（QEMU qemu-system-aarch64 `virt,gic-v3`）均 54/54；无真机硬件；RISC-V64 暂缓 |
 
 #### C23 标准升级特性分析（基于 JLOS freestanding 实际情况）
 
@@ -831,6 +836,53 @@ PML4[511]:   kernel text/data 0xFFFFFFFF80000000
 双架构编译：0 警告 0 错误（make BITS=32 / make BITS=64）
 VMware 4 核：54 passed / 0 failed
 ```
+
+***
+
+## Phase 10: ARM64 架构移植（已完成，2026-10-26）
+
+QEMU virt/gic-v3 验证（无真机）。进度：A1 启动链、A2 FDT+boot-info、A3 分页真实实现、**单核测试套件 54/54 全 PASS**、惰性 FPU（用户态 FP 已启用）、通用 NIC 抽象 + virtio-net（udp/http 真实跑通）均已完成。
+
+SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且**测试套件 54/54 全 PASS**（连续多次稳定）；单核亦 54/54。多核怪象的总根因见 ARM64-16（`.data..percpu` 段被吞致 per-CPU 机制失效），随后 ARM64-17（ESR WnR 漏判 CEL）收尾。
+
+### 10.1 关键运行时修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| ARM64-1 | **int8_t 跨架构符号性**（严重 Bug）：`typedef char int8_t` 依赖 ABI 符号性——x86-64 plain char 有符号，AArch64（AAPCS64）无符号 → arm64 上 int8_t 实为 0~255：am79c973 `-1` 哨兵变 255 且 `>= 0` 恒真（recv 游标错乱）、mouse console 下溢钳位失效、mouse.c PS/2 delta 符号扩展失效（鼠标单向移动） | `typedef signed char int8_t`（符合 C 标准 int8_t 定义，x86 行为零变化） | common/types.h |
+| ARM64-2 | exec-on-self 后 `eret` 到地址 0（`exec return entry 0x0`）：对**当前任务自身** exec 时 `init_arch_user` 在活跃栈顶写初始切换帧，覆盖同帧内 `entry` 局部槽 | 仅对**非当前运行任务**预置切换帧（exec 路径由 `exec_return` 直接 eret） | kernel/multitask.c |
+| ARM64-3 | 用户 ELF 文本段取指权限 fault（`ESR 0x8200000f`，UXN）：`elf_flags_to_pte_flags` 从不设 `JLOS_PG_EXEC`；x86 `pte_prot` 不置 NX 故无感，arm64 对非 EXEC 页显式置 UXN | 可执行段（PF_X）加 `JLOS_PG_EXEC` | fs/elf.c |
+| ARM64-4 | `ring3_mmap` 页错误被误杀：通用处理器按 **x86 错误码语义**解读 `context->error`，而 arm64 存的是原始 ESR | arm64 侧翻译 ESR（EC/DFSC/WnR）→ present/write/user 位 | arch/arm64/interrupts.c |
+| ARM64-5 | paging 单测全 FAIL：arm64 `map_entry` 直接用 `ctx->root`（未分配即失败），x86 有惰性根表分配 | 补 `root_ensure`，user 段惰性分配根表 | arch/arm64/paging.c |
+| ARM64-6 | fork/信号子进程 SIGSEGV（退出码 1/2）：COW 路径硬编码 `JLOS_PG_USER_RW` 映射，丢失 EXEC（文本/栈变 NX） | COW 克隆与写时复制按**源页权限**保留 EXEC | kernel/paging.c |
+| ARM64-7 | `ring3_signal` FAIL：`arch/arm64/signal.c` 为空 stub（信号帧未实现） | 实现 sigreturn 跳板 + 用户上下文保存/恢复；信号跳板在用户栈故栈需可执行 | arch/arm64/signal.c + kernel/multitask.c |
+| ARM64-8 | 用户态执行 FP/SIMD 触发 `EC 0x7`（`pc=0x400030`）：内核未放开 EL0 FP | arm64 惰性 FPU（`CPACR_EL1.FPEN` 只 trap EL0 + `ext_state` 扩到 528B + `EC 0x7` 接 `ext_trap_body`）；jlcy 恢复用户态 FP | arch/arm64/fpu.c + hal/ext_state.h + jlcy/Makefile |
+| ARM64-9 | 网络栈与 AMD 驱动硬耦合（`etherframe.h` 直接 include amd 头、backend 为具体类型），arm64 无 NIC | 引入通用 NIC 抽象（`hal/net.h`：`jlos_hal_net_dev_t`+ops+primary_dev，回调走原始 buffer）+ 改 amd/etherframe/network + arm64 virtio-net | hal/net.* + drivers/amd_am79c973.* + net/* + arch/arm64/virtio_net.c |
+| ARM64-10 | virtio-net DHCP 首发后 CPU 100% 死等：TX 写成**同步阻塞**等待 `used->idx`，而设备不立即回写（网卡 TX 本质异步） | TX 改**异步**（TX 缓冲池 + 提交即返回 + 下次发送/IRQ 回收），并补 RX 初始 `QueueNotify` | arch/arm64/virtio_net.c |
+| ARM64-11 | SMP：`boot_aps` 报 `4 cpus booted` 却无 AP 日志（AP online **假阳性**）：`smp_init` 把 BSP `online=1` 写入 per-CPU 段，`alloc_percpu_areas` **拷贝**后各 AP 也变 1 | AP per-CPU 区**清零**（对齐 x86，不再拷贝）——与 ARM64-13 同根因（拷贝 BSP 运行时 per-CPU 段），现象不同 | arch/arm64/smp.c |
+| ARM64-12 | SMP：AP 取指 `Prefetch Abort`（`ESR translation fault L0, FAR=ELR=0x4008028c`）后无 `VBAR` → 无限 abort：`paging.c` 内核页表初始化执行 `__pgtable_start[0]=0`，清掉 boot 期 identity 表；AP 复用 `TTBR0` 后低地址取指失败 | AP 次核入口（MMU off 阶段）**自建 identity 映射**（`L0_T0[0]→L1_IDMAP`，`L1_IDMAP[RAM]→RAM block`） | arch/arm64/boot.S |
+| ARM64-13 | SMP：BSP 栈被破坏（`check_pattern` 返回到 0 → `SAVE_FRAME` 用坏 `sp` 递归 **318101 次 Data Abort**）：`alloc_percpu_areas` 拷贝把 BSP 运行时 `current_task`（=BSP idle）等带给了各 AP；AP 在 `sched_init_cpu` **之前**已开中断，定时器 IRQ 以 BSP 任务为“当前”调度 → 破坏 BSP 任务/栈 | AP per-CPU 区**清零** + `ap_main` 把 `daifclr` **后置到 `sched_init_cpu` 之后** | arch/arm64/smp.c + arch/arm64/ap_boot.c |
+| ARM64-14 | SMP：AP 的 `ap_main` 运行栈与其 idle 任务栈**共用同一槽**，idle 预置帧覆盖 ap_main 活跃栈 | linker 拆 `__ap_boot_stack`（启动栈）/`__ap_idle_stack`（idle 内核栈），`boot_stack_info` 返回 idle 段 | arch/arm64/linker.lds.S + context_switch.c + smp.c |
+| ARM64-15 | SMP：GIC **SGI 未使能**（`jlos_arch_gic_irq_unmask` 只处理 `intid>=16`），目标核收不到 IPI → `tlb_shootdown` 死等 `done` | redistributor 使能 SGI 0-15；`unmask/mask` 覆盖 `intid<32`（SGI+PPI） | arch/arm64/gic.c |
+| ARM64-16 | SMP **总根因**：`.data..percpu` 输出段为空 → `percpu size = 0` → `jlos_kalloc(0)` 失败 → 各 AP 的 `per_cpu_offset` 恒 0 → **AP 与 BSP 共用同一 per-CPU 槽**（current_task / hrtimer base / gic rdist / tick 全部串台）→ 多核一切怪象（BSP tick 停摆、栈被破坏、cascade 挂起等）。根因：linker `.data : { *(.data .data.*) }` 中 **`.data.*` 通配符吞掉了 `.data..percpu` 输入段**，使后置的 `.data..percpu` 输出段为空 | 将 `.data..percpu` 输出段移到 `.data` **之前**（顺序匹配优先），段恢复非空（648B），AP offset 各异 | arch/arm64/linker.lds.S |
+| ARM64-17 | SMP：`jlos_copy_to_user`（内核写用户页）触发 `ESR 0x9600004f`（EC=0x25 同 EL Data Abort）被**误杀**：`jlos_irq_context_init` 翻译 ESR 时 **WnR 只对 `EC==0x24(LEL)` 取、漏了 `0x25(CEL)`** → 把"内核写 COW 只读页"判成 `write=0` → 走 kill 而非 COW。x86 因错误码天然含写位无此问题 | 数据 abort 的 WnR 对 **LEL/CEL 都取** | arch/arm64/interrupts.c |
+| ARM64-18 | arm64：`virtio_net_init_hw` 读 MAC 用**字节偏移** `virtio_reg_read(ctx, JLOS_VIRTIO_REG_CONFIG + i)`（i=0..5）→ 地址 `0x100+i` **未对齐**（i=1 即 `0x101`）→ Device 内存未对齐访问 fault（`kernel pf addr=0xffff00000a003d01`），**带 virtio-net 启动即崩** | 改为**按字对齐读**（读 `0x100`/`0x104` 两个字组合 6 字节 MAC） | arch/arm64/virtio_net.c |
+
+### 10.2 非阻塞优化（稳健性 A + 性能 B，2026-10-26）
+
+| 项 | 内容 | 文件 |
+| --- | --- | --- |
+| A2 | arm64 惰性 FPU 的 owner 改 **per-CPU**：原为全局 static（SMP 下两核同时用 FP 会互相踩；x86 因用户不用 FP 未暴露，arm64 用户启用 FP 故必须改）；随之去掉全局锁 | arch/arm64/fpu.c |
+| A1 | PAN/uaccess：HAL 增 `jlos_hal_uaccess_begin/end`（arm64 按 `ID_AA64PFR0_EL1.PAN` 检测后 `msr pan,#0/#1`，用 `.arch_extension pan`；x86 空实现）；包裹全部内核→用户内存访问点（copy_to/from_user、exec 用户栈、信号帧） | hal/hal_arch.h + arch/{arm64,x86}/hal_arch.c + kernel/syscall.c + kernel/multitask.c + arch/arm64/signal.c |
+| B1 | 启用 arm64 **ASID**：`jlos_paging_context_t` 加 `asid`；`tables_clone` 分配、`tables_destroy` 释放；`jlos_hal_paging_switch(root, asid)` 把 8-bit ASID 编码进 TTBR0[63:56]，**切换不再全量 flush** | hal/paging.h + arch/arm64/paging.{h,c} + arch/x86/paging.c + kernel/paging.c |
+| B2 | 随 ASID 达成：切页表免全量 flush；TLB shootdown 本就 per-mask/per-va | arch/arm64/paging.c |
+| B3 | arm64 `jlos_memcpy/memset` 汇编（`ldp/stp` 16B）覆盖 common 的 weak 版 | arch/arm64/lib/{memcpy,memset}.S |
+| B4 | 内核直接映射区 **2MB 块映射**：`map_range_entry` 对内核区（va≥`KERNEL_DIRECT_MAP_BASE`）写 PMD block；用户页保持 4KB（保 COW 语义） | arch/arm64/paging.c |
+| B5 | reschedule IPI 仅在 `need_resched` **0→1** 时发送（避免重复 SGI） | arch/arm64/smp.c |
+
+**验证**：单核 54/54、`-smp 4` 54/54；x86-64/32 clean 编译通过。**注意**：改 `hal/paging.h` 结构体布局后必须 **clean 重建**（Makefile 无头文件依赖跟踪，否则旧 .o 用旧布局导致随机崩溃）。
+
+**日志精简（2026-10-26）**：删除 arm64 运行日志中的**无用调试打印**——逐扇区 `xfer`、`elf ehdr`、`ctxsw exec return`、每条 `abort esr`、virtio 枚举/feature、`partition`/`fat32 cluster`/`udp socket` 等内部细节（**直接删语句**，不降级为 debug、不关 `JLOS_KERNEL_DEBUG`）；保留设备 `ready`、时钟选择、`rootfs mounted`、测试结果。日志行数 ~489 → ~138，`-smp 4` 54/54。连带修复 ARM64-18（virtio-net MAC 未对齐 MMIO 读）。
 
 ***
 

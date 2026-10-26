@@ -146,3 +146,10 @@ void jlos_hal_cpu_relax(void)
 {
     __asm__ __volatile__("pause" ::: "memory");
 }
+void jlos_hal_uaccess_begin(void)
+{
+}
+
+void jlos_hal_uaccess_end(void)
+{
+}

@@ -3,16 +3,20 @@
 
 JLOS_BITS := $(BITS)
 
+OBJTREE_SUFFIX := _$(JLOS_BITS)
+
 ifeq ($(JLOS_BITS),64)
   ARCH_DEFINE  := -DCONFIG_X86_64
   ARCH_CFLAGS  := -m64 -mcmodel=kernel -mno-red-zone -mgeneral-regs-only
   ARCH_LDFLAGS := -m elf_x86_64
+  JLOS_COMPDB_TARGET := --target=x86_64-none-elf
   TARGET_BIN   := johnkernel-x86_64.bin
   TARGET_ISO   := johnkernel-x86_64.iso
 else ifeq ($(JLOS_BITS),32)
   ARCH_DEFINE  := -DCONFIG_X86_32
   ARCH_CFLAGS  := -m32 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx
   ARCH_LDFLAGS := -m elf_i386
+  JLOS_COMPDB_TARGET := --target=i386-none-elf
   TARGET_BIN   := johnkernel-x86.bin
   TARGET_ISO   := johnkernel-x86.iso
 else

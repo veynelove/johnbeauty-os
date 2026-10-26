@@ -10,6 +10,7 @@
 #include <hal/spinlock.h>
 #include <hal/hal.h>
 #include <hal/hal_arch.h>
+#include <hal/boot_info.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "pfa"
 #include <kernel/printk.h>
@@ -194,9 +195,9 @@ static void jlos_page_frame_mark_reserve(uint32_t frame)
 
 void jlos_page_frame_allocator_init(void)
 {
-    uintptr_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
+    uintptr_t phys_start = jlos_device_physical_memory_start;
     uint32_t phys_end = jlos_device_physical_memory_end;
-    const multiboot_info_t *mb = jlos_device_multiboot_info;
+    const jlos_hal_boot_info_t *bi = jlos_device_boot_info;
 
     s_start_addr = phys_start;
     s_total_frames = (phys_end - phys_start) / JLOS_PAGE_FRAME_SIZE;
@@ -238,16 +239,14 @@ void jlos_page_frame_allocator_init(void)
     if (phys_start > 0) {
         jlos_page_frame_mark_occupied(0, phys_start);
     }
-    if (mb && (mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        multiboot_mmap_entry_t *entries = (multiboot_mmap_entry_t *)PHYS_TO_VIRT(mb->mmap_addr);
-        uint32_t count = mb->mmap_length / sizeof(multiboot_mmap_entry_t);
-        for (uint32_t i = 0; i < count; i++) {
-            multiboot_mmap_entry_t *e = &entries[i];
-            if (e->type == MULTIBOOT_MEMORY_AVAILABLE) {
+    if (bi) {
+        for (uint32_t i = 0; i < bi->mem_count; i++) {
+            const jlos_hal_boot_mem_t *m = &bi->mem[i];
+            if (m->type == JLOS_HAL_BOOT_MEM_USABLE) {
                 continue;
             }
-            uint64_t start = e->base_addr;
-            uint64_t end = start + e->length;
+            uint64_t start = m->addr;
+            uint64_t end = start + m->size;
             if (end <= phys_start || start >= phys_end) {
                 continue;
             }

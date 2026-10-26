@@ -10,6 +10,8 @@
 
 #ifdef CONFIG_X86_64
 #define JLOS_CPU_STATE_SIZE 176
+#elif defined(CONFIG_ARM64)
+#define JLOS_CPU_STATE_SIZE 272
 #else
 #define JLOS_CPU_STATE_SIZE 64
 #endif

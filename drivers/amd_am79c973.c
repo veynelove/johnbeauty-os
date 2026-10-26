@@ -10,31 +10,31 @@
 #define JLOS_KERNEL_LOG_SUBSYS "eth"
 #include <kernel/printk.h>
 
-static void jlos_rawdata_handler_on_raw_data_received(jlos_rawdata_handler_t* self, jlos_net_sk_buff_t *skb)
+static jlos_amd_am79c973_t *amd_from_net(jlos_hal_net_dev_t *self)
 {
-    (void)self;
-    jlos_net_skb_free(skb);
+    return container_of(self, jlos_amd_am79c973_t, base_net);
 }
 
-void jlos_rawdata_handler_init(jlos_rawdata_handler_t* self, jlos_amd_am79c973_t *backend)
+static void amd_net_destroy(jlos_hal_net_dev_t *self)
 {
-    self->backend = backend;
-    self->on_raw_data_received = jlos_rawdata_handler_on_raw_data_received;
-    self->send = jlos_rawdata_handler_send;
-    jlos_amd_am79c973_set_handler(backend, self);
+    jlos_amd_am79c973_destroy(amd_from_net(self));
 }
 
-void jlos_rawdata_handler_destroy(jlos_rawdata_handler_t* self)
+static void amd_net_send(jlos_hal_net_dev_t *self, uint8_t *buffer, uint32_t size)
 {
-    jlos_amd_am79c973_set_handler(self->backend, nullptr);
+    jlos_amd_am79c973_send(amd_from_net(self), buffer, (int)size);
 }
 
-void jlos_rawdata_handler_send(jlos_rawdata_handler_t* self, uint8_t *buffer, uint32_t size)
+static void amd_net_set_ip_address(jlos_hal_net_dev_t *self, uint32_t ip)
 {
-    (void)self;
-    (void)buffer;
-    (void)size;
+    jlos_amd_am79c973_set_ip_address(amd_from_net(self), ip);
 }
+
+static const jlos_hal_net_ops_t s_amd_net_ops = {
+    .destroy        = amd_net_destroy,
+    .send           = amd_net_send,
+    .set_ip_address = amd_net_set_ip_address,
+};
 
 void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *dev, jlos_irq_manager_t *interrupts)
 {
@@ -55,7 +55,7 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     jlos_io16_init(&self->reset_port, dev->port_base + 0x14);
     jlos_io16_init(&self->bus_control_register_data_port, dev->port_base + 0x16);
 
-    self->handler = nullptr;
+
     self->current_send_buffer = 0;
     self->current_recv_buffer = 0;
 
@@ -131,6 +131,16 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     }
 
     jlos_irq_manager_register(interrupts, dev->interrupt + jlos_irq_manager_hw_offset(interrupts), &self->base_handler);
+
+    self->base_net.dev_type = JLOS_HAL_NET_DEV_AMD_AM79C973;
+    self->base_net.ops = &s_amd_net_ops;
+    self->base_net.mac_address = 0;
+    for (int i = 0; i < JLOS_HAL_NET_ADDR_LEN; i++) {
+        self->base_net.mac_address |= ((uint64_t)self->init_block->physical_address[i]) << (8 * i);
+    }
+    jlos_hal_net_set_ip_address(&self->base_net, 0);
+    self->base_net.inited = 1;
+    jlos_hal_net_set_primary_dev(&self->base_net);
 }
 
 void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self)
@@ -319,12 +329,8 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
                 size -= 4;
             }
             uint8_t *buffer = (uint8_t *)PHYS_TO_VIRT(self->recv_buffer_descr[idx].address);
-            if (self->handler) {
-                jlos_net_sk_buff_t *skb = jlos_net_skb_alloc(size);
-                if (skb) {
-                    jlos_memcpy(jlos_net_skb_put(skb, size), buffer, size);
-                    self->handler->on_raw_data_received(self->handler, skb);
-                }
+            if (self->base_net.on_receive) {
+                self->base_net.on_receive(self->base_net.receive_context, buffer, size);
             }
         }
         self->recv_buffer_descr[idx].flags = (0x80000000 | bs | 0xF800);
@@ -339,10 +345,6 @@ void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)
     }
 }
 
-void jlos_amd_am79c973_set_handler(jlos_amd_am79c973_t* self, jlos_rawdata_handler_t *handler)
-{
-    self->handler = handler;
-}
 
 uint64_t jlos_amd_am79c973_get_mac_address(jlos_amd_am79c973_t* self)
 {

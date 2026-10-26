@@ -1114,8 +1114,9 @@ void jlos_hal_paging_disable(void)
 #endif
 }
 
-void jlos_hal_paging_switch(uintptr_t root_physical_addr)
+void jlos_hal_paging_switch(uintptr_t root_physical_addr, uint32_t asid)
 {
+    (void)asid;
 #ifdef CONFIG_X86_64
     __asm__ __volatile__(
         "movq %0, %%cr3\n\t"

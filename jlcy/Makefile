@@ -2,11 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # jlcy - JLOS C library (用户态库 + 应用程序)
-ARCH := x86
-OBJ_DIR := obj
-
+ARCH ?= x86
 BITS ?= 64
 
+OBJ_DIR := obj/$(ARCH)
+
+CC := gcc
+LD := ld
+FLOAT_FLAGS :=
+
+ifeq ($(ARCH), arm64)
+CC := aarch64-linux-gnu-gcc
+LD := aarch64-linux-gnu-ld
+BITS_CFLAGS  := -mcmodel=small
+BITS_DEFINE  := -DCONFIG_ARM64
+LDPARAMS     :=
+LINKER_LD    := user_linker64.ld
+
+else ifeq ($(ARCH), x86)
 ifeq ($(BITS), 64)
 BITS_CFLAGS  = -m64
 BITS_DEFINE = -DCONFIG_X86_64
@@ -18,17 +31,22 @@ BITS_DEFINE = -DCONFIG_X86_32
 LDPARAMS    = -melf_i386
 LINKER_LD   = user_linker.ld
 endif
+FLOAT_FLAGS = -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx
+else
+$(error unsupported arch: $(ARCH))
+endif
 
 CPARAMS = $(BITS_CFLAGS) $(BITS_DEFINE) -I. -nostdlib -fno-builtin -fno-exceptions \
     -fno-leading-underscore -std=gnu2x \
     -ffreestanding -fno-stack-protector \
     -fno-pic -fno-pie \
     -Wall -Wextra -Wno-address-of-packed-member \
-    -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx \
+    $(FLOAT_FLAGS) \
     -O2 -g
 
-LIB_C_SRCS := $(shell find lib -type f -name "*.c")
-LIB_ASM_SRCS := $(shell find lib -type f -name "*.S")
+LIB_C_SRCS := $(shell find lib -maxdepth 1 -type f -name "*.c") \
+              $(shell find lib/$(ARCH) -type f -name "*.c" 2>/dev/null)
+LIB_ASM_SRCS := $(shell find lib/$(ARCH) -type f -name "*.S" 2>/dev/null)
 LIB_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIB_C_SRCS)) \
             $(patsubst %.S,$(OBJ_DIR)/%.o,$(LIB_ASM_SRCS))
 
@@ -44,22 +62,28 @@ all: $(USER_ELFS)
 
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-	@gcc $(CPARAMS) -o $@ -c $<
+	@$(CC) $(CPARAMS) -o $@ -c $<
 
 $(OBJ_DIR)/%.o: %.S
 	@mkdir -p $(@D)
-	@gcc $(CPARAMS) -o $@ -c $<
+	@$(CC) $(CPARAMS) -o $@ -c $<
 
 user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/$(LINKER_LD)
-	@ld $(LDPARAMS) -T user/$(ARCH)/$(LINKER_LD) -o $@ $< $(LIB_OBJS)
+	@$(LD) $(LDPARAMS) -T user/$(ARCH)/$(LINKER_LD) -o $@ $< $(LIB_OBJS)
 
 # ==================磁盘镜像生成==================
-DISK_VMDK := ../disk.vmdk
-DISK_FLAT := ../disk-flat.vmdk
 FAT32_IMG := $(OBJ_DIR)/fat32.img
+PART_IMG := $(OBJ_DIR)/disk-part.img
+
+ifeq ($(ARCH), arm64)
+DISK_OUT := ../disk-arm64.img
+else
+DISK_OUT := ../disk.vmdk
+DISK_FLAT := ../disk-flat.vmdk
+endif
 
 .PHONY: disk
-disk: $(DISK_VMDK)
+disk: $(DISK_OUT)
 
 $(FAT32_IMG): $(USER_ELFS)
 	@mkdir -p $(@D)
@@ -67,12 +91,19 @@ $(FAT32_IMG): $(USER_ELFS)
 	@mkfs.fat -F32 $@ 2>/dev/null
 	@for elf in $(USER_ELFS); do mcopy -i $@ $$elf ::/$${elf##*/} 2>/dev/null; done
 
-$(DISK_FLAT): $(FAT32_IMG)
+$(PART_IMG): $(FAT32_IMG)
 	@dd if=/dev/zero of=$@ bs=512 count=32768 2>/dev/null
 	@echo ',,0x0C,*' | sfdisk --quiet $@
 	@dd if=$(FAT32_IMG) of=$@ bs=512 seek=2048 conv=notrunc 2>/dev/null
 
-$(DISK_VMDK): $(DISK_FLAT)
+ifeq ($(ARCH), arm64)
+$(DISK_OUT): $(PART_IMG)
+	@cp $(PART_IMG) $@
+else
+$(DISK_FLAT): $(PART_IMG)
+	@cp $(PART_IMG) $@
+
+$(DISK_OUT): $(DISK_FLAT)
 	@echo '# Disk DescriptorFile' > $@
 	@echo 'version=1' >> $@
 	@echo 'CID=ffffff01' >> $@
@@ -90,9 +121,10 @@ $(DISK_VMDK): $(DISK_FLAT)
 	@echo 'ddb.geometry.heads = "16"' >> $@
 	@echo 'ddb.geometry.sectors = "63"' >> $@
 	@echo 'ddb.adapterType = "ide"' >> $@
+endif
 
 clean:
-	@rm -rf $(OBJ_DIR) user/*.elf $(DISK_VMDK) $(DISK_FLAT)
+	@rm -rf obj user/*.elf $(DISK_OUT) $(DISK_FLAT)
 	@echo 'clean success.'
 
 # ==================clangd 支持==================
@@ -105,7 +137,7 @@ compdb:
 	@for f in $(C_SRCS); do \
 		echo "  {" >> build/compile_commands.json; \
 		echo "    \"directory\": \"$(shell pwd)\"," >> build/compile_commands.json; \
-		echo "    \"command\": \"gcc $(CLANGD_CPARAMS) -c $$f -o /dev/null\"," >> build/compile_commands.json; \
+		echo "    \"command\": \"$(CC) $(CLANGD_CPARAMS) -c $$f -o /dev/null\"," >> build/compile_commands.json; \
 		echo "    \"file\": \"$$f\"" >> build/compile_commands.json; \
 		echo "  }," >> build/compile_commands.json; \
 	done

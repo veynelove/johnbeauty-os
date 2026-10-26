@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <common/multiboot.h>
 #include <hal/mmu.h>
 #include <hal/context.h>
 #include <hal/hal_arch.h>
 #include <hal/paging.h>
 #include <hal/smp.h>
+#include <hal/boot_info.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 #include <kernel/page_frame_allocator.h>
@@ -18,7 +18,7 @@
 #define JLOS_KERNEL_LOG_SUBSYS "boot"
 #include <kernel/printk.h>
 
-void john_sunshine_main(const multiboot_info_t *multiboot_structure, uintptr_t kernel_end)
+void john_sunshine_main(const jlos_hal_boot_info_t *boot_info, uintptr_t kernel_end)
 {
     jlos_hal_arch_init();
     jlos_printk_init();
@@ -28,7 +28,7 @@ void john_sunshine_main(const multiboot_info_t *multiboot_structure, uintptr_t k
     jlos_mmu_init();
     jlos_arch_tss_init();
 
-    jlos_device_init(multiboot_structure);
+    jlos_device_init(boot_info);
     jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
     jlos_arch_paging_initialize_kernel(jlos_pfa_boot_alloc_page);
     jlos_page_frame_allocator_init();

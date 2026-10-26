@@ -10,47 +10,44 @@
 #define JLOS_KERNEL_LOG_SUBSYS "dev"
 #include <kernel/printk.h>
 
+uint32_t jlos_device_physical_memory_start = 0;
 uint32_t jlos_device_physical_memory_end = 0;
 uint32_t jlos_device_available_ram_bytes = 0;
 
-const multiboot_info_t *jlos_device_multiboot_info = nullptr;
+const jlos_hal_boot_info_t *jlos_device_boot_info = nullptr;
 
-void jlos_device_init(const multiboot_info_t *mb)
+void jlos_device_init(const jlos_hal_boot_info_t *boot_info)
 {
-    jlos_device_multiboot_info = mb;
+    jlos_device_boot_info = boot_info;
     uintptr_t phys_start = KERNEL_MEMORY_PHYSICAL_START;
-    uintptr_t phys_end = phys_start;
-    if (!(mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        printk_warn("mmap not available, using mem_upper\n");
-        phys_end = phys_start + (uintptr_t)mb->mem_upper * 1024;
-        if (phys_end > KERNEL_PHYSICAL_MAX) {
-            phys_end = KERNEL_PHYSICAL_MAX;
-        }
-        jlos_device_physical_memory_end = phys_end;
-        jlos_device_available_ram_bytes = mb->mem_upper * 1024;
-        return;
-    }
-
-    multiboot_mmap_entry_t *entries = (multiboot_mmap_entry_t *)PHYS_TO_VIRT(mb->mmap_addr);
-    uint32_t count = mb->mmap_length / sizeof(multiboot_mmap_entry_t);
-    
-    uint64_t max_end = phys_start;
+    uint64_t min_usable = 0;
+    uint64_t max_end = 0;
     uint64_t total_ram = 0;
-    for (uint32_t i = 0; i < count; i++) {
-        multiboot_mmap_entry_t *e = &entries[i];
-        if (e->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            total_ram += e->length;
-            uint64_t end = e->base_addr + e->length;
-            if (end > max_end) {
-                max_end = end;
-            }
+    for (uint32_t i = 0; i < boot_info->mem_count; i++) {
+        const jlos_hal_boot_mem_t *m = &boot_info->mem[i];
+        if (m->type != JLOS_HAL_BOOT_MEM_USABLE) {
+            continue;
+        }       
+        if (min_usable == 0 || m->addr < min_usable) {
+            min_usable = m->addr;
         }
+        total_ram += m->size;
+        uint64_t end = m->addr + m->size;
+        if (end > max_end) {
+            max_end = end;
+        }
+    }
+    if (min_usable) {
+        phys_start = (uintptr_t)min_usable;
     }
     if (max_end > KERNEL_PHYSICAL_MAX) {
         max_end = KERNEL_PHYSICAL_MAX;
     }
+
+    jlos_device_physical_memory_start = (uint32_t)phys_start;
     jlos_device_physical_memory_end = (uint32_t)max_end;
-    jlos_device_available_ram_bytes = (uint32_t)total_ram;
-    printk_info("mmap: %u entries, max ram end = 0x%x, total available = %u KB\n",
-        count, (uint32_t)jlos_device_physical_memory_end, (uint32_t)(jlos_device_available_ram_bytes / 1024));
+    jlos_device_available_ram_bytes = (uint32_t)total_ram;                                                                                                                                                                                  
+
+    printk_info("boot mem: %u entries, start = 0x%x, end = 0x%x, available = %u KB\n",
+        boot_info->mem_count, jlos_device_physical_memory_start, jlos_device_physical_memory_end, jlos_device_available_ram_bytes / 1024);
 }

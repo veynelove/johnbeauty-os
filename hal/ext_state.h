@@ -7,8 +7,13 @@
 #define _JLOS_HAL_EXT_STATE_H
 
 #include <common/types.h>
+#include <include/config.h>
 
+#ifdef CONFIG_ARM64
+#define JLOS_ARCH_EXT_STATE_SIZE    528
+#else
 #define JLOS_ARCH_EXT_STATE_SIZE    512
+#endif
 #define JLOS_ARCH_EXT_STATE_ALIGN   16
 
 typedef struct jlos_arch_ext_state {

@@ -123,7 +123,7 @@ static const uint16_t s_days_before_month[] = {
 static void printk_put_realtime(void)
 {
     uint64_t ns = jlos_timek_get_realtime_ns();
-    uint32_t unix_sec = ns / 1000000000;
+    uint32_t unix_sec = (uint32_t)(ns / 1000000000) + JLOS_WALLCLOCK_UTC_OFFSET_SEC;
     uint32_t secs_in_day = unix_sec % 86400;
     uint32_t h = secs_in_day / 3600;
     uint32_t m = (secs_in_day % 3600) / 60;

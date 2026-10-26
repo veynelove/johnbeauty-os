@@ -86,9 +86,11 @@ static void jlos_timek_rtc_init(void)
     jlos_timek_set_realtime(jlos_hal_rtc_read_ns());
 }
 
+
 static int tick_hrtimer_func(jlos_hrtimer_t *timer)
 {
     (void)timer;
+
     if (jlos_hal_get_cpu_id() == JLOS_SMP_BOOT_CPU) {
         jlos_timek_on_tick();
     }

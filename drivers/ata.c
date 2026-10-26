@@ -187,6 +187,7 @@ static void jlos_ata_block_dev_init(void)
     jlos_hal_block_ata_pio28_create(&s_ata_primary_dev, jlos_ata_primary_port_base, true);
     if (s_ata_primary_dev.inited) {
         s_ata_primary_ready = true;
+        jlos_hal_block_set_primary_dev(&s_ata_primary_dev);
         printk_debug("ata primary device ready, sectors = %u\n", (unsigned long long)s_ata_primary_dev.total_sectors);
     } else {
         printk_err("ata primary device init failed\n");

@@ -4,6 +4,7 @@
  */
 
 #include <hal/kernel_syscall.h>
+#include <hal/hal_arch.h>
 #include <hal/paging.h>
 #include <hal/signal.h>
 #include <fs/vfs.h>
@@ -919,9 +920,11 @@ bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)
     }
     uint8_t *d = (uint8_t *)dst;
     const uint8_t *s = (const uint8_t *)usr_src;
+    jlos_hal_uaccess_begin();
     for (size_t i = 0; i < n; i++) {
         d[i] = s[i];
     }
+    jlos_hal_uaccess_end();
     return true;
 }
 
@@ -932,9 +935,11 @@ bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
     }
     uint8_t *d = (uint8_t *)usr_dst;
     const uint8_t *s = (const uint8_t *)ker_src;
+    jlos_hal_uaccess_begin();
     for (size_t i = 0; i < n; i++) {
         d[i] = s[i];
     }
+    jlos_hal_uaccess_end();
     return true;
 }
 

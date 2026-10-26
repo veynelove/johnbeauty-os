@@ -161,3 +161,15 @@ int jlos_hal_block_write(jlos_hal_block_dev_t *self, uint64_t start_lba, const u
     }
     return self->ops->write_sectors(self, start_lba, buf, sector_count);
 }
+
+static jlos_hal_block_dev_t *s_primary_dev;
+
+jlos_hal_block_dev_t *jlos_hal_block_primary_dev(void)
+{
+    return s_primary_dev;
+}
+
+void jlos_hal_block_set_primary_dev(jlos_hal_block_dev_t *dev)
+{
+    s_primary_dev = dev;
+}

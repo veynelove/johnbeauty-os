@@ -104,8 +104,7 @@ int jlos_partition_parse_mbr(jlos_hal_block_dev_t *dev, jlos_partition_table_ent
             continue;
         }
         entries[count] = mbr.primary_partition[i];
-        printk_debug("partition %u, type = %x, start_lba = %u, sector = %u\n",
-            count & 0xFF, entries[count].partition_id, entries[count].start_lba, entries[count].length);
+
         count++;
     }
     return count;

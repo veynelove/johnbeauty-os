@@ -18,6 +18,7 @@
 #define JLOS_ELF_ET_EXEC    2
 #define JLOS_ELF_EM_386     3
 #define JLOS_ELF_EM_X86_64  62
+#define JLOS_ELF_EM_AARCH64 183
 
 #define JLOS_ELF_PT_LOAD    1
 

@@ -21,7 +21,8 @@
 #define JLOS_PG_USER_RO    (JLOS_PG_READ | JLOS_PG_USER)
 #define JLOS_PG_USER_RW    (JLOS_PG_READ | JLOS_PG_WRITE | JLOS_PG_USER)
 
-#define JLOS_PAGE_SIZE                  4096
+#define JLOS_PAGE_SHIFT                 12
+#define JLOS_PAGE_SIZE                  (1UL << JLOS_PAGE_SHIFT)
 
 #ifdef CONFIG_X86_64
 #define KERNEL_VIRTUAL_BASE             0xFFFF'FFFF'8000'0000
@@ -33,6 +34,16 @@
 #define KERNEL_SPACE_SIZE               0x0000'8000'0000'0000
 #define KERNEL_PHYSICAL_MAX             0x0000'0080'0000'0000
 #define KERNEL_DIRECT_MAP_SIZE          0x0000'0080'0000'0000
+#elif defined(CONFIG_ARM64)
+#define KERNEL_VIRTUAL_BASE             0xFFFF'8000'0000'0000
+#define KERNEL_VIRTUAL_END              0xFFFF'FFFF'FFFF'FFFF
+#define KERNEL_DIRECT_MAP_BASE          0xFFFF'0000'0000'0000
+#define KERNEL_HEAP_VIRT_BASE           0xFFFF'8002'0000'0000
+#define USER_VIRTUAL_END                0x0000'FFFF'FFFF'FFFF
+#define USER_SPACE_LIMIT                0x0001'0000'0000'0000
+#define KERNEL_SPACE_SIZE               0xFFFF'0000'0000'0000
+#define KERNEL_PHYSICAL_MAX             0x0000'0001'0000'0000
+#define KERNEL_DIRECT_MAP_SIZE          0x0000'0001'0000'0000
 #else
 #define KERNEL_VIRTUAL_BASE             0xC0000000
 #define KERNEL_VIRTUAL_END              0xFFFFFFFF
@@ -57,6 +68,7 @@
 typedef struct jlos_paging_context {
     void            *root;
     uint32_t        num_page_tables;
+    uint32_t        asid;
     jlos_spinlock_t lock;
 } jlos_paging_context_t;
 
@@ -66,7 +78,7 @@ typedef void *(*jlos_paging_table_alloc_fn)(void);
 
 void jlos_hal_paging_enable(uintptr_t root_physical_addr);
 void jlos_hal_paging_disable(void);
-void jlos_hal_paging_switch(uintptr_t root_physical_addr);
+void jlos_hal_paging_switch(uintptr_t root_physical_addr, uint32_t asid);
 void jlos_hal_paging_flush_tlb(uintptr_t virtual_addr);
 void jlos_hal_paging_flush_all_tlb(void);
 uintptr_t jlos_hal_paging_get_fault_addr(void);

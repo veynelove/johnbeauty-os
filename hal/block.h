@@ -19,6 +19,7 @@ typedef enum {
     JLOS_HAL_BLOCK_DEV_AHCI      = 3,
     JLOS_HAL_BLOCK_DEV_NVME      = 4,
     JLOS_HAL_BLOCK_DEV_PARTITION = 5,
+    JLOS_HAL_BLOCK_DEV_VIRTIO_BLK = 6,
 } jlos_hal_block_dev_type_t;
 
 typedef struct jlos_hal_block_dev jlos_hal_block_dev_t;
@@ -50,5 +51,8 @@ void jlos_hal_block_flush(jlos_hal_block_dev_t *self);
 
 int jlos_hal_block_read(jlos_hal_block_dev_t *self, uint64_t start_lba, uint8_t *buf, uint32_t sector_count);
 int jlos_hal_block_write(jlos_hal_block_dev_t *self, uint64_t start_lba, const uint8_t *buf, uint32_t sector_count);
+
+jlos_hal_block_dev_t *jlos_hal_block_primary_dev(void);
+void jlos_hal_block_set_primary_dev(jlos_hal_block_dev_t *dev);
 
 #endif

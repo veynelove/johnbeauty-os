@@ -12,7 +12,7 @@
 
 void jlos_udp_handler_init(jlos_udp_handler_t* self)
 {
-    printk_debug("handler initialized\n");
+
     self->handle_udp_message = jlos_udp_handler_handle_udp_message;
 }
 
@@ -26,12 +26,12 @@ void jlos_udp_handler_handle_udp_message(jlos_udp_handler_t* self, jlos_udp_sock
     (void)self;
     (void)socket;
     (void)data;
-    printk_debug("handler received data, size=%x%x\n", size & 0xFF, (size >> 8) & 0xFF);
+    (void)size;
 }
 
 void jlos_udp_socket_init(jlos_udp_socket_t* self, jlos_udp_provider_t *backend)
 {
-    printk_debug("socket initialized\n");
+
     self->backend = backend;
     self->handler = nullptr;
     self->listening = false;
@@ -47,7 +47,7 @@ void jlos_udp_socket_destroy(jlos_udp_socket_t* self)
 
 void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *data, uint16_t size)
 {
-    printk_debug("socket received data\n");
+
     if (self->handler) {
         self->handler->handle_udp_message(self->handler, self, data, size);
     }
@@ -55,7 +55,7 @@ void jlos_udp_socket_handle_udp_message(jlos_udp_socket_t* self, uint8_t *data, 
 
 void jlos_udp_socket_send(jlos_udp_socket_t* self, uint8_t *data, uint16_t size)
 {
-    printk_debug("socket sending data\n");
+
     jlos_udp_provider_send(self->backend, self, data, size);
 }
 
