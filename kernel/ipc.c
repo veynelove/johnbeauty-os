@@ -27,7 +27,7 @@ void jlos_pipe_init(jlos_pipe_t *pipe, uint32_t buf_size)
     jlos_semaphore_init(&pipe->sem_read_items, 0);
     jlos_mutex_init(&pipe->mutex);
     pipe->closed = false;
-    pipe->refcount = 1;
+    jlos_atomic_set(&pipe->refcount, 1);
 }
 
 void jlos_pipe_close(jlos_pipe_t *pipe)
@@ -133,13 +133,13 @@ uint32_t jlos_pipe_read(jlos_pipe_t *pipe, void *buf, uint32_t len)
 void jlos_pipe_ref_inc(jlos_pipe_t *pipe)
 {
     if (pipe) {
-        pipe->refcount++;
+        jlos_atomic_inc(&pipe->refcount);
     }
 }
 
 void jlos_pipe_ref_dec(jlos_pipe_t *pipe)
 {
-    if (pipe && --pipe->refcount == 0) {
+    if (pipe && jlos_atomic_dec_return(&pipe->refcount) == 0) {
         jlos_pipe_destroy(pipe);
     }
 }

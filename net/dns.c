@@ -96,7 +96,7 @@ static void jlos_dns_on_response(jlos_udp_handler_t *handler, jlos_udp_socket_t 
         }
         if (type == JLOS_DNS_TYPE_A && rdlength == 4) {
             jlos_memcpy(&self->resolved_ip, p, 4);
-            self->resolved = true;
+            jlos_atomic_set(&self->resolved, 1);
             printk_info("resolved, ip = %x\n", self->resolved_ip);
             return;
         }
@@ -111,7 +111,7 @@ void jlos_dns_resolver_init(jlos_dns_resolver_t *self, jlos_udp_provider_t *udp)
     self->socket = nullptr;
     self->query_id = 0;
     self->resolved_ip = 0;
-    self->resolved = false;
+    jlos_atomic_set(&self->resolved, 0);
 }
 
 bool jlos_dns_resolve(jlos_dns_resolver_t *self, const char *name, uint32_t *out_ip)
@@ -124,7 +124,7 @@ bool jlos_dns_resolve(jlos_dns_resolver_t *self, const char *name, uint32_t *out
         return false;
     }
     jlos_udp_provider_bind(self->udp, self->socket, &self->handler);
-    self->resolved = false;
+    jlos_atomic_set(&self->resolved, 0);
     self->resolved_ip = 0;
     self->query_id = (uint16_t)jlos_timek_get_monotonic_ns();
     uint8_t buffer[JLOS_DNS_MAX_PACKET];
@@ -148,7 +148,7 @@ bool jlos_dns_resolve(jlos_dns_resolver_t *self, const char *name, uint32_t *out
     printk_info("query sent, name = %s, id = %x\n", name, self->query_id);
 
     uint32_t start = jlos_timek_get_monotonic_ns();
-    while (!self->resolved) {
+    while (!jlos_atomic_read(&self->resolved)) {
         if (jlos_timek_get_monotonic_ns() - start > JLOS_DNS_TIMEOUT_NS) {
             jlos_udp_provider_disconnect(self->udp, self->socket);
             self->socket = nullptr;

@@ -40,7 +40,7 @@ LD      := $(CROSS_COMPILE)ld
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
 
-CFLAGS := -I$(srctree) -nostdlib -ffreestanding -fno-builtin -std=gnu2x -fno-stack-protector -fno-pic -fno-pie -Wall -Wextra -Wno-address-of-packed-member -O2 -g $(ARCH_DEFINE) $(ARCH_CFLAGS)
+CFLAGS := -I$(srctree) -nostdlib -ffreestanding -fno-builtin -std=gnu2x -fno-stack-protector -fno-pic -fno-pie -Wall -Wextra -Wno-address-of-packed-member -O2 -g -Werror $(ARCH_DEFINE) $(ARCH_CFLAGS)
 
 LDFLAGS := $(ARCH_LDFLAGS)
 

@@ -7,13 +7,14 @@
 #include <hal/ext_state.h>
 #include <hal/hal.h>
 #include <hal/spinlock.h>
+#include <hal/smp.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "fpu"
 #include <kernel/printk.h>
 
-static jlos_task_t      *s_fpu_owner = nullptr;
+static jlos_task_t      *s_fpu_owner[JLOS_MAX_CPUS];
 static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
 static bool             s_init_template_done = false;
 
@@ -46,8 +47,10 @@ void jlos_arch_task_ext_init(jlos_task_t *task)
 void jlos_arch_task_ext_destroy(jlos_task_t *task)
 {
     uint32_t fl = jlos_spin_lock_irqsave(&s_fpu_lock);
-    if (s_fpu_owner == task) {
-        s_fpu_owner = nullptr;
+    for (uint32_t c = 0; c < JLOS_MAX_CPUS; c++) {
+        if (s_fpu_owner[c] == task) {
+            s_fpu_owner[c] = nullptr;
+        }
     }
     jlos_spin_unlock_irqrestore(&s_fpu_lock, fl);
 }
@@ -78,14 +81,15 @@ void jlos_arch_task_ext_trap_body(void)
     if (!curr) {
         return;
     }
+    uint32_t cpu = jlos_hal_get_cpu_id();
     uint32_t fl = jlos_spin_lock_irqsave(&s_fpu_lock);
-    if (s_fpu_owner == curr) {
+    if (s_fpu_owner[cpu] == curr) {
         goto clear_ts_and_out;
     }
-    if (s_fpu_owner) {
+    if (s_fpu_owner[cpu]) {
         __asm__ __volatile__(
             "fxsave %0\n\t"
-            : "=m"(s_fpu_owner->ext_state.raw)
+            : "=m"(s_fpu_owner[cpu]->ext_state.raw)
             :
             : "memory"
         );
@@ -96,7 +100,7 @@ void jlos_arch_task_ext_trap_body(void)
         : "m"(curr->ext_state.raw)
         : "memory"
     );
-    s_fpu_owner = curr;
+    s_fpu_owner[cpu] = curr;
     curr->ext_state.used = true;
 
 clear_ts_and_out:

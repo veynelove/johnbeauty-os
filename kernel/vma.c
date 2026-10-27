@@ -185,7 +185,7 @@ bool jlos_vma_remove_range(jlos_mm_t *mm, uintptr_t start, uintptr_t end)
                 }
                 *tail = *vma;
                 tail->start = ov_e;
-                tail->end = ov_s;
+                vma->end = ov_s;
                 jlos_rbtree_insert(&mm->vma_tree, &tail->rb_node, jlos_vma_compare);
             }
         }

@@ -9,17 +9,18 @@
 #include <common/types.h>
 #include <hal/spinlock.h>
 
-#define JLOS_PG_READ       0x1
-#define JLOS_PG_WRITE      0x2
-#define JLOS_PG_EXEC       0x4
-#define JLOS_PG_USER       0x8
-#define JLOS_PG_GLOBAL     0x10
-#define JLOS_PG_NOCACHE    0x20
+#define JLOS_PG_READ        0x1
+#define JLOS_PG_WRITE       0x2
+#define JLOS_PG_EXEC        0x4
+#define JLOS_PG_USER        0x8
+#define JLOS_PG_GLOBAL      0x10
+#define JLOS_PG_NOCACHE     0x20
 
-#define JLOS_PG_KERNEL_RO  (JLOS_PG_READ)
-#define JLOS_PG_KERNEL_RW  (JLOS_PG_READ | JLOS_PG_WRITE)
-#define JLOS_PG_USER_RO    (JLOS_PG_READ | JLOS_PG_USER)
-#define JLOS_PG_USER_RW    (JLOS_PG_READ | JLOS_PG_WRITE | JLOS_PG_USER)
+#define JLOS_PG_KERNEL_RO   (JLOS_PG_READ)
+#define JLOS_PG_KERNEL_ROX  (JLOS_PG_READ | JLOS_PG_EXEC)
+#define JLOS_PG_KERNEL_RW   (JLOS_PG_READ | JLOS_PG_WRITE)
+#define JLOS_PG_USER_RO     (JLOS_PG_READ | JLOS_PG_USER)
+#define JLOS_PG_USER_RW     (JLOS_PG_READ | JLOS_PG_WRITE | JLOS_PG_USER)
 
 #define JLOS_PAGE_SHIFT                 12
 #define JLOS_PAGE_SIZE                  (1UL << JLOS_PAGE_SHIFT)

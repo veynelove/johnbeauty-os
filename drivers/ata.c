@@ -54,10 +54,11 @@ void jlos_ata_identify(jlos_ata_t* self)
     jlos_io8_write(&self->lba_hi_port, 0);
     jlos_io8_write(&self->command_port, 0xEC);
     status = jlos_io8_read(&self->command_port);
-    while ((status & 0x80) == 0x80) {
+    uint32_t timeout = 0;
+    while ((status & 0x80) == 0x80 && timeout++ < JLOS_ATA_POLL_TIMEOUT) {
         status = jlos_io8_read(&self->command_port);
     }
-    if ((status & 0x01) == 0x01) {
+    if ((status & 0x80) == 0x80 || (status & 0x01) == 0x01) {
         return;
     }
     if ((status & 0x08) != 0x08) {
@@ -94,7 +95,7 @@ int jlos_ata_read28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size)
     jlos_io8_write(&self->command_port, 0x20);
 
     uint8_t status = jlos_io8_read(&self->command_port);
-    for (uint32_t timeout = 0; timeout < 100000; timeout++) {
+    for (uint32_t timeout = 0; timeout < JLOS_ATA_POLL_TIMEOUT; timeout++) {
         if (status & 0x01) { break; }
         if (!(status & 0x80) && (status & 0x08)) { break; }
         status = jlos_io8_read(&self->command_port);
@@ -139,7 +140,7 @@ void jlos_ata_write28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size
     jlos_io8_write(&self->command_port, 0x30);
 
     uint8_t status = jlos_io8_read(&self->command_port);
-    for (uint32_t timeout = 0; timeout < 100000; timeout++) {
+    for (uint32_t timeout = 0; timeout < JLOS_ATA_POLL_TIMEOUT; timeout++) {
         if (status & 0x01) { break; }
         if (!(status & 0x80) && (status & 0x08)) { break; }
         status = jlos_io8_read(&self->command_port);
@@ -159,7 +160,7 @@ void jlos_ata_write28(jlos_ata_t* self, uint32_t sector, uint8_t *data, int size
         jlos_io16_write(&self->data_port, 0x0000);
     }
     status = jlos_io8_read(&self->command_port);
-    for (uint32_t timeout = 0; timeout < 100000; timeout++) {
+    for (uint32_t timeout = 0; timeout < JLOS_ATA_POLL_TIMEOUT; timeout++) {
         if (status & 0x01) { break; }
         if (!(status & 0x80)) { break; }
         status = jlos_io8_read(&self->command_port);
@@ -172,7 +173,8 @@ void jlos_ata_flush(jlos_ata_t* self)
     jlos_io8_write(&self->command_port, 0xE7);
 
     uint8_t status = jlos_io8_read(&self->command_port);
-    while (((status & 0x80) == 0x80) && ((status & 0x01) != 0x01)) {
+    uint32_t timeout = 0;
+    while (((status & 0x80) == 0x80) && ((status & 0x01) != 0x01 && timeout++ < JLOS_ATA_POLL_TIMEOUT)) {
         status = jlos_io8_read(&self->command_port);
     }
 }

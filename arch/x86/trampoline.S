@@ -193,10 +193,10 @@ jlos_x86_trampoline_prot32:
     movl    (%ebx), %eax
     movl    %eax, %cr3
 
-    /* 设 EFER.LME: 必须在 CR0.PG 前, 否则 CPU 进 32 位 PAE 而非 IA-32e → triple fault */
+    /* 设 EFER.LME + NXE: 必须在 CR0.PG 前, 否则 CPU 进 32 位 PAE 而非 IA-32e → triple fault */
     movl    $0xC0000080, %ecx
     rdmsr
-    orl     $0x00000100, %eax
+    orl     $0x00000900, %eax
     wrmsr
 
     /* 开 PG(bit31) + WP(bit16): EFER.LME=1 + PG: 0→1 → 进入 IA-32e 长模式 */

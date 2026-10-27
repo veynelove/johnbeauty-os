@@ -1079,13 +1079,8 @@ int32_t jlos_signal_send(jlos_task_t *t, uint32_t sig)
         if (t == jlos_hal_current_task()) {
             jlos_process_exit(t, sig);
         }
-        JLOS_TASK_SET_ZOMBIE(t, sig);
-        if (g_task_manager_ptr) {
-            uint32_t flags = jlos_spin_lock_irqsave(&g_task_manager_ptr->manager_lock);
-            wake_waiter_locked(g_task_manager_ptr, t->pid);
-            jlos_spin_unlock_irqrestore(&g_task_manager_ptr->manager_lock, flags);
-        }
-        jlos_sched_set_need_resched_on(t->cpu);
+        t->signal_pending |= (1u << sig);
+        jlos_task_wakeup(t);
         return 0;
     }
     t->signal_pending |= (1u << sig);

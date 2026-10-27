@@ -148,7 +148,7 @@ void jlos_hal_smp_boot_aps(void)
 
     /* Identity-map trampoline 页: AP 开 PG 后仍在此低地址执行, 直到 ljmp 高半核 */
     bool map_ok = jlos_arch_map_entry(&s_kernel_paging_context, JLOS_X86_AP_TRAMPOLINE_PHYS,
-        JLOS_X86_AP_TRAMPOLINE_PHYS, JLOS_PG_KERNEL_RW);
+        JLOS_X86_AP_TRAMPOLINE_PHYS, JLOS_PG_KERNEL_RW | JLOS_PG_EXEC);
     jlos_hal_paging_flush_all_tlb();
     if (!map_ok) {
         printk_err("boot_aps: FATAL identity map failed\n");

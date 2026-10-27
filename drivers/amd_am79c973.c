@@ -141,6 +141,7 @@ void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *de
     jlos_hal_net_set_ip_address(&self->base_net, 0);
     self->base_net.inited = 1;
     jlos_hal_net_set_primary_dev(&self->base_net);
+    jlos_spinlock_init(&self->send_lock);
 }
 
 void jlos_amd_am79c973_destroy(jlos_amd_am79c973_t* self)
@@ -256,6 +257,7 @@ uintptr_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uintpt
 
 void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size)
 {
+    uint32_t fl = jlos_spin_lock_irqsave(&self->send_lock);
     int send_descriptor = self->current_send_buffer;
     self->current_send_buffer = (self->current_send_buffer + 1) % NUM_SEND_BUFFERS;
     if (size > 1518) {
@@ -296,6 +298,7 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size
             sent,
             sflags);
     }
+    jlos_spin_unlock_irqrestore(&self->send_lock, fl);
 }
 
 void jlos_amd_am79c973_receive(jlos_amd_am79c973_t* self)

@@ -58,6 +58,9 @@ static void console_putc_locked(char c)
     } else if (c == '\b') {
         if (s_cursor_col > 0) {
             s_cursor_col--;
+        } else if (s_cursor_row > 0) {
+            s_cursor_row--;
+            s_cursor_col = JLOS_CONSOLE_MAX_COLS - 1;
         }
         jlos_hal_display_putc_at(s_cursor_col, s_cursor_row, ' ', s_attr);
         history_write_cell(s_cursor_col, ' ', s_attr);

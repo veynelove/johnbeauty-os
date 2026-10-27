@@ -1,7 +1,5 @@
-/**
- * Copyright 2026 veyne.
- * SPDX-License-Identifier: Apache-2.0
- */
+@REM Copyright 2026 veyne.
+@REM SPDX-License-Identifier: Apache-2.0
 
 @echo off
 chcp 65001 >nul

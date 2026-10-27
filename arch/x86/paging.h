@@ -36,6 +36,7 @@
 #define JLOS_PTE_DIRTY                  0x040
 #define JLOS_PTE_PAT                    0x080
 #define JLOS_PTE_GLOBAL                 0x100
+#define JLOS_PTE_NX                     0x8000'0000'0000'0000ULL
 
 #define JLOS_PDE_PRESENT                0x001
 #define JLOS_PDE_WRITABLE               0x002
@@ -44,7 +45,7 @@
 #define JLOS_PDE_CACHE_DISABLE          0x010
 #define JLOS_PDE_ACCESSED               0x020
 #define JLOS_PDE_DIRTY                  0x040
-#define JLOS_PDE_4MB                    0x080
+#define JLOS_PDE_PS                    0x080
 #define JLOS_PDE_GLOBAL                 0x100
 
 #define JLOS_PTE_KERNEL_RO              (JLOS_PTE_PRESENT)
@@ -53,8 +54,8 @@
 #define JLOS_PTE_USER_RW                (JLOS_PTE_PRESENT | JLOS_PTE_WRITABLE | JLOS_PTE_USER)
 #define JLOS_PTE_USER_COW               (JLOS_PTE_PRESENT | JLOS_PTE_USER)
 
-#define JLOS_PDE_KERNEL_4MB             (JLOS_PDE_PRESENT | JLOS_PDE_4MB | JLOS_PDE_WRITABLE)
-#define JLOS_PDE_USER_4MB_RW            (JLOS_PDE_PRESENT | JLOS_PDE_4MB | JLOS_PDE_WRITABLE | JLOS_PDE_USER)
+#define JLOS_PDE_KERNEL_4MB             (JLOS_PDE_PRESENT | JLOS_PDE_PS | JLOS_PDE_WRITABLE)
+#define JLOS_PDE_USER_4MB_RW            (JLOS_PDE_PRESENT | JLOS_PDE_PS | JLOS_PDE_WRITABLE | JLOS_PDE_USER)
 
 #ifdef CONFIG_X86_64
 #define JLOS_PAGING_ADDR_MASK           0x000F'FFFF'FFFF'F000ULL

@@ -8,6 +8,7 @@
 
 #include <common/types.h>
 #include <kernel/sync.h>
+#include <hal/atomic.h>
 
 #define JLOS_KERNEL_PIPE_BUF_SIZE       4096
 #define JLOS_KERNEL_PIPE_BUF_MAX_SIZE   65536
@@ -24,7 +25,7 @@ typedef struct {
     jlos_semaphore_t    sem_read_items;
     jlos_mutex_t        mutex;
     bool                closed;
-    uint32_t            refcount;
+    jlos_atomic_t       refcount;
 } jlos_pipe_t;
 
 typedef struct jlos_msg_node_t {

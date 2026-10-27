@@ -56,15 +56,9 @@ bool jlos_tcp_socket_handle_tcp_message(jlos_tcp_socket_t* self, uint8_t *data, 
 void jlos_tcp_socket_send(jlos_tcp_socket_t* self, uint8_t *data, uint16_t size)
 {
     if (self->state != JLOS_TCP_ESTABLISHED) {
-        jlos_mutex_lock(&self->state_mutex);
-        while (self->state != JLOS_TCP_ESTABLISHED && self->state != JLOS_TCP_CLOSED) {
-            jlos_cond_wait(&self->state_cond, &self->state_mutex);
-        }
-        jlos_mutex_unlock(&self->state_mutex);
+        return;
     }
-    if (self->state == JLOS_TCP_ESTABLISHED) {
-        jlos_tcp_provider_send(self->backend, self, data, size, (JLOS_TCP_PSH | JLOS_TCP_ACK));
-    }
+    jlos_tcp_provider_send(self->backend, self, data, size, (JLOS_TCP_PSH | JLOS_TCP_ACK));
 }
 
 void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self)
@@ -242,6 +236,10 @@ static bool jlos_tcp_provider_on_internet_protocol_received(jlos_tcp_provider_t*
             default:
                 if (JLOS_SWAP_ENDIAN_32(msg->sequence_number) == socket->acknowledgement_number) {
                     uint32_t header_bytes = data_offset * 4;
+                    if (data_offset < JLOS_TCP_MIN_DATA_OFFSET || header_bytes > size) {
+                        reset = true;
+                        break;
+                    }
                     uint32_t payload_len = size - header_bytes;
                     printk_debug("payload len=%x%x bytes, calling handler\n",
                         (payload_len >> 8) & 0xFF, payload_len & 0xFF);
@@ -336,7 +334,13 @@ void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket
     msg->sequence_number = JLOS_SWAP_ENDIAN_32(socket->sequence_number);
     msg->window_size = JLOS_SWAP_ENDIAN_16(0xFFFF);
     msg->urgent_ptr = 0;
-    msg->options = ((flags & JLOS_TCP_SYN) != 0) ? JLOS_SWAP_ENDIAN_32(0x020405B4) : 0;
+    if (flags & JLOS_TCP_SYN) {
+        uint8_t *opt = (uint8_t *)msg + sizeof(jlos_tcp_header_t);
+        opt[0] = JLOS_TCP_MSS_OPTIONS_KIND;
+        opt[1] = JLOS_TCP_MSS_OPTION_LEN;
+        opt[2] = (uint8_t)(JLOS_TCP_MSS >> 8);
+        opt[3] = (uint8_t)(JLOS_TCP_MSS & 0xFF);
+    }
     socket->sequence_number += size;
     msg->checksum = 0;
     jlos_tcp_pseudo_header_t phdr;

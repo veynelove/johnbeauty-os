@@ -18,7 +18,7 @@
 extern char __pgtable_start[];
 
 jlos_paging_context_t               s_kernel_paging_context;
-static struct jlos_paging_context   *s_active_context;
+static jlos_paging_context_t        *s_active_context[JLOS_MAX_CPUS];
 static jlos_paging_table_alloc_fn   s_page_table_alloc = nullptr;
 static uint64_t                     *s_kernel_l0;
 
@@ -154,12 +154,12 @@ void jlos_hal_paging_tlb_shootdown_all(uintptr_t va)
 
 jlos_paging_context_t *jlos_hal_paging_get_active_context(void)
 {
-    return s_active_context;
+    return s_active_context[jlos_hal_get_cpu_id()];
 }
 
 void jlos_hal_paging_set_active_context(jlos_paging_context_t *ctx)
 {
-    s_active_context = ctx;
+    s_active_context[jlos_hal_get_cpu_id()] = ctx;
 }
 
 void jlos_mmu_init(void)
@@ -472,7 +472,7 @@ void jlos_arch_pte_make_ro(jlos_paging_context_t *ctx, uintptr_t va)
 bool jlos_arch_pte_replace(jlos_paging_context_t *ctx, uintptr_t va, uintptr_t pa, uint32_t prot)
 {
     uint64_t *pte = pte_walk(ctx, va);
-    if (!pte | !(*pte & JLOS_ARM64_DESC_VALID)) {
+    if (!pte || !(*pte & JLOS_ARM64_DESC_VALID)) {
         return false;
     }
     *pte = (pa & JLOS_ARM64_PTE_ADDR_MASK) | pte_prot(prot);
@@ -531,7 +531,7 @@ void jlos_arch_paging_context_tables_destroy(jlos_paging_context_t *ctx)
             jlos_page_frame_clear_owner_type((uint32_t)VIRT_TO_PHYS(l2));
             jlos_page_frame_free(l2);
         }
-        jlos_page_frame_clear_owner_type((uint32_t)PHYS_TO_VIRT(l1));
+        jlos_page_frame_clear_owner_type((uint32_t)VIRT_TO_PHYS(l1));
         jlos_page_frame_free(l1);
     }
     jlos_spin_unlock_irqrestore(&ctx->lock, flags);

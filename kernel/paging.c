@@ -143,11 +143,13 @@ bool jlos_paging_cow_range(jlos_paging_context_t *src, jlos_paging_context_t *ds
         jlos_arch_map_entry(dst, va, phys, src_prot & ~JLOS_PG_WRITE);
         jlos_arch_pte_make_ro(src, va);
     }
-    if (src == jlos_hal_paging_get_active_context()) {
-        jlos_hal_paging_flush_all_tlb();
-    }
     jlos_spin_unlock_irqrestore(&dst->lock, dst_fl);
     jlos_spin_unlock_irqrestore(&src->lock, src_fl);
+    for (uintptr_t va = start; va < end; va += JLOS_PAGE_SIZE) {
+        if (jlos_arch_pte_present(src, va)) {
+            jlos_hal_paging_tlb_shootdown_all(va);
+        }
+    }
     return true;
 }
 
@@ -214,7 +216,7 @@ void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
     if (present && write && fault_addr < USER_SPACE_LIMIT) {
         uintptr_t page_addr = JLOS_PAGE_ALIGN_DOWN(fault_addr);
         uint32_t fl = jlos_spin_lock_irqsave(&ctx->lock);
-uintptr_t old_phys = jlos_arch_get_phys_entry(ctx, page_addr);
+        uintptr_t old_phys = jlos_arch_get_phys_entry(ctx, page_addr);
         if (old_phys) {
             uint32_t cow_prot = jlos_arch_pte_get_prot(ctx, page_addr) | JLOS_PG_WRITE;
             uint8_t refcount = jlos_page_frame_refcount_get((uint32_t)old_phys);

@@ -17,8 +17,8 @@ else ifeq ($(JLOS_BITS),32)
   ARCH_CFLAGS  := -m32 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx
   ARCH_LDFLAGS := -m elf_i386
   JLOS_COMPDB_TARGET := --target=i386-none-elf
-  TARGET_BIN   := johnkernel-x86.bin
-  TARGET_ISO   := johnkernel-x86.iso
+  TARGET_BIN   := johnkernel-x86_32.bin
+  TARGET_ISO   := johnkernel-x86_32.iso
 else
   $(error not support x86 bit width: BITS=$(BITS), you can select 32/64)
 endif

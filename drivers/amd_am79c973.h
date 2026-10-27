@@ -14,6 +14,7 @@
 #include <hal/pci.h>
 #include <hal/io.h>
 #include <hal/net.h>
+#include <hal/spinlock.h>
 
 typedef struct jlos_amd_am79c973 jlos_amd_am79c973_t;
 
@@ -57,6 +58,7 @@ struct jlos_amd_am79c973 {
     uint8_t                         recv_buffer_desc_memory[NUM_RECV_BUFFERS * sizeof(jlos_amd_buffer_descriptor_t) + 15];
     uint8_t                         recv_buffers[NUM_RECV_BUFFERS][2048] __attribute__((aligned(2048)));
     uint8_t                         current_recv_buffer;
+    jlos_spinlock_t                 send_lock;
 };
 
 void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *dev, jlos_irq_manager_t *interrupts);

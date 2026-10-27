@@ -44,7 +44,19 @@
 8. **生产级内核, vmplayer测试，目标运行在硬件上**
 9. **魔法字面量用语义宏命名**：裸数值（如 512/256/1024）用有语义的宏替代（如 `JLOS_BLOCK_SECTOR_SIZE`、`JLOS_IDT_ENTRIES`）；KB/MB 等计算机科学定义好的单位换算（如 `1024` KB→字节、`4*1024*1024` 4MB 对齐）不需定义宏。
 10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
+11. **AIOS 无崩溃约束**：崩溃理论不允许——内核**绝不采用 `halt`/`panic` 式终止**。任何异常/错误场景都必须有恢复处理（错误隔离、子系统重启、降级运行、状态回滚），保证系统持续运行。断言语义 = **记录 + 恢复/告警**，**绝不终止**；外部输入用错误码（EFAULT/EINVAL）。
 12. **不以收益或工作量作为取舍依据**：经典结构 + 性能优先是唯一准绳；即使当前负载小、短期收益不明显、改动较大，只要经典结构正确、性能更优就照做，不做收益/工作量导向的折中或过渡方案。
+
+***
+
+## 升级方向（长期愿景）
+
+| 方向 | 说明 | 前置依赖 | 备注 |
+| --- | --- | --- | --- |
+| **AIOS（AI Operating System）** | 从「生产级内核」演进为面向 AI/机器人负载的操作系统内核；硬约束：无崩溃、只做错误恢复 | P1-P4 地基 + 实时调度类 + tickless/hrtimer + 底半部 + 低延迟 IPC + 可靠资源保障 | 用户明确规划做 AIOS |
+| **内核态机器人子系统** | 内核完善后在内核态引入机器人子系统（调度/控制/感知/执行器配套） | AIOS 地基 + 实时性 + 资源隔离 + 确定性调度 | 后续独立阶段，与 P1-P5 并行不冲突 |
+
+> 详见记忆文件 `project_jlos_aios_vision_robotics.md`。
 
 ***
 
@@ -915,6 +927,84 @@ SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且
 | #   | 问题                       | 说明                                                                               |
 | --- | -------------------------- | ---------------------------------------------------------------------------------- |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
+
+***
+
+***
+
+## 全项目生产级差距与后续升级路线（2026-10-26 扫描）
+
+> 依据「优化原则」第 1 条（先修 BUG）与第 5/10 条（对齐成熟系统最终形态），对 kernel/arch/hal/net/fs/drivers/构建 做代码级扫描。以下为**待办路线**，非已完成项。
+
+### 1. 已核验的正确性 Bug（逐行核对过源码）
+
+| # | 位置 | 问题 | 影响 |
+| --- | --- | --- | --- |
+| BUG-1 | kernel/vma.c:186-188 | 中间挖洞拆分 `tail->start=ov_e; tail->end=ov_s`（区间反向），丢失 `[ov_e, 原 end)` | 非法 VMA，mmap 语义错 |
+| BUG-2 | arch/arm64/paging.c:475 | `if (!pte \| !(*pte & VALID))` 用按位或（不短路），`pte==NULL` 时 `*pte` 解引用崩溃 | arm64 缺页路径崩溃 |
+| BUG-3 | arch/arm64/paging.c:534 | 销毁页表 l1 用 `PHYS_TO_VIRT(l1)`（已是 VA），l2/l3 用 `VIRT_TO_PHYS` —— 二次转换 | 地址错乱 |
+| BUG-4 | arch/x86/paging.c:404 | 释放 2MB 大页用 `JLOS_PFA_MAX_ORDER`(=10/4MB)，阶数错配 | refcount 漂移/双释放 |
+| BUG-5 | net/tcp.c:339 + net/tcp.h:39-49 | 非 SYN 时 `push(20)` 但结构 24B（含 options），`msg->options=0` 越界写 4 字节到 payload 起始 | TCP 数据包前 4 字节被清零 |
+
+### 2. 高置信 Bug（待逐条复核）
+
+| 位置 | 问题 |
+| --- | --- |
+| kernel/multitask.c:103-111 vs :78-84 | 老化失效：入队重置 `last_ready_tick`，boost 恒 0，低优先级无保护 |
+| kernel/multitask.c:665-679, :920-950 | 僵尸回收缺陷：调度器无条件 free 僵尸（不校验父 wait、不回传 exit code）+ 父在跑时子不入僵尸链 → 泄漏 |
+| kernel/syscall.c:916-944 + kernel/paging.c:192-194 | copy_from/to_user 逐字节无异常表，非法用户指针 → 内核 halt（用户可 DoS） |
+| net/tcp.c:58-64 | `cond_wait` 可能由接收中断路径调用 → 中断上下文睡眠 |
+| drivers/ata.c:57-59, :174-177 | 轮询 BSY 无计数上限，设备异常即死循环 |
+| drivers/amd_am79c973.c:259-285 | TX 忙等（50 万次 NOP）且 `current_send_buffer` 无锁，SMP 竞态 |
+| kernel/ipc.c:133-145 | pipe refcount 非原子 |
+| kernel/multitask.c:1070-1093 | SIGKILL 跨 CPU 直接改目标任务状态，无同步 |
+| net/ipv4.c:49,61 / net/tcp.c:244-245 | 用报文 IHL/data_offset 直接 pull，未校验边界 → 畸形包越界 |
+| net/ipv4.c:125-130 + net/arp.c:136-144 | ARP 未解析返回广播 MAC 即丢包 → TCP 首 SYN 发不出 |
+| fs/vfs.c:498-514 | inode 缓存失效：每次 lookup 新建 inode（不查哈希）→ 泄漏 |
+| fs/page_cache.c:329 | `sync_all` 无任何调用者，仅 LRU 淘汰回写 → 掉电丢数据 |
+| kernel/paging.c:146-148 | COW 后仅刷 src TLB，未对 dst 所在其他 CPU shootdown |
+
+### 3. 四大代际缺口（对齐生产级内核）
+
+| # | 缺口 | 影响 |
+| --- | --- | --- |
+| G1 | 无底半部（softirq/tasklet/workqueue/内核线程），网络整栈跑硬中断（drivers/amd_am79c973.c:240、net/etherframe.c:53） | 关中断不可控、延迟/吞吐瓶颈 |
+| G2 | 无页回收（reclaim/shrinker/OOM/watermark/swap） | 内存耗尽即杀进程或 halt |
+| G3 | 页缓存无后台回写（无 flusher 线程/周期 sync） | 掉电丢数据 |
+| G4 | 块层无 request queue/合并/电梯/异步（ATA 全 PIO 逐扇区轮询 hal/block.c:55-80） | I/O 阻塞、无批量/并发 |
+
+### 4. 跨架构不一致（正确性，非优化）
+
+| 项 | x86 | arm64 |
+| --- | --- | --- |
+| paging active context | per-CPU 数组（paging.c:31） | 全局单例（paging.c:21）—— SMP 错误 |
+| FPU owner | 全局 + 全局锁（fpu.c:16-17） | per-CPU（fpu.c:21） |
+| NX/SMEP/SMAP/PCID | 全缺 | PXN/UXN/PAN 齐全 |
+
+### 5. 工程化缺口（稳定性基础设施）
+
+| 缺口 | 现状 |
+| --- | --- |
+| 头文件依赖跟踪 | Makefile 无 `-MMD/-MD`，改头文件不重编（靠 clean 兜） |
+| 告警门 | 无 `-Werror` |
+| CI | 无 |
+| sanitizer | 无 KASAN/UBSAN |
+| 崩溃诊断 | 只有 `for(;;) halt()`，无 panic/回溯/lockup |
+| 测试集成 | 无 `make test`，开关硬编码 config.h |
+| kallsyms / 静态分析 / Kconfig | 无 |
+
+### 6. 分阶段实施路线
+
+| 阶段 | 内容 | 验收 |
+| --- | --- | --- |
+| P0 修 bug | 第 1 节 5 条 + 第 2 节可复现项 | 各加回归用例，54/54 |
+| P1 工程化地基 | `-MMD` 头依赖 + `make test` + `-Werror` + 调试基础设施（断言=记录+恢复·不 halt、错误回溯、lockup 自愈） | 回归可自动判定 |
+| P2 跨架构一致性 + 安全 | arm64 active ctx / x86 FPU per-CPU；异常表 uaccess；x86 NX/SMEP/SMAP | arm64 `-smp 4` 稳定 + 安全用例 |
+| P3 底半部 + 网络 | softirq/内核线程 + NAPI；socket syscall + TCP 完整化 | 吞吐可测，用户态 socket 通 |
+| P4 内存完整性 | 页回收/watermark/OOM + 回写线程 + 块层 request queue | 内存压力/掉电一致性用例 |
+| P5 HAL 收口 + fs | hal/block.c 反依赖清除、架构宏上提、arm64 stub 补齐、VFS 完善 | 分层合规检查通过 |
+
+> **断言语义（对齐 AIOS 无崩溃约束）**：断言采用 debug/release 分层编译；动作固定为**记录 + 恢复/告警**，**绝不 halt/panic**。外部输入用错误码，内部不变量用"记录 + 恢复"。详见「升级方向」栏。
 
 ***
 

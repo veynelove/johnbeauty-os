@@ -10,6 +10,11 @@
 #include <dsa/hash_chain.h>
 #include <kernel/sync.h>
 
+#define JLOS_TCP_MSS                1460
+#define JLOS_TCP_MSS_OPTIONS_KIND   2
+#define JLOS_TCP_MSS_OPTION_LEN     4
+#define JLOS_TCP_MIN_DATA_OFFSET    5
+
 typedef enum {
     JLOS_TCP_CLOSED = 0,
     JLOS_TCP_LISTEN,
@@ -45,7 +50,6 @@ typedef struct {
     uint16_t window_size;
     uint16_t checksum;
     uint16_t urgent_ptr;
-    uint32_t options;
 } __attribute__((packed)) jlos_tcp_header_t;
 
 #define JLOS_TCP_GET_DATA_OFFSET(msg) (((((uint8_t*)&(msg)->data_offset_flags)[0]) >> 4) & 0x0F)

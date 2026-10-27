@@ -500,16 +500,26 @@ jlos_vfs_inode_t *jlos_vfs_inode_alloc(jlos_vfs_super_block_t *sb, uint32_t ino)
     if (!sb || !sb->ops || !sb->ops->alloc_inode) {
         return nullptr;
     }
+    vfs_inode_key_t key = {.sb = sb, .ino = ino};
+    uint32_t fl = jlos_spin_lock_irqsave(&s_vfs_lock);
+    jlos_hash_node_t *node = jlos_hash_chain_see(&s_inode_hash, &key);
+    if (node) {
+        jlos_vfs_inode_t *cached = container_of(node, jlos_vfs_inode_t, hash_node);
+        jlos_atomic_inc(&cached->ref_count);
+        jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
+        return cached;
+    }
     jlos_vfs_inode_t *inode = sb->ops->alloc_inode(sb);
     if (!inode) {
+        jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
         return nullptr;
     }
     inode->ino = ino;
     inode->sb = sb;
     jlos_atomic_set(&inode->ref_count, 1);
     jlos_fs_address_space_init(&inode->address_space, inode, sb->block_dev);
-    vfs_inode_key_t key = {.sb = sb, .ino = ino};
     jlos_hash_chain_insert(&s_inode_hash, &key, &inode->hash_node);
+    jlos_spin_unlock_irqrestore(&s_vfs_lock, fl);
     return inode;
 }
 

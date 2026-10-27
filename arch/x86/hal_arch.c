@@ -148,8 +148,10 @@ void jlos_hal_cpu_relax(void)
 }
 void jlos_hal_uaccess_begin(void)
 {
+    __asm__ __volatile__("stac" ::: "memory");
 }
 
 void jlos_hal_uaccess_end(void)
 {
+    __asm__ __volatile__("clac" ::: "memory");
 }
