@@ -10,6 +10,7 @@
 #include <kernel/page_frame_allocator.h>
 #include <kernel/multitask.h>
 #include <kernel/vma.h>
+#include <kernel/exception_recover.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
 #include <kernel/printk.h>
@@ -178,6 +179,11 @@ bool jlos_paging_is_user_accessible(jlos_paging_context_t *ctx, uintptr_t virtua
 
 void jlos_paging_page_fault_handler(jlos_irq_context_t *context)
 {
+    uintptr_t fixup = jlos_er_extable_lookup(context->instruction_pointer);
+    if (fixup) {
+        context->instruction_pointer = fixup;
+        return;
+    }
     uintptr_t fault_addr = jlos_hal_paging_get_fault_addr();
     uint32_t error_code = context->error;
     bool present = error_code & 0x01;

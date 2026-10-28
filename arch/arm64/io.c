@@ -7,7 +7,6 @@
 #include <hal/hal.h>
 #include <common/types.h>
 
-
 #define JLOS_MMIO_BARRIER_DMB_SY  "dmb sy"
 
 static uint8_t jlos_arm64_mmio_read8(const volatile void *addr)

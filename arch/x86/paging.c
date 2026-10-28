@@ -17,6 +17,12 @@
 #define JLOS_KERNEL_LOG_SUBSYS "paging"
 #include <kernel/printk.h>
 
+#ifdef CONFIG_X86_64
+static bool s_pcide_enabled;
+static uint32_t s_next_pcid = 1;
+static jlos_spinlock_t s_pcid_lock = JLOS_SPINLOCK_INIT;
+#endif
+
 extern uint32_t                     _boot_end_phys;
 extern uint32_t                     _kernel_end_phys;
 
@@ -427,6 +433,7 @@ void jlos_arch_paging_context_tables_destroy(jlos_paging_context_t *ctx)
     }
     jlos_spin_unlock_irqrestore(&ctx->lock, flags);
     jlos_page_frame_free(ctx->root);
+    jlos_hal_paging_asid_free(ctx->asid);
     jlos_paging_context_init(ctx);
 }
 
@@ -454,6 +461,7 @@ void jlos_arch_paging_context_tables_clone(jlos_paging_context_t *dst, jlos_pagi
         dst_pml4->entries[i] = src_pml4e;
     }
     jlos_spin_unlock_irqrestore(&src->lock, flags);
+    dst->asid = jlos_hal_paging_asid_alloc();
 }
 
 void jlos_arch_paging_initialize_kernel(jlos_paging_table_alloc_fn alloc_fn)
@@ -1124,17 +1132,15 @@ void jlos_hal_paging_disable(void)
 
 void jlos_hal_paging_switch(uintptr_t root_physical_addr, uint32_t asid)
 {
-    (void)asid;
 #ifdef CONFIG_X86_64
-    __asm__ __volatile__(
-        "movq %0, %%cr3\n\t"
-        : : "r"((uint64_t)root_physical_addr) : "memory"
-    );
+    uintptr_t cr3 = root_physical_addr;
+    if (s_pcide_enabled) {
+        cr3 |= (asid & JLOS_PAGING_PCID_MASK);
+    }
+    __asm__ __volatile__("movq %0, %%cr3\n\t" : : "r"((uint64_t)cr3) : "memory");
 #else
-    __asm__ __volatile__(
-        "movl %0, %%cr3\n\t"
-        : : "r"((uint32_t)root_physical_addr) : "memory"
-    );
+    (void)asid;
+    __asm__ __volatile__("movl %0, %%cr3\n\t" : : "r"((uint32_t)root_physical_addr) : "memory");
 #endif
 }
 
@@ -1173,6 +1179,12 @@ void jlos_hal_paging_flush_all_tlb(void)
         : "memory"
     );
 #endif
+}
+
+void jlos_hal_paging_flush_all_tlb_shootdown(void)
+{
+    jlos_hal_paging_flush_all_tlb();
+    jlos_hal_paging_tlb_shootdown_all(JLOS_PAGING_TLB_FLUSH_ALL);
 }
 
 uintptr_t jlos_hal_paging_get_fault_addr(void)
@@ -1227,9 +1239,9 @@ void jlos_hal_paging_enable_global_pages(void)
     uint64_t cr4;
     __asm__ __volatile__(
         "movq %%cr4, %0\n\t"
-        "orq $0x80, %0\n\t"
+        "orq $1, %0\n\t"
         "movq %0, %%cr4\n\t"
-        : "=r"(cr4) : : "memory"
+        : "=r"(cr4) : "i"(JLOS_PAGING_CR4_PCIDE) : "memory"
     );
     uint32_t max_leaf, ebx, ecx, edx;
     __asm__ __volatile__("cpuid" : "=a"(max_leaf), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0));
@@ -1251,6 +1263,20 @@ void jlos_hal_paging_enable_global_pages(void)
             );
         }
     }
+    uint32_t a, b, c, d;
+    __asm__ __volatile__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(1));
+    if (c & JLOS_PAGING_CPUID_ECX_PCID) {          /* CPUID.01H:ECX[17] = PCID */
+        uint64_t cr4v;
+        __asm__ __volatile__(
+            "movq %%cr4, %0\n\t"
+            "orq $1, %0\n\t"   /* CR4.PCIDE (bit17) */
+            "movq %0, %%cr4\n\t"
+            : "=r"(cr4v) : "i"(JLOS_PAGING_CR4_PCIDE) : "memory"
+        );
+        s_pcide_enabled = true;
+        uint64_t cr3v;
+        __asm__ __volatile__("movq %%cr3, %0\n\t" "movq %0, %%cr3\n\t" : "=r"(cr3v) : : "memory");
+    }
 #else
     uint32_t cr4;
     __asm__ __volatile__(
@@ -1264,7 +1290,21 @@ void jlos_hal_paging_enable_global_pages(void)
 
 uint32_t jlos_hal_paging_asid_alloc(void)
 {
+#ifdef CONFIG_X86_64
+    if (!s_pcide_enabled) {
+        return 0;
+    }
+    uint32_t fl = jlos_spin_lock_irqsave(&s_pcid_lock);
+    uint32_t pcid = s_next_pcid++;
+    if (s_next_pcid > JLOS_PAGING_PCID_MAX) {
+        s_next_pcid = 1;
+        jlos_hal_paging_flush_all_tlb_shootdown();
+    }
+    jlos_spin_unlock_irqrestore(&s_pcid_lock, fl);
+    return pcid;
+#else
     return 0;
+#endif
 }
 
 void jlos_hal_paging_asid_free(uint32_t asid)

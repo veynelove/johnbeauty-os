@@ -43,6 +43,10 @@ SECTIONS
 
     .data : ALIGN(8) {
         *(.data .data.*)
+        . = ALIGN(8);
+        __start_ex_table = .;
+        KEEP(*(.ex_table))
+        __stop_ex_table = .;
         . = ALIGN(16);
         __initcall0_start = .; KEEP(*(.initcall0))  __initcall0_end = .;
         . = ALIGN(16);

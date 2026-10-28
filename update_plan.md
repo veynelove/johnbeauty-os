@@ -46,6 +46,7 @@
 10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
 11. **AIOS 无崩溃约束**：崩溃理论不允许——内核**绝不采用 `halt`/`panic` 式终止**。任何异常/错误场景都必须有恢复处理（错误隔离、子系统重启、降级运行、状态回滚），保证系统持续运行。断言语义 = **记录 + 恢复/告警**，**绝不终止**；外部输入用错误码（EFAULT/EINVAL）。
 12. **不以收益或工作量作为取舍依据**：经典结构 + 性能优先是唯一准绳；即使当前负载小、短期收益不明显、改动较大，只要经典结构正确、性能更优就照做，不做收益/工作量导向的折中或过渡方案。
+13. **一个源文件 = 一个子系统；新增文件必须归属明确子系统**：顶层目录（`kernel/`、`fs/`、`net/`、`hal/`、`drivers/`、`dsa/`、`arch/`、`common/`）下每个 `.c` 对应一个明确的（子）子系统，不得存在"无处安放的零散工具"文件。新增文件前必须能回答"它属于哪个（子）子系统"；归属判定看**语义 + 唯一消费者 + 生命周期 + 内聚/规模**，不看谁生产数据。确为新子系统才单开，否则并入所属子系统文件。
 
 ***
 
@@ -936,6 +937,10 @@ SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且
 
 > 依据「优化原则」第 1 条（先修 BUG）与第 5/10 条（对齐成熟系统最终形态），对 kernel/arch/hal/net/fs/drivers/构建 做代码级扫描。以下为**待办路线**，非已完成项。
 
+> **进度（2026-10-27）**：**P0 全部完成** —— 第 1 节 5 条硬 bug 与第 2 节高置信项均已修复并核验（x86 4 核 + arm64 `-smp 4` 均 54/54）。其中「老化失效」「僵尸回收」经逐行复核为**误报**（设计自洽），未改动。P2 跨架构一致性/安全主体完成（见下）。
+>
+> **进度（2026-10-28）**：**P2 全部完成** —— P2-1 异常表 uaccess（汇编 usercopy + `.ex_table`，查找/排序用新增 `dsa/search.c`、`dsa/sort.c`，基础设施归新子系统 `kernel/exception_recover.c`，中断返回写回 IP）；P2-2 PCID（x86-64 启用 CR4.PCIDE + per-ctx PCID + 复用前全核失效独立原语 `jlos_hal_paging_flush_all_tlb_shootdown`，arm64 复用 `tlbi vmalle1is`）。**三架构均 54/54**（期间修掉 32 位 cdecl `esi/edi` 未保存 bug）。
+
 ### 1. 已核验的正确性 Bug（逐行核对过源码）
 
 | # | 位置 | 问题 | 影响 |
@@ -975,31 +980,29 @@ SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且
 
 ### 4. 跨架构不一致（正确性，非优化）
 
-| 项 | x86 | arm64 |
-| --- | --- | --- |
-| paging active context | per-CPU 数组（paging.c:31） | 全局单例（paging.c:21）—— SMP 错误 |
-| FPU owner | 全局 + 全局锁（fpu.c:16-17） | per-CPU（fpu.c:21） |
-| NX/SMEP/SMAP/PCID | 全缺 | PXN/UXN/PAN 齐全 |
+| 项 | x86 | arm64 | 状态 |
+| --- | --- | --- | --- |
+| paging active context | per-CPU 数组 | per-CPU 数组 | ✅ 已统一 |
+| FPU owner | per-CPU 数组 | per-CPU | ✅ 已统一 |
+| NX/SMEP/SMAP/PCID | NX + SMEP + SMAP + PCID 已启用 | PXN/UXN/PAN + ASID | ✅ 已统一 |
 
 ### 5. 工程化缺口（稳定性基础设施）
 
 | 缺口 | 现状 |
 | --- | --- |
-| 头文件依赖跟踪 | Makefile 无 `-MMD/-MD`，改头文件不重编（靠 clean 兜） |
-| 告警门 | 无 `-Werror` |
-| CI | 无 |
-| sanitizer | 无 KASAN/UBSAN |
-| 崩溃诊断 | 只有 `for(;;) halt()`，无 panic/回溯/lockup |
-| 测试集成 | 无 `make test`，开关硬编码 config.h |
-| kallsyms / 静态分析 / Kconfig | 无 |
+| 告警门 | ✅ 已加 `-Werror` |
+| 头文件依赖跟踪 | 决定不做（`make clean` 兜底） |
+| 崩溃诊断 | 仅 `for(;;) halt()`；AIOS 下将改为"记录 + 恢复" |
+| 测试集成 | 无 `make test`（断言/自动化方案暂缓，待重议） |
+| CI / sanitizer / kallsyms / 静态分析 / Kconfig | 无 |
 
 ### 6. 分阶段实施路线
 
 | 阶段 | 内容 | 验收 |
 | --- | --- | --- |
-| P0 修 bug | 第 1 节 5 条 + 第 2 节可复现项 | 各加回归用例，54/54 |
-| P1 工程化地基 | `-MMD` 头依赖 + `make test` + `-Werror` + 调试基础设施（断言=记录+恢复·不 halt、错误回溯、lockup 自愈） | 回归可自动判定 |
-| P2 跨架构一致性 + 安全 | arm64 active ctx / x86 FPU per-CPU；异常表 uaccess；x86 NX/SMEP/SMAP | arm64 `-smp 4` 稳定 + 安全用例 |
+| P0 修 bug | ✅ 完成（2026-10-27）：第 1 节 5 条 + 第 2 节高置信项 | x86/arm64 均 54/54 |
+| P1 工程化地基 | 部分：`-Werror` 已加；`-MMD`/断言/`make test` 暂缓（方案待重议） | 回归仍人工判定 |
+| P2 跨架构一致性 + 安全 | ✅ 完成（2026-10-28）：arm64 active ctx / x86 FPU per-CPU、NX/SMEP/SMAP、COW 跨核 shootdown、signal uaccess、**异常表 uaccess**、**PCID** | x86-64/x86-32/arm64 均 54/54 |
 | P3 底半部 + 网络 | softirq/内核线程 + NAPI；socket syscall + TCP 完整化 | 吞吐可测，用户态 socket 通 |
 | P4 内存完整性 | 页回收/watermark/OOM + 回写线程 + 块层 request queue | 内存压力/掉电一致性用例 |
 | P5 HAL 收口 + fs | hal/block.c 反依赖清除、架构宏上提、arm64 stub 补齐、VFS 完善 | 分层合规检查通过 |

@@ -10,6 +10,7 @@
 #include <arch/x86/lapic.h>
 #include <arch/x86/smp.h>
 #include <arch/x86/ioapic.h>
+#include <arch/x86/paging.h>
 #include <hal/paging.h>
 #include <hal/irq.h>
 #include <hal/ext_state.h>
@@ -296,6 +297,7 @@ uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint32_t interrup
         jlos_irq_context_t context;
         jlos_irq_context_init(&context, esp);
         jlos_paging_page_fault_handler(&context);
+        ((jlos_x86_regs_t *)esp)->eip = context.instruction_pointer;
         jlos_signal_deliver_check(esp);
         return esp;
     }
@@ -303,7 +305,12 @@ uintptr_t jlos_irq_manager_do_handle(jlos_irq_manager_t* self, uint32_t interrup
     if (interrupt >= JLOS_ARCH_IPI_VECTOR_FIRST) {
         jlos_arch_lapic_eoi();
         if (interrupt == JLOS_ARCH_IPI_TLB_SHOOTDOWN_VECTOR) {
-            jlos_hal_paging_flush_tlb(this_cpu_read(jlos_cpu_tlb_flush_va));
+            uintptr_t flush_va = this_cpu_read(jlos_cpu_tlb_flush_va);
+            if (flush_va == JLOS_PAGING_TLB_FLUSH_ALL) {
+                jlos_hal_paging_flush_all_tlb();
+            } else {
+                jlos_hal_paging_flush_tlb(flush_va);
+            }
             this_cpu_write(jlos_cpu_tlb_flush_done, true);
         } else if (interrupt == JLOS_ARCH_IPI_RESCHEDULE_VECTOR) {
             if (self->task_manager && jlos_need_resched()) {

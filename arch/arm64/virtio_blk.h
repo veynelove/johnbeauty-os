@@ -25,8 +25,8 @@ typedef struct {
 } jlos_virtio_blk_req_t;
 
 typedef struct {
-    jlos_virtio_blk_req_t req;
-    uint8_t              status;
+    jlos_virtio_blk_req_t   req;
+    uint8_t                 status;
 } jlos_virtio_blk_dma_t;
 
 typedef struct {

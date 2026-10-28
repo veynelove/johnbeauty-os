@@ -23,6 +23,9 @@ void jlos_hal_cpu_relax(void);
 void jlos_hal_uaccess_begin(void);
 void jlos_hal_uaccess_end(void);
 
+long jlos_hal_raw_copy_from_user(void *dst, const void *src, size_t n);
+long jlos_hal_raw_copy_to_user(void *dst, const void *src, size_t n);
+
 void jlos_hal_arch_display_register(void);
 void jlos_hal_arch_display_init_fb(void);
 

@@ -164,6 +164,7 @@ void jlos_arm64_sync_dispatch(jlos_arm64_pt_regs_t *frame)
         jlos_irq_context_t context;
         jlos_irq_context_init(&context, (uintptr_t)frame);
         jlos_paging_page_fault_handler(&context);
+        frame->pc = context.instruction_pointer;
         jlos_signal_deliver_check(frame);
         return;
     }

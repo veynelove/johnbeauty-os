@@ -48,6 +48,11 @@ void jlos_hal_paging_flush_all_tlb(void)
     );
 }
 
+void jlos_hal_paging_flush_all_tlb_shootdown(void)
+{
+    jlos_hal_paging_flush_all_tlb();
+}
+
 uintptr_t jlos_hal_paging_get_fault_addr(void)
 {
     uintptr_t far;

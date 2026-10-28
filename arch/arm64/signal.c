@@ -9,7 +9,6 @@
 #include <arch/arm64/interrupts.h>
 #include <arch/arm64/pt_regs.h>
 
-
 static const uint32_t s_sigreturn_code[] = {
     0xd2800008 | (JLOS_SYSCALL_SIGRETURN << 5),
     0xd4000001,

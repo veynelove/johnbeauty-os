@@ -918,14 +918,10 @@ bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)
     if (!jlos_access_ok(usr_src, n)) {
         return false;
     }
-    uint8_t *d = (uint8_t *)dst;
-    const uint8_t *s = (const uint8_t *)usr_src;
     jlos_hal_uaccess_begin();
-    for (size_t i = 0; i < n; i++) {
-        d[i] = s[i];
-    }
+    long left = jlos_hal_raw_copy_from_user(dst, usr_src, n);
     jlos_hal_uaccess_end();
-    return true;
+    return left == 0;
 }
 
 bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
@@ -933,14 +929,10 @@ bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
     if (!jlos_access_ok(usr_dst, n)) {
         return false;
     }
-    uint8_t *d = (uint8_t *)usr_dst;
-    const uint8_t *s = (const uint8_t *)ker_src;
     jlos_hal_uaccess_begin();
-    for (size_t i = 0; i < n; i++) {
-        d[i] = s[i];
-    }
+    long left = jlos_hal_raw_copy_to_user(usr_dst, ker_src, n);
     jlos_hal_uaccess_end();
-    return true;
+    return left == 0;
 }
 
 JLOS_INITCALL(JLOS_INITCALL_DEVICE, jlos_syscall_handler_init);
