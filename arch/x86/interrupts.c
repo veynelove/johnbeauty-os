@@ -21,6 +21,7 @@
 #include <kernel/paging.h>
 #include <kernel/hrtimer.h>
 #include <kernel/multitask.h>
+#include <kernel/softirq.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
 #include <kernel/printk.h>
@@ -266,10 +267,12 @@ void jlos_irq_manager_deactivate(jlos_irq_manager_t* self)
 
 uintptr_t jlos_irq_manager_handle(uint32_t interrupt, uintptr_t esp)
 {
-    if (jlos_active_irq_manager != nullptr) {
-        return jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
+    uintptr_t ret = esp;
+    if (jlos_active_irq_manager) {
+        ret = jlos_irq_manager_do_handle(jlos_active_irq_manager, interrupt, esp);
     }
-    return esp;
+    jlos_softirq_run_pending();
+    return ret;
 }
 
 uint16_t jlos_irq_manager_hw_offset(jlos_irq_manager_t* self)

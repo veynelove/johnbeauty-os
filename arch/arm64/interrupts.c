@@ -17,6 +17,7 @@
 #include <kernel/initcall.h>
 #include <kernel/multitask.h>
 #include <kernel/paging.h>
+#include <kernel/softirq.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "irq"
 #include <kernel/printk.h>
@@ -145,6 +146,7 @@ void jlos_arm64_irq_dispatch(jlos_arm64_pt_regs_t *frame)
     jlos_irq_manager_do_handle(mgr, intid, (uintptr_t)frame);
     jlos_arch_gic_irq_eoi(intid);
     jlos_signal_deliver_check(frame);
+    jlos_softirq_run_pending();
 }
 
 void jlos_arm64_sync_dispatch(jlos_arm64_pt_regs_t *frame)

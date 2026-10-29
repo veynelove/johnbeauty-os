@@ -121,6 +121,7 @@ typedef struct jlos_task {
     uint32_t                signal_pending;
     uintptr_t               signal_handlers[JLOS_SIGNAL_NUM];
     uint32_t                cpu;
+    void                    *kthread;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {

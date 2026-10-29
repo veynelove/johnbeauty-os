@@ -17,6 +17,7 @@
 #include <kernel/initcall.h>
 #include <kernel/timek.h>
 #include <kernel/hrtimer.h>
+#include <kernel/kthread.h>
 #include <fs/elf.h>
 #include <fs/vfs.h>
 
@@ -194,6 +195,7 @@ void jlos_task_init_1(jlos_task_t *self, const char *name)
     self->sleep_node.expires = 0;
     self->slot_idx = -1;
     self->cpu = jlos_hal_get_cpu_id();
+    self->kthread = nullptr;
     jlos_arch_task_ext_init(self);
 }
 
@@ -352,6 +354,7 @@ static void task_free_locked(jlos_task_manager_t *self, jlos_task_t *task)
     jlos_list_del_init(&task->rq_node);
     jlos_timer_wheel_del(&task->sleep_node);
 
+    jlos_kthread_release(task);
     jlos_kfree(task);
 }
 
@@ -418,6 +421,9 @@ void jlos_task_reap_all_zombies(jlos_task_manager_t *self)
             }
             if (t->status == JLOS_TASK_ZOMBIE) {
                 if (jlos_hal_is_task_in_use(t)) {
+                    continue;
+                }
+                if (t->kthread && !jlos_kthread_can_release(t)) {
                     continue;
                 }
                 if (!jlos_list_empty(&t->zombie_node)) {

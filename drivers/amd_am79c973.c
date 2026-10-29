@@ -5,6 +5,7 @@
 
 #include <drivers/amd_am79c973.h>
 #include <kernel/memory_manager.h>
+#include <kernel/softirq.h>
 #include <hal/paging.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "eth"
@@ -30,10 +31,16 @@ static void amd_net_set_ip_address(jlos_hal_net_dev_t *self, uint32_t ip)
     jlos_amd_am79c973_set_ip_address(amd_from_net(self), ip);
 }
 
+static void amd_net_poll(jlos_hal_net_dev_t *self)
+{
+    jlos_amd_am79c973_receive(amd_from_net(self));
+}
+
 static const jlos_hal_net_ops_t s_amd_net_ops = {
     .destroy        = amd_net_destroy,
     .send           = amd_net_send,
     .set_ip_address = amd_net_set_ip_address,
+    .poll           = amd_net_poll,
 };
 
 void jlos_amd_am79c973_init(jlos_amd_am79c973_t* self, jlos_hal_pci_device_t *dev, jlos_irq_manager_t *interrupts)
@@ -238,7 +245,7 @@ uintptr_t jlos_amd_am79c973_handle_interrupt(jlos_irq_handler_t* handler, uintpt
         command |= 0x0800;
     }
     if ((temp & 0x0400) == 0x0400) {
-        jlos_amd_am79c973_receive(eth);
+        jlos_softirq_raise(JLOS_SOFTIRQ_NET_RX);
         command |= 0x0400;
     }
     if ((temp & 0x0200) == 0x0200) {

@@ -24,6 +24,7 @@ typedef struct {
     void (*destroy)(jlos_hal_net_dev_t *self);
     void (*send)(jlos_hal_net_dev_t *self, uint8_t *buffer, uint32_t size);
     void (*set_ip_address)(jlos_hal_net_dev_t *self, uint32_t ip);
+    void (*poll)(jlos_hal_net_dev_t *self);
 } jlos_hal_net_ops_t;
 
 typedef struct jlos_hal_net_dev {

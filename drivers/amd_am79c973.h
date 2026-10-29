@@ -19,14 +19,14 @@
 typedef struct jlos_amd_am79c973 jlos_amd_am79c973_t;
 
 typedef struct {
-    uint16_t mode;
-    uint8_t recv_len;
-    uint8_t send_len;
-    uint8_t physical_address[6];
-    uint16_t reserved;
-    uint8_t logical_address[8];
-    uint32_t recv_buffer_descr_address;
-    uint32_t send_buffer_descr_address;
+    uint16_t    mode;
+    uint8_t     recv_len;
+    uint8_t     send_len;
+    uint8_t     physical_address[6];
+    uint16_t    reserved;
+    uint8_t     logical_address[8];
+    uint32_t    recv_buffer_descr_address;
+    uint32_t    send_buffer_descr_address;
 } __attribute__((packed)) jlos_amd_init_block_t;
 
 typedef struct {

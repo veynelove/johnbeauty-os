@@ -8,12 +8,21 @@
 #include <hal/net.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
+#include <kernel/softirq.h>
 #include <include/config.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "net"
 #include <kernel/printk.h>
 
 network_stack_t *g_network_stack = nullptr;
+
+static void jlos_net_rx_action(void)
+{
+    jlos_hal_net_dev_t *dev = jlos_hal_net_primary_dev();
+    if (dev && dev->ops && dev->ops->poll) {
+        dev->ops->poll(dev);
+    }
+}
 
 void network_init(void)
 {
@@ -30,7 +39,8 @@ void network_init(void)
         g_network_stack = nullptr;
         return;
     }
-    
+
+    jlos_softirq_register(JLOS_SOFTIRQ_NET_RX, jlos_net_rx_action);
     jlos_memset(&g_network_stack->config, 0, sizeof(g_network_stack->config));
     printk_info("initializing network stack (unconfigured)\n");
     jlos_hal_net_set_ip_address(eth0, g_network_stack->config.ip);
