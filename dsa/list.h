@@ -115,4 +115,14 @@ static inline bool jlos_list_is_last(jlos_list_head_t *entry, jlos_list_head_t *
     return entry->next == head;
 }
 
+static inline uint32_t jlos_list_count(const jlos_list_head_t *head)
+{
+    uint32_t count = 0;
+    const jlos_list_head_t *pos;
+    for (pos = head->next; pos != head; pos = pos->next) {
+        count++;
+    }
+    return count;
+}
+
 #endif

@@ -477,11 +477,11 @@ bool jlos_task_check_zombie_exit(jlos_task_manager_t *self, uint32_t pid, uint32
     return result;
 }
 
-int32_t jlos_task_fd_malloc(jlos_task_t *task)
+int32_t jlos_task_fd_malloc(jlos_task_t *task, jlos_task_fd_type_t type)
 {
     for (int i = 3; i < JLOS_TASK_FDS_NUM; i++) {
         if (task->fds[i].type == JLOS_TASK_FD_UNUSED) {
-            task->fds[i].type = JLOS_TASK_FD_PIPE;
+            task->fds[i].type = type;
             return i;
         }
     }

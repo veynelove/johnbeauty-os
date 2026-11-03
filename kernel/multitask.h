@@ -66,17 +66,18 @@ typedef enum {
 } jlos_task_exit_code;
 
 enum jlos_task_errno {
-    TASK_ERR_NOMEM      = 1,
-    TASK_ERR_INVAL      = 2,
-    TASK_ERR_NOT_FOUND  = 3,
-    TASK_ERR_NO_CHILD   = 4,
+    TASK_ERR_NOMEM          = 1,
+    TASK_ERR_INVAL          = 2,
+    TASK_ERR_NOT_FOUND      = 3,
+    TASK_ERR_NO_CHILD       = 4,
 };
 
 typedef enum {
-    JLOS_TASK_FD_UNUSED = 0,
-    JLOS_TASK_FD_PIPE   ,
-    JLOS_TASK_FD_CONSOLE,
-    JLOS_TASK_FD_FILE
+    JLOS_TASK_FD_UNUSED     = 0,
+    JLOS_TASK_FD_PIPE       = 1,
+    JLOS_TASK_FD_CONSOLE    = 2,
+    JLOS_TASK_FD_FILE       = 3,
+    JLOS_TASK_FD_NET_SOCKET = 4,
 } jlos_task_fd_type_t;
 
 typedef struct {
@@ -156,7 +157,7 @@ void jlos_task_reap_all_zombies(jlos_task_manager_t *self);
 int32_t jlos_task_wait_or_reap(jlos_task_manager_t *self, uint32_t pid, jlos_task_t *parent, int32_t *exit_code_out);
 bool jlos_task_check_zombie_exit(jlos_task_manager_t *self, uint32_t pid, uint32_t expected_exit);
 
-int32_t jlos_task_fd_malloc(jlos_task_t *task);
+int32_t jlos_task_fd_malloc(jlos_task_t *task, jlos_task_fd_type_t type);
 jlos_task_fd_t *jlos_task_fd_get(jlos_task_t *task, int32_t fd);
 void jlos_task_fd_free(jlos_task_t *task, int32_t fd);
 

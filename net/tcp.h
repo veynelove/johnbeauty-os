@@ -9,11 +9,30 @@
 #include <net/ipv4.h>
 #include <dsa/hash_chain.h>
 #include <kernel/sync.h>
+#include <kernel/hrtimer.h>
 
-#define JLOS_TCP_MSS                1460
-#define JLOS_TCP_MSS_OPTIONS_KIND   2
-#define JLOS_TCP_MSS_OPTION_LEN     4
-#define JLOS_TCP_MIN_DATA_OFFSET    5
+#define JLOS_TCP_MSS                    1460
+#define JLOS_TCP_MSS_OPTIONS_KIND       2
+#define JLOS_TCP_MSS_OPTION_LEN         4
+#define JLOS_TCP_MIN_DATA_OFFSET        5
+#define JLOS_TCP_TIMEWAIT_TIMEOUT_NS    ((uint64_t)60 * 1000 * 1000 * 1000)
+#define JLOS_TCP_CLOSED_RELEASE_NS         ((uint64_t)1 * 1000 * 1000 * 1000)
+#define JLOS_TCP_RCVBUF_SIZE               (64 * 1024)
+
+#define JLOS_TCP_INITIAL_SEQUENCE       0xbeefcafe
+
+#define JLOS_TCP_ACCEPT_BACKLOG_MAX     16
+#define JLOS_TCP_SYNRECV_RELEASE_NS     ((uint64_t)3 * 1000 * 1000 * 1000)
+
+#define JLOS_TCP_GET_DATA_OFFSET(msg)   (((((uint8_t*)&(msg)->data_offset_flags)[0]) >> 4) & 0x0F)
+#define JLOS_TCP_GET_FLAGS(msg)         ((((uint8_t*)&(msg)->data_offset_flags)[1]) | ((((uint8_t*)&(msg)->data_offset_flags)[0] & 0x01) << 8))
+
+#define JLOS_TCP_SET_DATA_OFFSET_FLAGS(msg, doff, flags) \
+    do { \
+        uint8_t *__p = (uint8_t*)&(msg)->data_offset_flags; \
+        __p[0] = (((doff) & 0x0F) << 4) | (((flags) >> 8) & 0x01); \
+        __p[1] = (flags) & 0xFF; \
+    } while(0)
 
 typedef enum {
     JLOS_TCP_CLOSED = 0,
@@ -52,15 +71,6 @@ typedef struct {
     uint16_t urgent_ptr;
 } __attribute__((packed)) jlos_tcp_header_t;
 
-#define JLOS_TCP_GET_DATA_OFFSET(msg) (((((uint8_t*)&(msg)->data_offset_flags)[0]) >> 4) & 0x0F)
-#define JLOS_TCP_GET_FLAGS(msg)       ((((uint8_t*)&(msg)->data_offset_flags)[1]) | ((((uint8_t*)&(msg)->data_offset_flags)[0] & 0x01) << 8))
-#define JLOS_TCP_SET_DATA_OFFSET_FLAGS(msg, doff, flags) \
-    do { \
-        uint8_t *__p = (uint8_t*)&(msg)->data_offset_flags; \
-        __p[0] = (((doff) & 0x0F) << 4) | (((flags) >> 8) & 0x01); \
-        __p[1] = (flags) & 0xFF; \
-    } while(0)
-
 typedef struct {
     uint32_t src_ip;
     uint32_t dst_ip;
@@ -70,11 +80,6 @@ typedef struct {
 
 typedef struct jlos_tcp_provider jlos_tcp_provider_t;
 typedef struct jlos_tcp_socket jlos_tcp_socket_t;
-typedef struct jlos_tcp_handler jlos_tcp_handler_t;
-
-struct jlos_tcp_handler {
-    bool (*handle_tcp_message)(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size);
-};
 
 struct jlos_tcp_socket {
     uint16_t                remote_port;
@@ -84,12 +89,18 @@ struct jlos_tcp_socket {
     uint32_t                sequence_number;
     uint32_t                acknowledgement_number;
     jlos_tcp_provider_t     *backend;
-    jlos_tcp_handler_t      *handler;
     jlos_tcp_socket_state_t state;
     jlos_cond_t             state_cond;
     jlos_mutex_t            state_mutex;
+    jlos_semaphore_t        state_event;
+    jlos_hrtimer_t          release_timer;
     jlos_hash_node_t        hash_node;
-    bool (*handle_tcp_message)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
+    jlos_list_head_t        accept_node;
+    jlos_tcp_socket_t       *listener;
+    jlos_list_head_t        receive_queue;
+    jlos_spinlock_t         receive_lock;
+    jlos_semaphore_t        receive_wait;
+    uint32_t                receive_bytes;
     void (*send)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*disconnect)(struct jlos_tcp_socket* self);
 };
@@ -97,6 +108,9 @@ struct jlos_tcp_socket {
 struct jlos_tcp_provider {
     jlos_internet_protocol_handler_t    base_handler;
     jlos_hash_chain_t                   sockets;
+    jlos_hash_chain_t                   listeners;
+    jlos_list_head_t                    accept_queue;
+    jlos_spinlock_t                     accept_lock;
     uint16_t                            num_sockets;
     uint16_t                            free_port;
 };
@@ -106,15 +120,11 @@ typedef struct {
     uint16_t port;
 } jlos_tcp_key_t;
 
-void jlos_tcp_handler_init(jlos_tcp_handler_t* self);
-void jlos_tcp_handler_destroy(jlos_tcp_handler_t* self);
-bool jlos_tcp_handler_handle_tcp_message(jlos_tcp_handler_t* self, jlos_tcp_socket_t* socket, uint8_t *data, uint16_t size);
-
 void jlos_tcp_socket_init(jlos_tcp_socket_t* self, jlos_tcp_provider_t *backend);
 void jlos_tcp_socket_destroy(jlos_tcp_socket_t* self);
-bool jlos_tcp_socket_handle_tcp_message(jlos_tcp_socket_t* self, uint8_t *data, uint16_t size);
 void jlos_tcp_socket_send(jlos_tcp_socket_t* self, uint8_t *data, uint16_t size);
 void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self);
+bool jlos_tcp_receive_enqueue(jlos_tcp_socket_t* self, const uint8_t *data, uint32_t size);
 
 void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_provider_t *backend);
 void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self);
@@ -122,6 +132,7 @@ jlos_tcp_socket_t *jlos_tcp_provider_connect(jlos_tcp_provider_t* self, uint32_t
 jlos_tcp_socket_t *jlos_tcp_provider_listen(jlos_tcp_provider_t* self, uint16_t port);
 void jlos_tcp_provider_disconnect(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket);
 void jlos_tcp_provider_send(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, uint8_t *data, uint16_t size, uint16_t flags);
-void jlos_tcp_provider_bind(jlos_tcp_provider_t* self, jlos_tcp_socket_t *socket, jlos_tcp_handler_t *handler);
+
+jlos_tcp_socket_t *jlos_tcp_provider_accept(jlos_tcp_provider_t *self, jlos_tcp_socket_t *listener);
 
 #endif

@@ -41,6 +41,13 @@
 #define SYSCALL_SETTIMEOFDAY       27
 #define SYSCALL_CLOCK_SETTIME      28
 #define SYSCALL_NANOSLEEP          29
+#define SYSCALL_SOCKET             30
+#define SYSCALL_BIND               31
+#define SYSCALL_LISTEN             32
+#define SYSCALL_ACCEPT             33
+#define SYSCALL_CONNECT            34
+#define SYSCALL_SEND               35
+#define SYSCALL_RECV               36
 
 #ifndef __ASSEMBLY__
 #define PROT_READ       0x1

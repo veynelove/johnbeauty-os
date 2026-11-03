@@ -64,11 +64,10 @@ void jlos_udp_socket_disconnect(jlos_udp_socket_t* self)
     jlos_udp_provider_disconnect(self->backend, self);
 }
 
-static uint32_t udp_hash_ip_port(const void *key)
+static uint32_t udp_hash_port(const void *key)
 {
     jlos_udp_key_t *k = (jlos_udp_key_t *)key;
-    uint32_t port = k->port;
-    return k->ip ^ (port << 16) ^ (port >> 16);
+    return k->port;
 }
 
 static int udp_cmp_ip_port(const void *key, const void *node)
@@ -89,7 +88,7 @@ static int udp_match_socket(jlos_hash_node_t *node, void *args1)
     if (socket->local_port != (uint16_t)args[3]) {
         return -1;
     }
-    if (socket->local_ip != args[2] && args[2] != JLOS_IPV4_BROADCAST) {
+    if (socket->local_ip != args[2] && socket->local_ip != JLOS_IPV4_ANY && args[2] != JLOS_IPV4_BROADCAST) {
         return -1;
     }
     if (socket->remote_ip == args[0] && socket->remote_port == (uint16_t)args[1]) {
@@ -141,7 +140,7 @@ void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_pr
         (bool (*)(jlos_internet_protocol_handler_t *, jlos_net_sk_buff_t *))jlos_udp_provider_on_internet_protocol_received;
     self->num_sockets = 0;
     self->free_port = JLOS_EPHEMERAL_PORT_START;
-    jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, udp_hash_ip_port, udp_cmp_ip_port);
+    jlos_hash_chain_init(&self->sockets, JLOS_NET_HASH_CHAIN_NUM, udp_hash_port, udp_cmp_ip_port);
     printk_info("initialized\n");
 }
 

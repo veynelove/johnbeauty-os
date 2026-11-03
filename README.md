@@ -277,138 +277,210 @@ ARM64
 [1970-01-01 08:00:00] [I] [boot] [john_sunshine_main] paging initialized
 [1970-01-01 08:00:00] [I] [mm] [jlos_memory_manager_init_main] init_main: first=0xffff800200000000 size=4194256 heap=[0xffff800200000000,0xffff800200400000) current=0xffff800200400000
 [1970-01-01 08:00:00] [I] [gic] [gic_init] dist = 0xffff000008000000, rdist = 0xffff0000080a0000, stride = 0x20000
+[1970-01-01 08:00:00] [I] [kthread] [jlos_kthread_daemon_init] kth_daemon init success
 [1970-01-01 08:00:00] [I] [timer] [jlos_arch_timer_init] freq = 1000000000 hz, intid = 30
+[1970-01-01 08:00:00] [I] [wk_que] [jlos_workqueue_create] wq create success
+[1970-01-01 08:00:00] [I] [wk_que] [jlos_workqueue_init_system] sys_wq init success
 [1970-01-01 08:00:00] [I] [virtio] [jlos_virtio_blk_dev_init] blk0 ready, sectors = 32768
 [1970-01-01 08:00:00] [I] [virtio] [jlos_virtio_net_dev_init] net0 ready, mac = 0x563412005452, intid = 78
 [1970-01-01 08:00:00] [E] [ata] [jlos_ata_block_dev_init] ata primary device init failed
 [1970-01-01 08:00:00] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
 [1970-01-01 08:00:00] [I] [clocks] [clocksource_select] selected = arch_timer, rating = 350
 [1970-01-01 08:00:00] [D] [rootfs] [jlos_rootfs_init] rootfs mounted on partition 0, type 0xc
-[2026-10-27 21:08:30] [I] [rtc] [pl031_init] rtc: 1793106510 seconds since epoch
-[2026-10-27 21:08:30] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] AP 1 online
-[2026-10-27 21:08:30] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] ap 1 idle ready
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] AP 2 online
-[2026-10-27 21:08:30] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] ap 2 idle ready
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] AP 3 online
-[2026-10-27 21:08:30] [I] [smp] [jlos_hal_smp_boot_aps] 4 cpus booted
-[2026-10-27 21:08:30] [I] [smp] [jlos_ap_main] ap 3 idle ready
-[2026-10-27 21:08:30] [I] [net] [network_init] initializing network stack (unconfigured)
-[2026-10-27 21:08:30] [I] [arp] [jlos_arp_init] initializing ARP protocol
-[2026-10-27 21:08:30] [I] [udp] [jlos_udp_provider_init] initialized
-[2026-10-27 21:08:30] [I] [dhcp] [jlos_dhcp_client_init] client initialized, xid = 0
-[2026-10-27 21:08:30] [I] [net] [network_init] network stack initialization complete
-[2026-10-27 21:08:30] [I] [dhcp] [jlos_dhcp_client_discover] DISC sent, xid = 4b19807
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all] === memory ===
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  roundtrip
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  kvheap_fallback
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  large_contig
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  small_slab
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  boundary
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all] === timek ===
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  realtime_ge_monotonic
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  ticks_non_decreasing
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  monotonic_increasing
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all] === hrtimer ===
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  ordering
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  periodic
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all]   PASS  lifecycle
-[2026-10-27 21:08:30] [I] [test] [jlos_test_run_all] === multitask ===
-[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  sleep_until_cascade
-[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  sleep_until_short
-u[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  ring3_nanosleep
-ummap_test: pid=9
+[2026-11-02 11:39:21] [I] [rtc] [pl031_init] rtc: 1793590761 seconds since epoch
+[2026-11-02 11:39:21] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] AP 1 online
+[2026-11-02 11:39:21] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] ap 1 idle ready
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] AP 2 online
+[2026-11-02 11:39:21] [I] [clocke] [jlos_clock_event_select] selected = arch_timer, rating = 400
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] ap 2 idle ready
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] AP 3 online
+[2026-11-02 11:39:21] [I] [smp] [jlos_hal_smp_boot_aps] 4 cpus booted
+[2026-11-02 11:39:21] [I] [smp] [jlos_ap_main] ap 3 idle ready
+[2026-11-02 11:39:21] [I] [net] [network_init] initializing network stack (unconfigured)
+[2026-11-02 11:39:21] [I] [arp] [jlos_arp_init] initializing ARP protocol
+[2026-11-02 11:39:21] [I] [udp] [jlos_udp_provider_init] initialized
+[2026-11-02 11:39:21] [I] [dhcp] [jlos_dhcp_client_init] client initialized, xid = 0
+[2026-11-02 11:39:21] [I] [net] [network_init] network stack initialization complete
+[2026-11-02 11:39:21] [I] [dhcp] [jlos_dhcp_client_discover] DISC sent, xid = 33686c0
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all] === memory ===
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  roundtrip
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  kvheap_fallback
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  large_contig
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  small_slab
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  boundary
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all] === timek ===
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  realtime_ge_monotonic
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  ticks_non_decreasing
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  monotonic_increasing
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all] === hrtimer ===
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  ordering
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  periodic
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all]   PASS  lifecycle
+[2026-11-02 11:39:21] [I] [test] [jlos_test_run_all] === multitask ===
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  sleep_until_cascade
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  sleep_until_short
+u[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  ring3_nanosleep
+ummap_test: pid=14
 mmap_test: ALL PASSED
-[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  ring3_mmap
-usignal_test: pid=10
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  ring3_mmap
+usignal_test: pid=15
 signal_test: caught sig=15
 signal_test: ALL PASSED
-[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  ring3_signal
-ufile_test: pid=13 argc=1
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  ring3_signal
+u[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=2 size=00 seq=beefcafe ack=0
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=2 seq=beefcafe ack=0
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=1 remote=0.0.ff.ff:3888
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] listen -> syn_rcvd, sending syn-ack
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 2328->40 flags=12 size=00 seq=beefcafe ack=beefcaff
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 2328->40 flags=12 seq=beefcafe ack=beefcaff
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=2 remote=1.0.0.7f:2328
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=10 size=00 seq=beefcaff ack=beefcaff
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=10 seq=beefcaff ack=beefcaff
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=3 remote=1.0.0.7f:40
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] 3-way handshake complete, state=established
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=18 size=0e seq=beefcaff ack=beefcaff
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=18 seq=beefcaff ack=beefcaff
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=4 remote=1.0.0.7f:40
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] payload len=0e bytes, calling handler
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 2328->40 flags=10 size=00 seq=beefcaff ack=beefcb0d
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 2328->40 flags=10 seq=beefcaff ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 2328->40 flags=18 size=0e seq=beefcaff ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=4 remote=1.0.0.7f:2328
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] payload len=00 bytes, calling handler
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [E] [socket] [jlos_socket_receive_enqueue] rx skb alloc failed
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 2328->40 flags=18 seq=beefcaff ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=4 remote=1.0.0.7f:2328
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] payload len=0e bytes, calling handler
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=10 size=00 seq=beefcb0d ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=11 size=00 seq=beefcb0d ack=beefcb0d
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=10 seq=beefcb0d ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=11 seq=beefcb0d ack=beefcb0d
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=4 remote=1.0.0.7f:40
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=4 remote=1.0.0.7f:40
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] payload len=00 bytes, calling handler
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 2328->40 flags=10 size=00 seq=beefcb0d ack=beefcb0e
+[2026-11-02 11:39:24] [E] [socket] [jlos_socket_receive_enqueue] rx skb alloc failed
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 2328->40 flags=11 size=00 seq=beefcb0d ack=beefcb0e
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 2328->40 flags=10 seq=beefcb0d ack=beefcb0e
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=5 remote=1.0.0.7f:2328
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 2328->40 flags=11 seq=beefcb0d ack=beefcb0e
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=6 remote=1.0.0.7f:2328
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_send] send 40->2328 flags=10 size=00 seq=beefcb0e ack=beefcb0e
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] packet is for us
+[2026-11-02 11:39:24] [D] [ipv4] [jlos_internet_protocol_provider_on_ether_frame_received] handler found, calling it
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] recv 40->2328 flags=10 seq=beefcb0e ack=beefcb0e
+[2026-11-02 11:39:24] [D] [tcp] [jlos_tcp_provider_on_internet_protocol_received] socket state=a remote=1.0.0.7f:40
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  ring3_socket
+ufile_test: pid=20 argc=1
 OK: elf magic 127 69 76 70
 OK: write/read match
 OK: lseek+read
 OK: unlink+reopen-fail
 OK: mmap/munmap anon
 file_test: ALL PASSED
-[2026-10-27 21:08:33] [I] [test] [jlos_test_run_all]   PASS  ring3_file
-uhello from user ELF. PID = 14, argc = 1, argv[0] = /hello.elf, curr time: 1793106513
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] --- task list ---
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] [0] name = idle, pid = 0, status = running, task_type = kernel
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] [1] name = idle, pid = 3, status = running, task_type = kernel
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] [2] name = idle, pid = 4, status = running, task_type = kernel
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] [3] name = idle, pid = 5, status = running, task_type = kernel
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] [4] name = mt_ring3, pid = 14, status = running, task_type = user
-[2026-10-27 21:08:33] [I] [syscall] [syscall_get_tasks_info] ---
+[2026-11-02 11:39:24] [I] [test] [jlos_test_run_all]   PASS  ring3_file
+uhello from user ELF. PID = 21, argc = 1, argv[0] = /hello.elf, curr time: 1793590764
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] --- task list ---
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [0] name = idle, pid = 0, status = running, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [1] name = kth_daemon, pid = 3, status = blocked, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [2] name = system, pid = 4, status = blocked, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [3] name = system, pid = 5, status = blocked, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [4] name = system, pid = 6, status = blocked, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [5] name = system, pid = 7, status = blocked, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [6] name = idle, pid = 8, status = running, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [7] name = idle, pid = 9, status = running, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [8] name = idle, pid = 10, status = running, task_type = kernel
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] [9] name = mt_ring3, pid = 21, status = running, task_type = user
+[2026-11-02 11:39:24] [I] [syscall] [syscall_get_tasks_info] ---
 user ELF: wakeup -> exit
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  ring3_smoke
-ufork_test: pid=15
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  ring3_smoke
+ufork_test: pid=22
 fork_test: fork+wait OK
 fork_test: 10-child pressure OK
 fork_test: ALL PASSED
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  fork_pressure
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  schedule_alternation
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all] === pfa ===
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  pressure_and_accounting
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  owner_type
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  refcount
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  alloc_n
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  order_alloc
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all]   PASS  single_frame_roundtrip
-[2026-10-27 21:08:34] [I] [test] [jlos_test_run_all] === sync ===
-[2026-10-27 21:08:36] [I] [test] [jlos_test_run_all]   PASS  cond_wait_broadcast
-[2026-10-27 21:08:37] [I] [test] [jlos_test_run_all]   PASS  cond_wait_signal
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  semaphore_block_and_wake
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  mutex_recursive_reentry
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  mutex_lock_unlock
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  semaphore_count_down_up
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === paging ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  user_accessible
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  clone
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  change_flags
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  map_range
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  map_unmap
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === ata ===
-[2026-10-27 21:08:38] [I] [t_ata] [jlos_test_fn_ata_write_read_roundtrip] skip: no ata device
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  write_read_roundtrip
-[2026-10-27 21:08:38] [I] [t_ata] [jlos_test_fn_ata_read_mbr] skip: no ata device
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  read_mbr
-[2026-10-27 21:08:38] [I] [t_ata] [jlos_test_fn_ata_identify] skip: no ata device
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  identify
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === udp ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  server_listen
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === http ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  server_listen
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === timer_wheel ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  same_slot_multiple
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  empty_advance
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  del_prevents_expire
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  boundary_deltas
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  cascade_multi_level
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  cascade_vec2_to_vec1
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  init_all_slots
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === rbtree ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  random_insert_remove
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  find_le
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  remove
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  ordered_traversal
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all]   PASS  insert_and_find
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] === summary ===
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] suite             pass  fail total
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] memory               5     0     5
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] timek                3     0     3
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] hrtimer              3     0     3
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] multitask            9     0     9
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] pfa                  6     0     6
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] sync                 6     0     6
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] paging               5     0     5
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] ata                  3     0     3
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] udp                  1     0     1
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] http                 1     0     1
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] timer_wheel          7     0     7
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] rbtree               5     0     5
-[2026-10-27 21:08:38] [I] [test] [jlos_test_run_all] total               54     0    54
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  fork_pressure
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  schedule_alternation
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all] === pfa ===
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  pressure_and_accounting
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  owner_type
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  refcount
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  alloc_n
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  order_alloc
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all]   PASS  single_frame_roundtrip
+[2026-11-02 11:39:25] [I] [test] [jlos_test_run_all] === sync ===
+[2026-11-02 11:39:27] [I] [test] [jlos_test_run_all]   PASS  cond_wait_broadcast
+[2026-11-02 11:39:28] [I] [test] [jlos_test_run_all]   PASS  cond_wait_signal
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  semaphore_block_and_wake
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  mutex_recursive_reentry
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  mutex_lock_unlock
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  semaphore_count_down_up
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === paging ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  user_accessible
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  clone
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  change_flags
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  map_range
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  map_unmap
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === ata ===
+[2026-11-02 11:39:29] [I] [t_ata] [jlos_test_fn_ata_write_read_roundtrip] skip: no ata device
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  write_read_roundtrip
+[2026-11-02 11:39:29] [I] [t_ata] [jlos_test_fn_ata_read_mbr] skip: no ata device
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  read_mbr
+[2026-11-02 11:39:29] [I] [t_ata] [jlos_test_fn_ata_identify] skip: no ata device
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  identify
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === udp ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  server_listen
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === http ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  server_listen
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === timer_wheel ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  same_slot_multiple
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  empty_advance
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  del_prevents_expire
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  boundary_deltas
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  cascade_multi_level
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  cascade_vec2_to_vec1
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  init_all_slots
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === rbtree ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  random_insert_remove
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  find_le
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  remove
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  ordered_traversal
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all]   PASS  insert_and_find
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] === summary ===
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] suite             pass  fail total
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] memory               5     0     5
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] timek                3     0     3
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] hrtimer              3     0     3
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] multitask           10     0    10
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] pfa                  6     0     6
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] sync                 6     0     6
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] paging               5     0     5
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] ata                  3     0     3
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] udp                  1     0     1
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] http                 1     0     1
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] timer_wheel          7     0     7
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] rbtree               5     0     5
+[2026-11-02 11:39:29] [I] [test] [jlos_test_run_all] total               55     0    55
 
 ```

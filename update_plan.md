@@ -943,6 +943,10 @@ SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且
 > **进度（2026-10-28）**：**P2 全部完成** —— P2-1 异常表 uaccess（汇编 usercopy + `.ex_table`，查找/排序用新增 `dsa/search.c`、`dsa/sort.c`，基础设施归新子系统 `kernel/exception_recover.c`，中断返回写回 IP）；P2-2 PCID（x86-64 启用 CR4.PCIDE + per-ctx PCID + 复用前全核失效独立原语 `jlos_hal_paging_flush_all_tlb_shootdown`，arm64 复用 `tlbi vmalle1is`）。**三架构均 54/54**（期间修掉 32 位 cdecl `esi/edi` 未保存 bug）。
 >
 > **进度（2026-10-29）**：**P3-1 kthread 完成** —— 新子系统 `kernel/kthread.c`（内核线程：`create/run/stop/should_stop`；内核线程守护线程 `kthread daemon` 负责异步创建 + 统一父）；`jlos_task_t` 加 `kthread` 指针；`task_free_locked` 释放回调 + `reap_all_zombies` 延迟回收（避免 stop 等待期 use-after-free）。arm64 `-smp 4` 54/54。P3-2 workqueue 进行中。
+>
+> **进度（2026-11-02）**：**P3-2/3/4/5 全部完成，arm64 `-smp 4` 实测 54/54** —— P3-2 workqueue（per-CPU worker + work 去重 PENDING 位 + barrier flush + system wq）；P3-3 softirq（per-CPU 位图 + 中断退出触发，独立子系统）；P3-4 NAPI（中断 `raise(NET_RX)` → 软中断 poll 主网卡）；P3-5 socket（`net/socket.c` 统一 socket 层 + 接收队列背压 + TCP 接收失败语义对齐 Linux（丢段不 ACK 不 RST / 乱序 DUP ACK / 畸形丢弃 / 真违规才 RST）+ fd 类型 `NET_SOCKET` + syscall 30..36 + `dsa/search.c`、`dsa/sort.c` 算法库 + #14 jlcy 用户态 POSIX socket API 与 accept 地址回填）。期间修：workqueue 缺链接符号、32 位 usercopy `esi/edi` ABI、clangd per-子树 `.clangd` 入口。下一步 #3 全链路运行时验证（前置：内核 loopback 快速路径 + INADDR_ANY 通配）。
+>
+> **进度（2026-11-03）**：**#3 全链路验证 + TCP 完整化 #4/#5 完成（arm64 55/55）** —— #3 loopback 快速路径（ipv4 127/8 回注 + INADDR_ANY 通配 + port-only hash 根治 bucket 错位）+ `ring3_socket` 用户态 echo 用例（基线 54→55）；#4 TIME_WAIT/CLOSED 终态定时回收（内嵌 hrtimer，TIME_WAIT 60s / CLOSED 1s，TIME_WAIT 分支 FIN-only ACK 消除双 TIME_WAIT ACK 风暴）；#5 accept 多连接 backlog（listener 独立表 `jlos_hash_uint16` + SYN 创建独立连接 socket + accept 队列 + 半连接 3s 超时；**接收缓冲下沉 tcp_socket**（Linux sk_receive_queue 形态），**删除 handler/binding 机制**根治"数据早于绑定"竞态，UDP 保留 handler 模型）；`jlos_list_count` 补 dsa/list.h；ISN 提宏 `JLOS_TCP_INITIAL_SEQUENCE`。遗留：socket fd 引用计数（fork 继承/close 竞态）、accept 队列残留清理、#6 重传+rwnd。
 
 ### 1. 已核验的正确性 Bug（逐行核对过源码）
 

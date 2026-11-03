@@ -16,6 +16,7 @@
 #include <kernel/initcall.h>
 #include <kernel/multitask.h>
 #include <kernel/timek.h>
+#include <net/socket.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
 #include <kernel/printk.h>
@@ -181,12 +182,12 @@ static int32_t syscall_create_pipe(uintptr_t arg1, uintptr_t arg2, uintptr_t arg
         return -SYSCALL_ENOMEM;
     }
     jlos_pipe_init(pipe, 0);
-    int32_t fd_read = jlos_task_fd_malloc(current_task);
+    int32_t fd_read = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_PIPE);
     if (fd_read < 0) {
         jlos_pipe_destroy(pipe);
         return -SYSCALL_ENOMEM;
     }
-    int32_t fd_write = jlos_task_fd_malloc(current_task);
+    int32_t fd_write = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_PIPE);
     if (fd_write < 0) {
         jlos_task_fd_free(current_task, fd_read);
         jlos_pipe_destroy(pipe);
@@ -224,18 +225,27 @@ static int32_t syscall_task_fd_close(uintptr_t arg1, uintptr_t arg2, uintptr_t a
     if (!fd_entry) {
         return -SYSCALL_ENINVAL;
     }
-    if (fd_entry->type == JLOS_TASK_FD_PIPE) {
-        jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
-        if (pipe) {
-            jlos_pipe_close(pipe);
-            jlos_pipe_ref_dec(pipe);
+    switch (fd_entry->type) {
+        case JLOS_TASK_FD_PIPE:
+            jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
+            if (pipe) {
+                jlos_pipe_close(pipe);
+                jlos_pipe_ref_dec(pipe);
+            }
+            break;
+        case JLOS_TASK_FD_FILE: {
+            jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
+            if (file) {
+                jlos_vfs_close(file);
+            }
+            break;
         }
-    }
-    if (fd_entry->type == JLOS_TASK_FD_FILE) {
-        jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
-        if (file) {
-            jlos_vfs_close(file);
-        }
+        case JLOS_TASK_FD_NET_SOCKET:
+            jlos_socket_destroy((jlos_socket_t *)fd_entry->obj);
+            fd_entry->obj = nullptr;
+            break;
+        default:
+            break;
     }
     jlos_task_fd_free(current_task, fd);
     (void)arg2;
@@ -263,7 +273,7 @@ static int32_t syscall_open(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
     if (!file) {
         return -SYSCALL_ENOENT;
     }
-    int32_t fd = jlos_task_fd_malloc(current_task);
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_FILE);
     if (fd < 0) {
         jlos_vfs_close(file);
         return -SYSCALL_ENOMEM;
@@ -800,6 +810,188 @@ static int32_t syscall_sigreturn(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
     return jlos_cpu_state_get_retval(me->syscall_tf);
 }
 
+static jlos_socket_t *syscall_socket_get(jlos_task_t *task, int32_t fd)
+{
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(task, fd);
+    if (!fd_entry || fd_entry->type != JLOS_TASK_FD_NET_SOCKET) {
+        return nullptr;
+    }
+    return (jlos_socket_t *)fd_entry->obj;
+}
+
+static int32_t syscall_socket(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = jlos_socket_create((uint32_t)arg1, (uint32_t)arg2, (uint32_t)arg3);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_NET_SOCKET);
+    if (fd < 0) {
+        jlos_socket_destroy(socket);
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
+    fd_entry->obj = socket;
+    fd_entry->type = JLOS_TASK_FD_NET_SOCKET;
+    return fd;
+}
+
+static int32_t syscall_bind(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_bind(socket, (uint32_t)arg2, (uint16_t)arg3)) {
+        return -SYSCALL_ENINVAL;
+    }
+    return 0;
+}
+
+static int32_t syscall_listen(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    (void)arg3;
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_listen(socket, (int32_t)arg2)) {
+        return -SYSCALL_EIO;
+    }
+    return 0;
+}
+
+static int32_t syscall_accept(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    jlos_socket_t *child = jlos_socket_accept(socket);
+    if (!child) {
+        return -SYSCALL_EIO;
+    }
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_NET_SOCKET);
+    if (fd < 0) {
+        jlos_socket_destroy(child);
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
+    fd_entry->obj = child;
+    fd_entry->flags = JLOS_TASK_FD_READ_WRITE;
+    if (arg2) {
+        uint32_t peer_ip = 0;
+        uint16_t peer_port = 0;
+        jlos_socket_getpeer_name(child, &peer_ip, &peer_port);
+        jlos_sockaddr_in_t peer;
+        peer.family = JLOS_SOCKET_DOMAIN_INET;
+        peer.port = peer_port;
+        peer.addr = peer_ip;
+        jlos_memset(peer.zero, 0, sizeof(peer.zero));
+        uint32_t peer_len = sizeof(jlos_sockaddr_in_t);
+        if (arg3 && !jlos_copy_to_user((void *)arg3, &peer_len, sizeof(peer_len))) {
+            return -SYSCALL_EFAULT;
+        }
+        if (!jlos_copy_to_user((void *)arg2, &peer, sizeof(peer))) {
+            return -SYSCALL_EFAULT;
+        }
+    }
+    return fd;
+}
+
+static int32_t syscall_connect(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_connect(socket, (uintptr_t)arg2, (uint16_t)arg3)) {
+        return -SYSCALL_EIO;
+    }
+    return 0;
+}
+
+static int32_t syscall_send(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint32_t len = (uint32_t)arg3;
+    if (len == 0 || len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
+        return -SYSCALL_EPBIG;
+    }
+    void *buf = jlos_kalloc(len);
+    if (!buf) {
+        return -SYSCALL_ENOMEM;
+    }
+    if (!jlos_copy_from_user(buf, (const void *)arg2, len)) {
+        jlos_kfree(buf);
+        return -SYSCALL_EFAULT;
+    }
+    int32_t sent = jlos_socket_send(socket, buf, len);
+    jlos_kfree(buf);
+    if (sent < 0) {
+        return -SYSCALL_EIO;
+    }
+    return sent;
+}
+
+static int32_t syscall_recv(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint32_t len = (uint32_t)arg3;
+    if (len == 0 || len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
+        return -SYSCALL_EPBIG;
+    }
+    void *buf = jlos_kalloc(len);
+    if (!buf) {
+        return -SYSCALL_ENOMEM;
+    }
+    int32_t n = jlos_socket_recv(socket, buf, len);
+    if (n < 0) {
+        jlos_kfree(buf);
+        return -SYSCALL_EIO;
+    }
+    if (!jlos_copy_to_user((void *)arg2, buf, (size_t)n)) {
+        jlos_kfree(buf);
+        return -SYSCALL_EFAULT;
+    }
+    jlos_kfree(buf);
+    return n;
+}
+
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
 {
     if (!s_syscall_handler_ptr) {
@@ -867,6 +1059,13 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_SETTIMEOFDAY, syscall_settimeofday);
     jlos_syscall_register(JLOS_SYSCALL_CLOCK_SETTIME, syscall_clock_settime);
     jlos_syscall_register(JLOS_SYSCALL_NANOSLEEP, syscall_nanosleep);
+    jlos_syscall_register(JLOS_SYSCALL_SOCKET, syscall_socket);
+    jlos_syscall_register(JLOS_SYSCALL_BIND, syscall_bind);
+    jlos_syscall_register(JLOS_SYSCALL_LISTEN, syscall_listen);
+    jlos_syscall_register(JLOS_SYSCALL_ACCEPT, syscall_accept);
+    jlos_syscall_register(JLOS_SYSCALL_CONNECT, syscall_connect);
+    jlos_syscall_register(JLOS_SYSCALL_SEND, syscall_send);
+    jlos_syscall_register(JLOS_SYSCALL_RECV, syscall_recv);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)

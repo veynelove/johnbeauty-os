@@ -104,6 +104,17 @@ static void ring3_file_test_entry(void)
     }
 }
 
+static void ring3_socket_test_entry(void)
+{
+    char *argv[] = {"/socket_echo_test.elf", nullptr};
+    char *envp[] = {nullptr};
+    jlos_task_t *current_task = jlos_hal_current_task();
+    int ret = jlos_process_exec_elf(current_task, "/socket_echo_test.elf", 1, argv, envp);
+    if (ret < 0) {
+        jlos_process_exit(current_task, 0);
+    }
+}
+
 static void ring3_signal_test_entry(void)
 {
     char *argv[] = {"/signal_test.elf", nullptr};
@@ -226,6 +237,25 @@ JLOS_TEST(multitask, ring3_file)
 
     uint32_t t0 = jlos_timek_get_ticks();
     while (!exited && jlos_timek_get_ticks() - t0 < 5000) {
+        if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
+            exited = 1;
+        }
+        for (volatile int k = 0; k < 20000; k++);
+    }
+    JLOS_TEST_TRUE(exited);
+    reap_zombies();
+}
+
+JLOS_TEST(multitask, ring3_socket)
+{
+    s_mgr = g_task_manager_ptr;
+    jlos_task_t *t = spawn_kernel_task(ring3_socket_test_entry, "mt_socket");
+    JLOS_ASSERT_NOT_NULL(t);
+    uint32_t pid = t->pid;
+    int exited = 0;
+
+    uint32_t t0 = jlos_timek_get_ticks();
+    while (!exited && jlos_timek_get_ticks() - t0 < 8000) {
         if (jlos_task_check_zombie_exit(s_mgr, pid, 42)) {
             exited = 1;
         }
