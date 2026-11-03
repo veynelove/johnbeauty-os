@@ -16,5 +16,6 @@ void jlos_timek_on_tick(void);
 
 uint32_t jlos_timek_get_ticks(void);
 void jlos_timek_reset_ticks(void);
+void jlos_tick_init_cpu(void);
 
 #endif

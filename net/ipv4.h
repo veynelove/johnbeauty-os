@@ -9,7 +9,19 @@
 #include <net/etherframe.h>
 #include <net/arp.h>
 
-#define JLOS_EPHEMERAL_PORT_START 1024
+#define JLOS_EPHEMERAL_PORT_START   1024
+#define JLOS_IPV4_BROADCAST         0xFFFFFFFF
+
+#define JLOS_IPV4_ANY               0
+#define JLOS_IPV4_LOOPBACK_NET      0x7F000000
+#define JLOS_IPV4_LOOPBACK_MASK     0xFF000000
+
+#define JLOS_IPV4_GET_VERSION(msg)  (((msg)->version_ihl >> 4) & 0x0F)
+#define JLOS_IPV4_GET_IHL(msg)      ((msg)->version_ihl & 0x0F)
+
+#define JLOS_IPV4_SET_VERSION_IHL(msg, ver, ihl) ((msg)->version_ihl = (((ver) & 0x0F) << 4) | ((ihl) & 0x0F))
+
+#define JLOS_IPV4_FMT(ip)           ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF
 
 typedef struct {
     uint8_t     version_ihl;
@@ -23,14 +35,6 @@ typedef struct {
     uint32_t    src_ip;
     uint32_t    dst_ip;
 } __attribute__((packed)) jlos_ipv4_message_t;
-
-#define JLOS_IPV4_GET_VERSION(msg) (((msg)->version_ihl >> 4) & 0x0F)
-#define JLOS_IPV4_GET_IHL(msg)     ((msg)->version_ihl & 0x0F)
-#define JLOS_IPV4_SET_VERSION_IHL(msg, ver, ihl) ((msg)->version_ihl = (((ver) & 0x0F) << 4) | ((ihl) & 0x0F))
-
-#define JLOS_IPV4_BROADCAST 0xFFFFFFFF
-
-#define JLOS_IPV4_FMT(ip)   ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF
 
 typedef struct jlos_internet_protocol_provider jlos_internet_protocol_provider_t;
 

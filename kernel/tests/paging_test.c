@@ -19,8 +19,8 @@ JLOS_TEST(paging, map_unmap)
     jlos_paging_context_init(&ctx);
     void *frame = jlos_page_frame_malloc();
     JLOS_ASSERT_NOT_NULL(frame);
-    uint32_t phys = VIRT_TO_PHYS(frame);
-    uint32_t va = TEST_VBASE;
+    uintptr_t phys = VIRT_TO_PHYS(frame);
+    uintptr_t va = TEST_VBASE;
 
     JLOS_TEST_TRUE(jlos_paging_map(&ctx, va, phys, JLOS_PG_USER_RW));
     JLOS_TEST_EQ(jlos_paging_get_physical_addr(&ctx, va), phys);
@@ -43,8 +43,8 @@ JLOS_TEST(paging, map_range)
 
     void *bulk = jlos_page_frame_alloc_n(N);
     JLOS_ASSERT_NOT_NULL(bulk);
-    uint32_t phys = VIRT_TO_PHYS(bulk);
-    uint32_t va = TEST_VBASE + JLOS_PAGE_FRAME_SIZE;
+    uintptr_t phys = VIRT_TO_PHYS(bulk);
+    uintptr_t va = TEST_VBASE + JLOS_PAGE_FRAME_SIZE;
 
     JLOS_TEST_TRUE(jlos_paging_map_range(&ctx, va, phys, N * JLOS_PAGE_FRAME_SIZE, JLOS_PG_USER_RW));
     for (uint32_t i = 0; i < N; i++) {
@@ -64,8 +64,8 @@ JLOS_TEST(paging, change_flags)
     jlos_paging_context_init(&ctx);
     void *frame = jlos_page_frame_malloc();
     JLOS_ASSERT_NOT_NULL(frame);
-    uint32_t phys = VIRT_TO_PHYS(frame);
-    uint32_t va = TEST_VBASE + 2 * JLOS_PAGE_FRAME_SIZE;
+    uintptr_t phys = VIRT_TO_PHYS(frame);
+    uintptr_t va = TEST_VBASE + 2 * JLOS_PAGE_FRAME_SIZE;
 
     jlos_paging_map(&ctx, va, phys, JLOS_PG_USER_RW);
     uint32_t prot = jlos_arch_pte_get_prot(&ctx, va);
@@ -89,7 +89,7 @@ JLOS_TEST(paging, clone)
     jlos_paging_context_init(&src);
     void *frame = jlos_page_frame_malloc();
     JLOS_ASSERT_NOT_NULL(frame);
-    uint32_t va = TEST_VBASE + 3 * JLOS_PAGE_FRAME_SIZE;
+    uintptr_t va = TEST_VBASE + 3 * JLOS_PAGE_FRAME_SIZE;
     jlos_paging_map(&src, va, VIRT_TO_PHYS(frame), JLOS_PG_USER_RW);
 
     jlos_arch_paging_context_tables_clone(&dst, &src);

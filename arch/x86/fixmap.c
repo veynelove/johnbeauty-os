@@ -8,7 +8,7 @@
 
 static void jlos_fixmap_set(jlos_fixmap_idx_t idx, uint32_t phys, uint32_t prot)
 {
-    uint32_t va = jlos_fixmap_virt(idx);
+    uintptr_t va = jlos_fixmap_virt(idx);
     if (jlos_arch_pte_present(&s_kernel_paging_context, va)) {
         jlos_arch_pte_replace(&s_kernel_paging_context, va, phys, prot);
     } else {

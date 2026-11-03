@@ -26,7 +26,7 @@ extern jlos_test_stats_t g_jlos_test_stats;
 #define JLOS_TEST(suite, name) \
     static void jlos_test_fn_##suite##_##name(void); \
     static const jlos_test_case_t \
-        __attribute__((used, section(".jlos_test"))) \
+        __attribute__((used, section(".jlos_test"), aligned(sizeof(void *)))) \
         jlos_test_##suite##_##name = { #suite, #name, jlos_test_fn_##suite##_##name }; \
     static void jlos_test_fn_##suite##_##name(void)
 
@@ -130,8 +130,8 @@ void jlos_test_fail_ptr(const char *file, int line, const char *a_str, const cha
         } \
     } while (0)
 
-#define JLOS_TEST_NULL(p)          JLOS_TEST_PTR_EQ(p, NULL)
-#define JLOS_TEST_NOT_NULL(p)      JLOS_TEST_TRUE((p) != NULL)
+#define JLOS_TEST_NULL(p)          JLOS_TEST_PTR_EQ(p, nullptr)
+#define JLOS_TEST_NOT_NULL(p)      JLOS_TEST_TRUE((p) != nullptr)
 
 #define JLOS_ASSERT_TRUE(cond) \
     do { \
@@ -142,7 +142,7 @@ void jlos_test_fail_ptr(const char *file, int line, const char *a_str, const cha
         } \
     } while (0)
 
-#define JLOS_ASSERT_NOT_NULL(p) JLOS_ASSERT_TRUE((p) != NULL)
+#define JLOS_ASSERT_NOT_NULL(p) JLOS_ASSERT_TRUE((p) != nullptr)
 
 void jlos_test_run_all(void);
 

@@ -95,7 +95,8 @@ uint64_t jlos_hal_rtc_read_ns(void)
         full_year = 1900 + year;
     }
 
-    uint32_t unix_sec = rtc_date_to_unix(full_year, month, day, hour, min, sec);
+    uint32_t local_sec = rtc_date_to_unix(full_year, month, day, hour, min, sec);
+    uint32_t unix_sec = local_sec - JLOS_WALLCLOCK_UTC_OFFSET_SEC;
     return (uint64_t)unix_sec * 1000000000ULL;
 }
 

@@ -7,8 +7,9 @@
 #include <kernel/initcall.h>
 #include <kernel/timek.h>
 #include <hal/clock_event.h>
+#include <hal/smp.h>
 
-static jlos_hrtimer_base_t s_base;
+DEFINE_PER_CPU(jlos_hrtimer_base_t, jlos_cpu_hrtimer_base);
 
 static int hrtimer_cmp(const jlos_rbtree_node_t *a, const jlos_rbtree_node_t *b)
 {
@@ -64,30 +65,31 @@ void jlos_hrtimer_cancel(jlos_hrtimer_base_t *base, jlos_hrtimer_t *timer)
 
 jlos_hrtimer_base_t *jlos_hrtimer_get_base(void)
 {
-    return &s_base;
+    return this_cpu_ptr(jlos_cpu_hrtimer_base);
 }
 
 void jlos_hrtimer_interrupt(void)
 {
+    jlos_hrtimer_base_t *base = jlos_hrtimer_get_base();
     uint64_t now = jlos_timek_get_monotonic_ns();
     jlos_rbtree_node_t *node;
-    while ((node = jlos_rbtree_first(&s_base.active))) {
+    while ((node = jlos_rbtree_first(&base->active))) {
         jlos_hrtimer_t *timer = jlos_rbtree_entry(node, jlos_hrtimer_t, node);
         if (timer->expires > now) {
             break;
         }
-        jlos_rbtree_remove(&s_base.active, &timer->node);
+        jlos_rbtree_remove(&base->active, &timer->node);
         timer->active = false;
         if (timer->interval > 0) {
             do {
                 timer->expires += timer->interval;
             } while (timer->expires <= now);
             timer->active = true;
-            jlos_rbtree_insert(&s_base.active, &timer->node, hrtimer_cmp);
+            jlos_rbtree_insert(&base->active, &timer->node, hrtimer_cmp);
         }
         timer->func(timer);
     }
-    node = jlos_rbtree_first(&s_base.active);
+    node = jlos_rbtree_first(&base->active);
     if (node) {
         jlos_hrtimer_t *timer = jlos_rbtree_entry(node, jlos_hrtimer_t, node);
         if (timer->expires > now) {
@@ -98,10 +100,11 @@ void jlos_hrtimer_interrupt(void)
     }
 }
 
-static void hrtimer_base_setup(void)
+void jlos_hrtimer_base_init_cpu(void)
 {
-    jlos_rbtree_init(&s_base.active);
-    jlos_spinlock_init(&s_base.lock);
+    jlos_hrtimer_base_t *base = jlos_hrtimer_get_base();
+    jlos_rbtree_init(&base->active);
+    jlos_spinlock_init(&base->lock);
 }
 
-JLOS_INITCALL(JLOS_INITCALL_SUBSYS, hrtimer_base_setup);
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_hrtimer_base_init_cpu);

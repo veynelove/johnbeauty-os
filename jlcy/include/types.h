@@ -16,10 +16,13 @@ typedef short                      int16_t;
 typedef int                        int32_t;
 typedef long long int              int64_t;
 
-typedef unsigned char               bool;
-#define true                        1
-#define false                       0
-#define NULL                        ((void*)0)
+#if __SIZEOF_POINTER__ == 8
+typedef uint64_t                   uintptr_t;
+typedef int64_t                    intptr_t;
+#else
+typedef uint32_t                   uintptr_t;
+typedef int32_t                    intptr_t;
+#endif
 
 typedef uint32_t                   size_t;
 

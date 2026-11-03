@@ -1,10 +1,11 @@
+#ifndef CONFIG_X86_64
 /**
  * Copyright 2026 veyne.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-# SSE2 优化 memcpy — 32B 宽读写
-# void *jlos_memcpy(void *dst, const void *src, size_t size)
+/* SSE2 优化 memcpy — 32B 宽读写 */
+/* void *jlos_memcpy(void *dst, const void *src, size_t size) */
 .text
 .global jlos_memcpy
 jlos_memcpy:
@@ -94,3 +95,6 @@ jlos_memcpy:
     popl %ebp
     ret
 .section .note.GNU-stack,"",%progbits
+#else
+.section .note.GNU-stack,"",%progbits
+#endif

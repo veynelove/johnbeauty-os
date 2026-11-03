@@ -46,7 +46,7 @@ void printk(int level, const char *subsys, const char *func, const char *fmt, ..
  #define printk_debug(fmt,...) do{}while(0)
 #endif
 
-#define printk_raw(fmt,...) printk(JLOS_KERNEL_LOG_RAW, NULL, NULL, fmt, ##__VA_ARGS__)
+#define printk_raw(fmt,...) printk(JLOS_KERNEL_LOG_RAW, nullptr, nullptr, fmt, ##__VA_ARGS__)
 
 void jlos_printk_init(void);
 void jlos_printk_set_loglevel(int level);

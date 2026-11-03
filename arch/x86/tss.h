@@ -8,6 +8,20 @@
 
 #include <common/types.h>
 
+#ifdef CONFIG_X86_64
+typedef struct {
+    uint32_t reserved0;
+    uint64_t rsp0;
+    uint64_t rsp1;
+    uint64_t rsp2;
+    uint64_t reserved1;
+    uint64_t ist[7];
+    uint32_t reserved2;
+    uint32_t reserved3;
+    uint16_t reserved4;
+    uint16_t io_map_base;
+} __attribute__((packed)) jlos_x86_tss_t;
+#else
 typedef struct {
     uint16_t back_link;
     uint16_t reserved0;
@@ -48,8 +62,9 @@ typedef struct {
     uint16_t trap_flag;
     uint16_t io_map_base;
 } __attribute__((packed)) jlos_x86_tss_t;
+#endif
 
-void jlos_x86_tss_init(jlos_x86_tss_t *self, uint32_t esp0, uint16_t ss0);
+void jlos_x86_tss_init(jlos_x86_tss_t *self, uintptr_t stack0, uint16_t ss0);
 void jlos_x86_tss_load(uint16_t selector);
 
 #endif

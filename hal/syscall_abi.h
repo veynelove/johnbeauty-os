@@ -40,6 +40,13 @@ enum jlos_syscall_num {
     JLOS_SYSCALL_SETTIMEOFDAY       = 27,
     JLOS_SYSCALL_CLOCK_SETTIME      = 28,
     JLOS_SYSCALL_NANOSLEEP          = 29,
+    JLOS_SYSCALL_SOCKET             = 30,
+    JLOS_SYSCALL_BIND               = 31,
+    JLOS_SYSCALL_LISTEN             = 32,
+    JLOS_SYSCALL_ACCEPT             = 33,
+    JLOS_SYSCALL_CONNECT            = 34,
+    JLOS_SYSCALL_SEND               = 35,
+    JLOS_SYSCALL_RECV               = 36,
 };
 
 enum jlos_syscall_misscode {

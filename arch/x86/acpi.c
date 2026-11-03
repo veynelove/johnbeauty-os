@@ -6,6 +6,7 @@
 #include <arch/x86/acpi.h>
 #include <arch/x86/smp.h>
 #include <arch/x86/fixmap.h>
+#include <arch/x86/ioapic.h>
 #include <hal/paging.h>
 #include <kernel/initcall.h>
 
@@ -59,7 +60,7 @@ static jlos_acpi_rsdp_t *jlos_acpi_find_rsdp(void)
             return rsdp;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
@@ -73,12 +74,12 @@ static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
         root_phys = rsdp->rsdt_address;
         entry_size = 4;
     } else {
-        return NULL;
+        return nullptr;
     }
 
     jlos_acpi_sdt_header_t *root = (jlos_acpi_sdt_header_t *)jlos_fixmap_map(JLOS_FIXMAP_ACPI_0, root_phys);
     if (!jlos_acpi_sdt_checksum_ok(root)) {
-        return NULL;
+        return nullptr;
     }
     uint32_t entry_count = (root->length - sizeof(jlos_acpi_sdt_header_t)) / entry_size;
     uint8_t *entries = (uint8_t *)root + sizeof(jlos_acpi_sdt_header_t);
@@ -97,7 +98,7 @@ static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
             return (jlos_acpi_madt_t *)sdt;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
@@ -117,6 +118,12 @@ static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
                 jlos_arch_smp_set_cpu_apic_id(cpu_index, lapic->apic_id);
                 cpu_index++;
             }
+        } else if (type == JLOS_ACPI_MADT_TYPE_IOAPIC && length >= sizeof(jlos_acpi_madt_ioapic_t)) {
+            jlos_acpi_madt_ioapic_t *ioapic = (jlos_acpi_madt_ioapic_t *)entry;
+            jlos_ioapic_add_from_madt(ioapic->ioapic_id, ioapic->ioapic_address, ioapic->gsi_base);
+        } else if (type == JLOS_ACPI_MADT_TYPE_ISO && length >= sizeof(jlos_acpi_madt_iso_t)) {
+            jlos_acpi_madt_iso_t *iso = (jlos_acpi_madt_iso_t *)entry;
+            jlos_ioapic_add_iso(iso->source, iso->gsi, iso->flags);
         }
         entry += length;
     }
@@ -140,6 +147,7 @@ void jlos_acpi_init(void)
         printk_err("madt not found\n");
         return;
     }
+    jlos_ioapic_routes_init();
     uint32_t num_cpus = jlos_acpi_parse_madt(madt);
     if (num_cpus == 0) {
         printk_err("no enabled local apic entries\n");
@@ -150,6 +158,7 @@ void jlos_acpi_init(void)
     for (uint32_t i = 0; i < num_cpus; i++) {
         printk_debug("cpu id = %u, apic_id = %u\n", i, jlos_arch_smp_cpu_apic_id(i));
     }
+    jlos_ioapic_init();
 }
 
 JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_acpi_init);

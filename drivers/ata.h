@@ -12,6 +12,8 @@
 
 #define JLOS_ATA_IDENTIFY_WORDS 256
 
+#define JLOS_ATA_POLL_TIMEOUT   100000
+
 extern const uint16_t jlos_ata_primary_port_base;
 extern const uint16_t jlos_ata_secondary_port_base;
 

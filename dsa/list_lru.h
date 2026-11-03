@@ -40,7 +40,7 @@ static inline bool jlos_list_lru_is_empty(jlos_list_lru_t *lru)
 static inline jlos_list_head_t *jlos_list_lru_evict(jlos_list_lru_t *lru)
 {
     if (jlos_list_empty(&lru->list)) {
-        return NULL;
+        return nullptr;
     }
     jlos_list_head_t *victim = lru->list.next;
     jlos_list_del_init(victim);

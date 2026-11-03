@@ -4,6 +4,7 @@
  */
 
 #include <hal/kernel_syscall.h>
+#include <hal/hal_arch.h>
 #include <hal/paging.h>
 #include <hal/signal.h>
 #include <fs/vfs.h>
@@ -15,17 +16,17 @@
 #include <kernel/initcall.h>
 #include <kernel/multitask.h>
 #include <kernel/timek.h>
+#include <net/socket.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "syscall"
 #include <kernel/printk.h>
 
 extern jlos_task_manager_t      *g_task_manager_ptr;
-extern jlos_task_t              *g_current_task_ptr;
 
 static jlos_syscall_handler_t   s_syscall_handler;
 jlos_syscall_handler_t          *s_syscall_handler_ptr = &s_syscall_handler;
 
-static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_write(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     void *user_buf = (void *)arg2;
@@ -33,10 +34,11 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
         len = JLOS_SYSCALL_WRITE_BUF_SIZE_MAX;
     }
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
     if (!fd_entry) {
         return - SYSCALL_ENINVAL;
     }
@@ -44,7 +46,7 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         len += 1;
     }
     uint8_t stack_buf[256];
-    uint8_t *buf = NULL;
+    uint8_t *buf = nullptr;
     uint32_t alloc_len = len;
     if (alloc_len <= sizeof(stack_buf)) {
         buf = stack_buf;
@@ -99,22 +101,23 @@ static int32_t syscall_write(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return -SYSCALL_ENINVAL;
 }
 
-static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_read(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
     void *user_buf = (void *)arg2;
     uint32_t len = arg3;
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
     if (!fd_entry) {
         return -SYSCALL_ENOMEM;
     }
     if (fd_entry->type == JLOS_TASK_FD_PIPE) {
         jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
         uint8_t stack_buf[256];
-        uint8_t *buf = NULL;
+        uint8_t *buf = nullptr;
         if (len <= sizeof(stack_buf)) {
             buf = stack_buf;
         } else {
@@ -138,7 +141,7 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (fd_entry->type == JLOS_TASK_FD_FILE) {
         jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
         uint8_t stack_buf[256];
-        uint8_t *buf = NULL;
+        uint8_t *buf = nullptr;
         if (len <= sizeof(stack_buf)) {
             buf = stack_buf;
         } else {
@@ -168,9 +171,10 @@ static int32_t syscall_read(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return -SYSCALL_ENINVAL;
 }
 
-static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_create_pipe(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
     jlos_pipe_t *pipe = (jlos_pipe_t *)jlos_kalloc(sizeof(jlos_pipe_t));
@@ -178,30 +182,30 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENOMEM;
     }
     jlos_pipe_init(pipe, 0);
-    int32_t fd_read = jlos_task_fd_malloc(g_current_task_ptr);
+    int32_t fd_read = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_PIPE);
     if (fd_read < 0) {
         jlos_pipe_destroy(pipe);
         return -SYSCALL_ENOMEM;
     }
-    int32_t fd_write = jlos_task_fd_malloc(g_current_task_ptr);
+    int32_t fd_write = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_PIPE);
     if (fd_write < 0) {
-        jlos_task_fd_free(g_current_task_ptr, fd_read);
+        jlos_task_fd_free(current_task, fd_read);
         jlos_pipe_destroy(pipe);
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_r = jlos_task_fd_get(g_current_task_ptr, fd_read);
+    jlos_task_fd_t *fd_r = jlos_task_fd_get(current_task, fd_read);
     fd_r->type = JLOS_TASK_FD_PIPE;
     fd_r->obj = pipe;
     fd_r->flags = JLOS_TASK_FD_READ_ONLY;
-    jlos_task_fd_t *fd_w = jlos_task_fd_get(g_current_task_ptr, fd_write);
+    jlos_task_fd_t *fd_w = jlos_task_fd_get(current_task, fd_write);
     fd_w->type = JLOS_TASK_FD_PIPE;
     fd_w->obj = pipe;
     fd_w->flags = JLOS_TASK_FD_WRITE_ONLY;
     jlos_pipe_ref_inc(pipe);
     int32_t fds[2] = {fd_read, fd_write};
     if (!jlos_copy_to_user((void *)arg1, fds, sizeof(fds))) {
-        jlos_task_fd_free(g_current_task_ptr, fd_read);
-        jlos_task_fd_free(g_current_task_ptr, fd_write);
+        jlos_task_fd_free(current_task, fd_read);
+        jlos_task_fd_free(current_task, fd_write);
         jlos_pipe_destroy(pipe);
         return -SYSCALL_EFAULT;
     }
@@ -210,38 +214,49 @@ static int32_t syscall_create_pipe(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_task_fd_close(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_task_fd_close(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
     if (!fd_entry) {
         return -SYSCALL_ENINVAL;
     }
-    if (fd_entry->type == JLOS_TASK_FD_PIPE) {
-        jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
-        if (pipe) {
-            jlos_pipe_close(pipe);
-            jlos_pipe_ref_dec(pipe);
+    switch (fd_entry->type) {
+        case JLOS_TASK_FD_PIPE:
+            jlos_pipe_t *pipe = (jlos_pipe_t *)fd_entry->obj;
+            if (pipe) {
+                jlos_pipe_close(pipe);
+                jlos_pipe_ref_dec(pipe);
+            }
+            break;
+        case JLOS_TASK_FD_FILE: {
+            jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
+            if (file) {
+                jlos_vfs_close(file);
+            }
+            break;
         }
+        case JLOS_TASK_FD_NET_SOCKET:
+            jlos_socket_destroy((jlos_socket_t *)fd_entry->obj);
+            fd_entry->obj = nullptr;
+            break;
+        default:
+            break;
     }
-    if (fd_entry->type == JLOS_TASK_FD_FILE) {
-        jlos_vfs_file_t *file = (jlos_vfs_file_t *)fd_entry->obj;
-        if (file) {
-            jlos_vfs_close(file);
-        }
-    }
-    jlos_task_fd_free(g_current_task_ptr, fd);
+    jlos_task_fd_free(current_task, fd);
     (void)arg2;
     (void)arg3;
     return 0;
 }
 
-static int32_t syscall_open(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_open(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
     char kernel_path[JLOS_VFS_PATH_MAX];
@@ -258,12 +273,12 @@ static int32_t syscall_open(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!file) {
         return -SYSCALL_ENOENT;
     }
-    int32_t fd = jlos_task_fd_malloc(g_current_task_ptr);
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_FILE);
     if (fd < 0) {
         jlos_vfs_close(file);
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
     fd_entry->type = JLOS_TASK_FD_FILE;
     fd_entry->obj = file;
     switch (arg2 & JLOS_VFS_O_ACCMODE) {
@@ -280,13 +295,14 @@ static int32_t syscall_open(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return fd;
 }
 
-static int32_t syscall_lseek(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_lseek(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     int32_t fd = (int32_t)arg1;
-    if (!g_current_task_ptr || !g_current_task_ptr->fds) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_fd_t *fd_entry = jlos_task_fd_get(g_current_task_ptr, fd);
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
     if (!fd_entry || fd_entry->type != JLOS_TASK_FD_FILE) {
         return -SYSCALL_ENINVAL;
     }
@@ -298,48 +314,50 @@ static int32_t syscall_lseek(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return result;
 }
 
-static int32_t syscall_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_fork(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
     (void)arg3;
-    if (!g_current_task_ptr || !g_task_manager_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_cpu_state_t *tf = g_current_task_ptr->syscall_tf;
+    jlos_cpu_state_t *tf = current_task->syscall_tf;
     if (!tf) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_t *child = jlos_process_fork(g_task_manager_ptr, g_current_task_ptr, tf);
+    jlos_task_t *child = jlos_process_fork(g_task_manager_ptr, current_task, tf);
     if (!child) {
         return -SYSCALL_ENOMEM;
     }
     return (int32_t)child->pid;
 }
 
-static int32_t syscall_clone(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clone(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint32_t clone_flags = arg1;
     uint32_t child_stack = arg2;
     (void)arg3;
-    if (!g_current_task_ptr || !g_task_manager_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_cpu_state_t *tf = g_current_task_ptr->syscall_tf;
+    jlos_cpu_state_t *tf = current_task->syscall_tf;
     if (!tf) {
         return -SYSCALL_ENOMEM;
     }
     jlos_task_t *child =
-        jlos_process_clone(g_task_manager_ptr, g_current_task_ptr, tf, clone_flags, child_stack);
+        jlos_process_clone(g_task_manager_ptr, current_task, tf, clone_flags, child_stack);
     if (!child) {
         return -SYSCALL_ENOMEM;
     }
     return (int32_t)child->pid;
 }
 
-static int32_t syscall_unlink(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_unlink(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    if (!jlos_hal_current_task()) {
         return -SYSCALL_ENOMEM;
     }
     char kernel_path[JLOS_VFS_PATH_MAX];
@@ -360,12 +378,13 @@ static int32_t syscall_unlink(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_task_brk(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->mm) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_mm_t *mm = g_current_task_ptr->mm;
+    jlos_mm_t *mm = current_task->mm;
     if (arg1 == 0) {
         return (int32_t)mm->brk_end;
     }
@@ -387,19 +406,21 @@ static int32_t syscall_task_brk(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)new_brk;
 }
 
-static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_mmap(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
+
     struct {
-        uint32_t addr;
+        uintptr_t addr;
         uint32_t len;
         uint32_t prot;
         uint32_t flags;
         uint32_t fd;
         uint32_t offset;
     } args;
-    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->mm) {
         return -SYSCALL_ENOMEM;
     }
     if (!jlos_copy_from_user(&args, (const void *)arg1, sizeof(args))) {
@@ -412,9 +433,9 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         return -SYSCALL_ENOSYS;
     }
     uint32_t len = JLOS_PAGE_ALIGN_UP(args.len);
-    jlos_mm_t *mm = g_current_task_ptr->mm;
+    jlos_mm_t *mm = current_task->mm;
 
-    uint32_t addr;
+    uintptr_t addr;
     if (args.flags & JLOS_MMAP_FIXED) {
         if (args.addr & (JLOS_PAGE_FRAME_SIZE - 1)) {
             return -SYSCALL_ENINVAL;
@@ -425,7 +446,7 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
         addr = args.addr;
         jlos_vma_remove_range(mm, addr, addr + len);
     } else {
-        uint32_t hint = args.addr ? args.addr : 0;
+        uintptr_t hint = args.addr ? args.addr : 0;
         addr = jlos_vma_find_free_area(mm, JLOS_TASK_USER_MMAP_BASE, JLOS_TASK_USER_MMAP_LIMIT, hint, len);
         if (!addr) {
             return -SYSCALL_ENOMEM;
@@ -438,13 +459,17 @@ static int32_t syscall_mmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (!jlos_vma_add(mm, addr, addr + len, vma_flags, JLOS_VMA_TYPE_ANON)) {
         return -SYSCALL_ENOMEM;
     }
+
+
     return (int32_t)addr;
 }
 
-static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_munmap(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
-    if (!g_current_task_ptr || !g_current_task_ptr->mm) {
+
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->mm) {
         return -SYSCALL_ENOMEM;
     }
     uint32_t addr = arg1;
@@ -452,7 +477,8 @@ static int32_t syscall_munmap(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     if (len == 0 || (addr & (JLOS_PAGE_FRAME_SIZE - 1))) {
         return -SYSCALL_ENINVAL;
     }
-    jlos_vma_remove_range(g_current_task_ptr->mm, addr, addr + len);
+    jlos_vma_remove_range(current_task->mm, addr, addr + len);
+
     return 0;
 }
 
@@ -463,11 +489,11 @@ static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char
     }
     *count = 0;
     for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
-        kernel_ptrs[i] = NULL;
+        kernel_ptrs[i] = nullptr;
     }
     for (int i = 0; i < JLOS_EXECVE_MAX_ARGS; i++) {
-        uint32_t user_str;
-        if (!jlos_copy_from_user(&user_str, (const void *)(user_ptr_arr + i * sizeof(uint32_t)), sizeof(uint32_t))) {
+        uintptr_t user_str;
+        if (!jlos_copy_from_user(&user_str, (const void *)(user_ptr_arr + i * sizeof(uintptr_t)), sizeof(uintptr_t))) {
             return - SYSCALL_EFAULT;
         }
         if (user_str == 0) {
@@ -493,9 +519,10 @@ static int syscall_copy_strings(uint32_t user_ptr_arr, char *kernel_ptrs[], char
     return 0;
 }
 
-static int32_t syscall_execve(uint32_t path, uint32_t argv, uint32_t envp)
+static int32_t syscall_execve(uintptr_t path, uintptr_t argv, uintptr_t envp)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENINVAL;
     }
     char kernel_path[JLOS_VFS_PATH_MAX];
@@ -525,48 +552,51 @@ static int32_t syscall_execve(uint32_t path, uint32_t argv, uint32_t envp)
         jlos_kfree(strbuf);
         return err;
     }
-    int ret = jlos_process_exec_elf(g_current_task_ptr, kernel_path, argc, kernel_argv, kernel_envp);
+    int ret = jlos_process_exec_elf(current_task, kernel_path, argc, kernel_argv, kernel_envp);
     jlos_kfree(strbuf);
     return ret;
 }
 
-static int32_t syscall_exit(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_exit(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_process_exit(g_current_task_ptr, arg1);
+    jlos_process_exit(current_task, arg1);
     (void)arg2;
     (void)arg3;
     return 0;
 }
 
-static int32_t syscall_yield(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_yield(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENOMEM;
     }
-    g_current_task_ptr->yield = true;
+    current_task->yield = true;
     (void)arg1;
     (void)arg2;
     (void)arg3;
     return 0;
 }
 
-static int32_t syscall_get_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_pid(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENOMEM;
     }
     (void)arg1;
     (void)arg2;
     (void)arg3;
-    return g_current_task_ptr->pid;
+    return current_task->pid;
 }
 
-static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_sleep(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    if (!jlos_hal_current_task()) {
         return -SYSCALL_ENOMEM;
     }
     jlos_task_sleep_until(g_task_manager_ptr, jlos_timek_get_ticks() + arg1);
@@ -575,7 +605,7 @@ static int32_t syscall_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_nanosleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_nanosleep(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
@@ -594,18 +624,19 @@ static int32_t syscall_nanosleep(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_get_errno(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_errno(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENOMEM;
     }
     (void)arg1;
     (void)arg2;
     (void)arg3;
-    return g_current_task_ptr->errno;
+    return current_task->errno;
 }
 
-static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_ticks(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
@@ -613,7 +644,7 @@ static int32_t syscall_get_ticks(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return (int32_t)jlos_timek_get_ticks();
 }
 
-static int32_t syscall_gettimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_gettimeofday(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint64_t ns = jlos_timek_get_realtime_ns();
     uint32_t tv[2];
@@ -627,7 +658,7 @@ static int32_t syscall_gettimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clock_gettime(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint64_t ns;
     if (arg1 == 0) {
@@ -645,7 +676,7 @@ static int32_t syscall_clock_gettime(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
-static int32_t syscall_settimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_settimeofday(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg2;
     (void)arg3;
@@ -664,7 +695,7 @@ static int32_t syscall_settimeofday(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return 0;
 }
 
-static int32_t syscall_clock_settime(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_clock_settime(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
     if (arg1 != 0) {
@@ -685,7 +716,7 @@ static int32_t syscall_clock_settime(uint32_t arg1, uint32_t arg2, uint32_t arg3
     return 0;
 }
 
-static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_get_tasks_info(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     if (!g_task_manager_ptr) {
         return - SYSCALL_ENOMEM;
@@ -705,53 +736,50 @@ static int32_t syscall_get_tasks_info(uint32_t arg1, uint32_t arg2, uint32_t arg
     return 0;
 }
 
-static int32_t syscall_wait_pid(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_wait_pid(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     uint32_t target_pid = arg1;
     int32_t *exit_code = (int32_t *)arg2;
+    (void)arg3;
 
-    if (!g_current_task_ptr || !g_task_manager_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !g_task_manager_ptr) {
         return -SYSCALL_ENOMEM;
     }
-    jlos_task_t *target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
-    if (!target || target->parent_pid != g_current_task_ptr->pid) {
-        return -SYSCALL_ENINVAL;
-    }
-    while (target->status != JLOS_TASK_ZOMBIE) {
-        JLOS_TASK_SET_WAITING(g_current_task_ptr, target_pid);
-        jlos_task_manager_schedule(g_task_manager_ptr);
-        target = jlos_task_manager_find_pid(g_task_manager_ptr, target_pid);
-        if (!target) {
+    for (;;) {
+        int32_t code = 0;
+        int32_t ret = jlos_task_wait_or_reap(g_task_manager_ptr, target_pid, current_task, &code);
+        if (ret > 0) {
+            if (exit_code && !jlos_copy_to_user(exit_code, &code, sizeof(int32_t))) {
+                return -SYSCALL_EFAULT;
+            }
+            return ret;
+        }
+        if (ret == -TASK_ERR_NOT_FOUND || ret == -TASK_ERR_NO_CHILD) {
             return -SYSCALL_ENINVAL;
         }
+        jlos_task_manager_schedule(g_task_manager_ptr);
     }
-    if (exit_code && !jlos_copy_to_user(exit_code, &target->exit_code, sizeof(int32_t))) {
-            return -SYSCALL_EFAULT;
-    }
-    (void)arg3;
-    uint32_t reaped_pid = target->pid;
-
-    jlos_task_free(g_task_manager_ptr, target);
-
-    return (int32_t)reaped_pid;
+    return 0;
 }
 
-static int32_t syscall_signal(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_signal(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return -SYSCALL_ENOMEM;
     }
     uint32_t sig = arg1;
     if (sig == 0 || sig >= JLOS_SIGNAL_NUM) {
         return -SYSCALL_ENINVAL;
     }
-    uint32_t old = g_current_task_ptr->signal_handlers[sig];
-    g_current_task_ptr->signal_handlers[sig] = arg2;
+    uintptr_t old = current_task->signal_handlers[sig];
+    current_task->signal_handlers[sig] = arg2;
     return (int32_t)old;
 }
 
-static int32_t syscall_kill(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_kill(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg3;
     if (!g_task_manager_ptr) {
@@ -769,17 +797,199 @@ static int32_t syscall_kill(uint32_t arg1, uint32_t arg2, uint32_t arg3)
     return jlos_signal_send(target, sig);
 }
 
-static int32_t syscall_sigreturn(uint32_t arg1, uint32_t arg2, uint32_t arg3)
+static int32_t syscall_sigreturn(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
 {
     (void)arg1;
     (void)arg2;
     (void)arg3;
-    jlos_task_t *me = g_current_task_ptr;
+    jlos_task_t *me = jlos_hal_current_task();
     if (!me || !me->syscall_tf) {
         return -SYSCALL_ENINVAL;
     }
     jlos_arch_signal_frame_restore(me->syscall_tf);
     return jlos_cpu_state_get_retval(me->syscall_tf);
+}
+
+static jlos_socket_t *syscall_socket_get(jlos_task_t *task, int32_t fd)
+{
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(task, fd);
+    if (!fd_entry || fd_entry->type != JLOS_TASK_FD_NET_SOCKET) {
+        return nullptr;
+    }
+    return (jlos_socket_t *)fd_entry->obj;
+}
+
+static int32_t syscall_socket(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = jlos_socket_create((uint32_t)arg1, (uint32_t)arg2, (uint32_t)arg3);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_NET_SOCKET);
+    if (fd < 0) {
+        jlos_socket_destroy(socket);
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
+    fd_entry->obj = socket;
+    fd_entry->type = JLOS_TASK_FD_NET_SOCKET;
+    return fd;
+}
+
+static int32_t syscall_bind(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_bind(socket, (uint32_t)arg2, (uint16_t)arg3)) {
+        return -SYSCALL_ENINVAL;
+    }
+    return 0;
+}
+
+static int32_t syscall_listen(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    (void)arg3;
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_listen(socket, (int32_t)arg2)) {
+        return -SYSCALL_EIO;
+    }
+    return 0;
+}
+
+static int32_t syscall_accept(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    jlos_socket_t *child = jlos_socket_accept(socket);
+    if (!child) {
+        return -SYSCALL_EIO;
+    }
+    int32_t fd = jlos_task_fd_malloc(current_task, JLOS_TASK_FD_NET_SOCKET);
+    if (fd < 0) {
+        jlos_socket_destroy(child);
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_task_fd_t *fd_entry = jlos_task_fd_get(current_task, fd);
+    fd_entry->obj = child;
+    fd_entry->flags = JLOS_TASK_FD_READ_WRITE;
+    if (arg2) {
+        uint32_t peer_ip = 0;
+        uint16_t peer_port = 0;
+        jlos_socket_getpeer_name(child, &peer_ip, &peer_port);
+        jlos_sockaddr_in_t peer;
+        peer.family = JLOS_SOCKET_DOMAIN_INET;
+        peer.port = peer_port;
+        peer.addr = peer_ip;
+        jlos_memset(peer.zero, 0, sizeof(peer.zero));
+        uint32_t peer_len = sizeof(jlos_sockaddr_in_t);
+        if (arg3 && !jlos_copy_to_user((void *)arg3, &peer_len, sizeof(peer_len))) {
+            return -SYSCALL_EFAULT;
+        }
+        if (!jlos_copy_to_user((void *)arg2, &peer, sizeof(peer))) {
+            return -SYSCALL_EFAULT;
+        }
+    }
+    return fd;
+}
+
+static int32_t syscall_connect(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    if (jlos_socket_connect(socket, (uintptr_t)arg2, (uint16_t)arg3)) {
+        return -SYSCALL_EIO;
+    }
+    return 0;
+}
+
+static int32_t syscall_send(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint32_t len = (uint32_t)arg3;
+    if (len == 0 || len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
+        return -SYSCALL_EPBIG;
+    }
+    void *buf = jlos_kalloc(len);
+    if (!buf) {
+        return -SYSCALL_ENOMEM;
+    }
+    if (!jlos_copy_from_user(buf, (const void *)arg2, len)) {
+        jlos_kfree(buf);
+        return -SYSCALL_EFAULT;
+    }
+    int32_t sent = jlos_socket_send(socket, buf, len);
+    jlos_kfree(buf);
+    if (sent < 0) {
+        return -SYSCALL_EIO;
+    }
+    return sent;
+}
+
+static int32_t syscall_recv(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task || !current_task->fds) {
+        return -SYSCALL_ENOMEM;
+    }
+    jlos_socket_t *socket = syscall_socket_get(current_task, (int32_t)arg1);
+    if (!socket) {
+        return -SYSCALL_ENINVAL;
+    }
+    uint32_t len = (uint32_t)arg3;
+    if (len == 0 || len > JLOS_SYSCALL_WRITE_BUF_SIZE_MAX) {
+        return -SYSCALL_EPBIG;
+    }
+    void *buf = jlos_kalloc(len);
+    if (!buf) {
+        return -SYSCALL_ENOMEM;
+    }
+    int32_t n = jlos_socket_recv(socket, buf, len);
+    if (n < 0) {
+        jlos_kfree(buf);
+        return -SYSCALL_EIO;
+    }
+    if (!jlos_copy_to_user((void *)arg2, buf, (size_t)n)) {
+        jlos_kfree(buf);
+        return -SYSCALL_EFAULT;
+    }
+    jlos_kfree(buf);
+    return n;
 }
 
 void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
@@ -790,15 +1000,16 @@ void jlos_syscall_register(uint8_t num, jlos_syscall_func_t handler)
     s_syscall_handler_ptr->dispatch[num] = handler;
 }
 
-static int32_t s_syscall_dispatch(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3)
+static int32_t s_syscall_dispatch(uint32_t num, uintptr_t a1, uintptr_t a2, uintptr_t a3)
 {
     return jlos_syscall_do_dispatch(s_syscall_handler_ptr, num, a1, a2, a3);
 }
 
-static uint32_t s_syscall_resched_do(uint32_t ctx)
+static uintptr_t s_syscall_resched_do(uintptr_t ctx)
 {
-    if (g_current_task_ptr) {
-        g_current_task_ptr->yield = false;
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (current_task) {
+        current_task->yield = false;
         jlos_task_manager_schedule(g_task_manager_ptr);
     }
     return ctx;
@@ -848,6 +1059,13 @@ void jlos_syscall_handler_init(void)
     jlos_syscall_register(JLOS_SYSCALL_SETTIMEOFDAY, syscall_settimeofday);
     jlos_syscall_register(JLOS_SYSCALL_CLOCK_SETTIME, syscall_clock_settime);
     jlos_syscall_register(JLOS_SYSCALL_NANOSLEEP, syscall_nanosleep);
+    jlos_syscall_register(JLOS_SYSCALL_SOCKET, syscall_socket);
+    jlos_syscall_register(JLOS_SYSCALL_BIND, syscall_bind);
+    jlos_syscall_register(JLOS_SYSCALL_LISTEN, syscall_listen);
+    jlos_syscall_register(JLOS_SYSCALL_ACCEPT, syscall_accept);
+    jlos_syscall_register(JLOS_SYSCALL_CONNECT, syscall_connect);
+    jlos_syscall_register(JLOS_SYSCALL_SEND, syscall_send);
+    jlos_syscall_register(JLOS_SYSCALL_RECV, syscall_recv);
 }
 
 void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
@@ -855,15 +1073,16 @@ void jlos_syscall_handler_destroy(jlos_syscall_handler_t* self)
     (void)self;
 }
 
-int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uint32_t arg1, uint32_t arg2,
-    uint32_t arg3)
+int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_num, uintptr_t arg1, uintptr_t arg2,
+    uintptr_t arg3)
 {
     int32_t result = - SYSCALL_ENOSYS;
     if (syscall_num < JLOS_SYSCALL_MAX && self->dispatch[syscall_num]) {
         result = self->dispatch[syscall_num](arg1, arg2, arg3);
     }
-    if (g_current_task_ptr) {
-        g_current_task_ptr->errno = (result < 0) ? -result : 0;
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (current_task) {
+        current_task->errno = (result < 0) ? -result : 0;
         return (result < 0) ? -1 : result;
     }
     return result;
@@ -871,14 +1090,15 @@ int32_t jlos_syscall_do_dispatch(jlos_syscall_handler_t *self, uint32_t syscall_
 
 bool jlos_syscall_need_resched()
 {
-    if (!g_current_task_ptr) {
+    jlos_task_t *current_task = jlos_hal_current_task();
+    if (!current_task) {
         return false;
     }
-    if (g_task_manager_ptr && g_task_manager_ptr->need_resched) {
+    if (jlos_need_resched()) {
         return true;
     }
-    if (g_current_task_ptr->status == JLOS_TASK_ZOMBIE || g_current_task_ptr->status == JLOS_TASK_WAITING
-    || g_current_task_ptr->sleeping || g_current_task_ptr->yield) {
+    if (current_task->status == JLOS_TASK_ZOMBIE || current_task->status == JLOS_TASK_WAITING
+    || current_task->sleeping || current_task->yield) {
         return true;
     }
     return false;
@@ -886,9 +1106,10 @@ bool jlos_syscall_need_resched()
 
 bool jlos_access_ok(const void *addr, size_t n)
 {
+    jlos_task_t *current_task = jlos_hal_current_task();
     jlos_paging_context_t *ctx =
-        g_current_task_ptr && g_current_task_ptr->mm ? g_current_task_ptr->mm->pc : jlos_hal_paging_get_active_context();
-    return jlos_paging_is_user_accessible(ctx, (uint32_t)addr, n);
+        current_task && current_task->mm ? current_task->mm->pc : jlos_hal_paging_get_active_context();
+    return jlos_paging_is_user_accessible(ctx, (uintptr_t)addr, n);
 }
 
 bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)
@@ -896,12 +1117,10 @@ bool jlos_copy_from_user(void *dst, const void *usr_src, size_t n)
     if (!jlos_access_ok(usr_src, n)) {
         return false;
     }
-    uint8_t *d = (uint8_t *)dst;
-    const uint8_t *s = (const uint8_t *)usr_src;
-    for (size_t i = 0; i < n; i++) {
-        d[i] = s[i];
-    }
-    return true;
+    jlos_hal_uaccess_begin();
+    long left = jlos_hal_raw_copy_from_user(dst, usr_src, n);
+    jlos_hal_uaccess_end();
+    return left == 0;
 }
 
 bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
@@ -909,12 +1128,10 @@ bool jlos_copy_to_user(void *usr_dst, const void *ker_src, size_t n)
     if (!jlos_access_ok(usr_dst, n)) {
         return false;
     }
-    uint8_t *d = (uint8_t *)usr_dst;
-    const uint8_t *s = (const uint8_t *)ker_src;
-    for (size_t i = 0; i < n; i++) {
-        d[i] = s[i];
-    }
-    return true;
+    jlos_hal_uaccess_begin();
+    long left = jlos_hal_raw_copy_to_user(usr_dst, ker_src, n);
+    jlos_hal_uaccess_end();
+    return left == 0;
 }
 
 JLOS_INITCALL(JLOS_INITCALL_DEVICE, jlos_syscall_handler_init);

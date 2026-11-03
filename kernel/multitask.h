@@ -12,6 +12,9 @@
 #include <hal/ext_state.h>
 #include <hal/syscall_abi.h>
 #include <hal/smp.h>
+#include <hal/context.h>
+#include <hal/spinlock.h>
+#include <hal/paging.h>
 #include <dsa/list.h>
 #include <dsa/hash_chain.h>
 #include <dsa/timer_wheel.h>
@@ -48,15 +51,12 @@
 #define JLOS_TASK_USER_MMAP_BASE    0x40000000
 #define JLOS_TASK_USER_MMAP_LIMIT   0xBFF00000
 
-#define JLOS_KERN_WRITABLE_MIN   ((uint32_t)(unsigned long)&_kernel_end)
-#define JLOS_KERN_U32OF(p)       ((uint32_t)(unsigned long)(p))
-#define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_U32OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
-                                     (JLOS_KERN_U32OF(p) + (sz) >  JLOS_KERN_U32OF(p)) && \
-                                     (JLOS_KERN_U32OF(p) + (sz) <= 0xFFFFFFFFu) )
+#define JLOS_KERN_WRITABLE_MIN   KERNEL_DIRECT_MAP_BASE
+#define JLOS_KERN_ADDR_OF(p)     ((uintptr_t)(p))
+#define JLOS_KERN_PTR_VALID(p,sz)  ( (JLOS_KERN_ADDR_OF(p) >= JLOS_KERN_WRITABLE_MIN) && \
+                                     (JLOS_KERN_ADDR_OF(p) + (sz) >  JLOS_KERN_ADDR_OF(p)) )
 
 #define JLOS_TASK_PID_HASH_SIZE     256
-
-#define jlos_task_curr()  (g_current_task_ptr)
 
 extern uint32_t _kernel_end;
 
@@ -66,17 +66,18 @@ typedef enum {
 } jlos_task_exit_code;
 
 enum jlos_task_errno {
-    TASK_ERR_NOMEM      = 1,
-    TASK_ERR_INVAL      = 2,
-    TASK_ERR_NOT_FOUND  = 3,
-    TASK_ERR_NO_CHILD   = 4,
+    TASK_ERR_NOMEM          = 1,
+    TASK_ERR_INVAL          = 2,
+    TASK_ERR_NOT_FOUND      = 3,
+    TASK_ERR_NO_CHILD       = 4,
 };
 
 typedef enum {
-    JLOS_TASK_FD_UNUSED = 0,
-    JLOS_TASK_FD_PIPE   ,
-    JLOS_TASK_FD_CONSOLE,
-    JLOS_TASK_FD_FILE
+    JLOS_TASK_FD_UNUSED     = 0,
+    JLOS_TASK_FD_PIPE       = 1,
+    JLOS_TASK_FD_CONSOLE    = 2,
+    JLOS_TASK_FD_FILE       = 3,
+    JLOS_TASK_FD_NET_SOCKET = 4,
 } jlos_task_fd_type_t;
 
 typedef struct {
@@ -119,39 +120,44 @@ typedef struct jlos_task {
     jlos_arch_ext_state_t   ext_state;
     jlos_cpu_state_t        *syscall_tf;
     uint32_t                signal_pending;
-    uint32_t                signal_handlers[JLOS_SIGNAL_NUM];
+    uintptr_t               signal_handlers[JLOS_SIGNAL_NUM];
     uint32_t                cpu;
+    void                    *kthread;
 } __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN))) jlos_task_t;
 
 typedef struct {
+    jlos_spinlock_t     lock;
     struct {
-        jlos_list_head_t head;
-        uint32_t count;
+    jlos_list_head_t head;
+    uint32_t count;
     }                   queue[JLOS_TASK_MLFQ_LEVELS];
     uint32_t            nonempty;
 } jlos_task_runqueue_t;
 
 typedef struct {
+    jlos_spinlock_t         manager_lock;
     jlos_task_t             **tasks;
     uint32_t                max_tasks;
     jlos_hash_chain_t       pid_hash;
     uint32_t                num_tasks;
-    int                     current_task;
     jlos_list_head_t        zombie_head;
     jlos_timer_wheel_t      sleep_wheel;
     jlos_task_runqueue_t    rq[JLOS_MAX_CPUS];
-    jlos_task_t             *idle_task;
-    bool                    need_resched;
+    jlos_task_t             *idle_task[JLOS_MAX_CPUS];
 } jlos_task_manager_t;
 
-extern jlos_task_t *g_current_task_ptr;
 extern jlos_task_manager_t *g_task_manager_ptr;
 
 int32_t jlos_task_init(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 int32_t jlos_task_init_user(jlos_task_t* self, jlos_mmu_t *mmu, void (*entrypoint)(void), const char *name);
 void jlos_task_free(jlos_task_manager_t *self, jlos_task_t *task);
 
-int32_t jlos_task_fd_malloc(jlos_task_t *task);
+int32_t jlos_task_reap_child(jlos_task_manager_t *self, uint32_t pid, jlos_task_t *parent, int32_t *exit_code_out);
+void jlos_task_reap_all_zombies(jlos_task_manager_t *self);
+int32_t jlos_task_wait_or_reap(jlos_task_manager_t *self, uint32_t pid, jlos_task_t *parent, int32_t *exit_code_out);
+bool jlos_task_check_zombie_exit(jlos_task_manager_t *self, uint32_t pid, uint32_t expected_exit);
+
+int32_t jlos_task_fd_malloc(jlos_task_t *task, jlos_task_fd_type_t type);
 jlos_task_fd_t *jlos_task_fd_get(jlos_task_t *task, int32_t fd);
 void jlos_task_fd_free(jlos_task_t *task, int32_t fd);
 
@@ -179,6 +185,7 @@ void jlos_task_sleep_hrtimer(jlos_task_manager_t *self, uint64_t ns);
 void jlos_task_manager_init();
 void jlos_task_manager_destroy(jlos_task_manager_t* self);
 bool jlos_task_manager_add_task(jlos_task_manager_t* self, jlos_task_t *task);
+void jlos_task_manager_enqueue(jlos_task_manager_t *self, jlos_task_t *task);
 
 void jlos_task_manager_schedule(jlos_task_manager_t* self);
 
@@ -191,17 +198,20 @@ jlos_task_t *jlos_process_clone(jlos_task_manager_t *self,
     jlos_task_t *parent, const jlos_cpu_state_t *parent_trapframe, uint32_t clone_flags, uint32_t child_stack);
 
 int jlos_process_exec(jlos_task_t *task, void (*entrypoint)(void));
-__attribute__((noreturn)) void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
+[[noreturn]] void jlos_process_exit(jlos_task_t *task, uint32_t exit_code);
 
 bool jlos_need_resched(void);
 void jlos_sched_set_need_resched(void);
 void jlos_sched_wake_waiter(jlos_task_manager_t *self, uint32_t exited_pid);
 void jlos_sched_balance(jlos_task_manager_t *self);
 
+void jlos_sched_set_need_resched_on(uint32_t cpu);
+void jlos_sched_init_cpu(void);
+
 #define JLOS_EXECVE_MAX_ARGS    256
 #define JLOS_EXECVE_MAX_STRLEN  256
 
 int jlos_process_exec_elf(jlos_task_t *task, const char *path, int argc, char *const argv[], char *const envp[]);
-void jlos_arch_exec_return(jlos_paging_context_t *pc, uint32_t entry, uint32_t stack_top);
+void jlos_arch_exec_return(jlos_paging_context_t *pc, uintptr_t entry, uintptr_t stack_top);
 
 #endif

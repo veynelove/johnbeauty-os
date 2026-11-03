@@ -7,6 +7,7 @@
 #define _JLOS_NET_DNS_H
 
 #include <net/udp.h>
+#include <hal/atomic.h>
 
 #define JLOS_DNS_SERVER_PORT    53
 
@@ -33,7 +34,7 @@ typedef struct {
     jlos_udp_provider_t *udp;
     uint16_t            query_id;
     uint32_t            resolved_ip;
-    bool                resolved;
+    jlos_atomic_t       resolved;
 } jlos_dns_resolver_t;
 
 void jlos_dns_resolver_init(jlos_dns_resolver_t *self, jlos_udp_provider_t *udp);

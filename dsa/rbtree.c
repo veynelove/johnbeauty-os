@@ -247,12 +247,12 @@ jlos_rbtree_node_t *jlos_rbtree_find(const jlos_rbtree_t *tree, const jlos_rbtre
             return x;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 jlos_rbtree_node_t *jlos_rbtree_find_le(const jlos_rbtree_t *tree, const jlos_rbtree_node_t *key, jlos_rbtree_compare_fn cmp)
 {
-    jlos_rbtree_node_t *best = NULL;
+    jlos_rbtree_node_t *best = nullptr;
     jlos_rbtree_node_t *x = tree->root;
     while (x != &tree->nil) {
         if (cmp(x, key) <= 0) {
@@ -268,7 +268,7 @@ jlos_rbtree_node_t *jlos_rbtree_find_le(const jlos_rbtree_t *tree, const jlos_rb
 jlos_rbtree_node_t *jlos_rbtree_first(const jlos_rbtree_t *tree)
 {
     if (tree->root == &tree->nil) {
-        return NULL;
+        return nullptr;
     }
     return rbtree_minimum(tree, tree->root);
 }
@@ -276,7 +276,7 @@ jlos_rbtree_node_t *jlos_rbtree_first(const jlos_rbtree_t *tree)
 jlos_rbtree_node_t *jlos_rbtree_last(const jlos_rbtree_t *tree)
 {
     if (tree->root == &tree->nil) {
-        return NULL;
+        return nullptr;
     }
     return rbtree_maximum(tree, tree->root);
 }
@@ -292,7 +292,7 @@ jlos_rbtree_node_t *jlos_rbtree_next(const jlos_rbtree_t *tree, jlos_rbtree_node
         y = y->parent;
     }
     if (y == &tree->nil) {
-        return NULL;
+        return nullptr;
     }
     return y;
 }
@@ -308,7 +308,7 @@ jlos_rbtree_node_t *jlos_rbtree_prev(const jlos_rbtree_t *tree, jlos_rbtree_node
         y = y->parent;
     }
     if (y == &tree->nil) {
-        return NULL;
+        return nullptr;
     }
     return y;
 }
@@ -331,12 +331,12 @@ jlos_rbtree_node_t *jlos_rbtree_find_key(const jlos_rbtree_t *tree, const void *
             return x;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 jlos_rbtree_node_t *jlos_rbtree_find_key_le(const jlos_rbtree_t *tree, const void *key, jlos_rbtree_cmp_key_fn cmp)
 {
-    jlos_rbtree_node_t *best = NULL;
+    jlos_rbtree_node_t *best = nullptr;
     jlos_rbtree_node_t *x = tree->root;
     while (x != &tree->nil) {
         if (cmp(x, key) <= 0) {

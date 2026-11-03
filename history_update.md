@@ -1,7 +1,54 @@
 # JLOS 开发历史日志（history_update.md）
 
-> 从 update_plan.md 迁出的历史记录：完整开发日志（v1.0 ~ v3.0）+ v2.3 及以前的历史版本档案。
+> 从 update_plan.md 迁出的历史记录：完整开发日志（v1.0 起）+ v2.3 及以前的历史版本档案。
 > 当前计划与待办以 update_plan.md 为准，本文件仅用于追溯。
+
+***
+
+## 2026-10-26（v4.4）ARM64/AArch64 架构移植（SMP + A/B 优化）
+
+### 背景
+
+多架构目标（P2）落地：在已有 x86-64 HAL 分层基座上移植 AArch64，凑齐 x86-64 + ARM64 两套架构；无真机，用 QEMU `qemu-system-aarch64 -M virt,gic-version=3 -cpu max` 验证。
+
+### 阶段 1：启动链与基础子系统（单核 54/54）
+
+- **启动链**：`boot.S`（EL2→EL1 + 早期页表 + PL011）、FDT 解析 + boot-info 接缝、`arch/arm64/paging.c` 真实分页实现。
+- **中断/异常**：GICv3 + 向量表；页错误 ESR→通用错误码翻译（EC/DFSC/WnR）。
+- **信号**：`arch/arm64/signal.c` 实现 sigreturn 跳板 + 用户上下文保存/恢复。
+- **syscall / 惰性 FPU**：`CPACR_EL1.FPEN` 只 trap EL0 + `ext_state` 扩到 528B（FPSIMD）+ `EC 0x7` 接 `ext_trap_body`；jlcy 恢复用户态 FP。
+- **网络**：引入通用 NIC 抽象（`hal/net.h`：`jlos_hal_net_dev_t` + ops + primary_dev，回调走原始 buffer，解耦网络栈与驱动），改造 amd/etherframe/network；新增 arm64 `virtio-net`（mmio + 双 virtqueue，TX 异步 + RX IRQ）。
+- 结果：单核 54/54，udp/http 真实跑通。
+
+### 阶段 2：SMP（对应 x86 8 步）
+
+- **Phase A**：per-CPU 基础设施（`.data..percpu` 段 + `jlos_smp_per_cpu_offset` + `current/prev task` per-CPU 化）。
+- **Phase B**：AP 启动（FDT `/psci`(HVC/SMC) + `psci_cpu_on` + `boot.S` 次核入口 + GIC per-CPU redistributor/CPUIF + AP timer + `jlos_ap_main`）。
+- **Phase C**：IPI/TLB（GIC SGI 发送 `icc_sgi1r` + redistributor SGI 使能 + `set_need_resched_on` reschedule SGI + `tlb_shootdown` 广播/等待）。
+- **Phase D**：多核稳定性打磨 → `-smp 4` 54/54。
+
+### 阶段 3：A/B 优化
+
+- **A（稳健性）**：惰性 FPU owner 改 per-CPU；PAN/uaccess（HAL `jlos_hal_uaccess_begin/end`，arm64 `msr pan`，x86 空）。
+- **B（性能）**：启用 ASID（切换免全量 flush）；arm64 `memcpy/memset` 汇编；内核直接映射区 2MB 大页；reschedule IPI 仅 0→1 发送。
+
+### 关键踩坑（过程，逐条根因/结论见 update_plan.md Phase 10.1 / 10.2）
+
+1. `.data..percpu` 输出段被 linker `.data : { *(.data .data.*) }` 的 `.data.*` 通配符吞掉 → per-CPU 段为空 → `kalloc(0)` 失败 → AP `per_cpu_offset` 恒 0（**多核总根因**）。
+2. `arch/arm64/paging.c` 内核页表初始化执行 `__pgtable_start[0]=0`，清掉 boot 期 identity 表 → AP 低地址取指 `Prefetch Abort`。
+3. `alloc_percpu_areas` 用 `memcpy` 拷贝 BSP 运行时状态给 AP → 破坏 BSP 栈（318101 次 Data Abort）。
+4. AP 启动栈与 idle 内核栈共用槽 → idle 预置帧覆盖 `ap_main` 活跃栈。
+5. `jlos_irq_context_init` 翻译 ESR 时 WnR 只判 `EC 0x24(LEL)` 漏 `0x25(CEL)` → 内核写 COW 页被误杀。
+6. `memcpy/memset` 汇编用 `subs+b.hs` 循环边界错 → 非 16 倍数越界写 → external abort。
+7. 改 `hal/paging.h` 结构体布局后未 clean 重建（Makefile 无头文件依赖跟踪）→ 旧 `.o` 用旧布局随机崩溃。
+
+### 验证
+
+```
+单核：54 passed / 0 failed
+-smp 4：54 passed / 0 failed（连续多次）
+arm64 编译：0 警告；x86-64/32：0 警告 0 错误
+```
 
 ***
 
@@ -42,7 +89,7 @@ net 子系统各层用 `uint8_t *data + size` 裸指针传递，一次 UDP 发�
 ### TCP 崩溃修复
 
 - **现象**：外部 `curl -v http://192.168.159.133:1234` 触发 SYN-ACK 发送时 triple fault。
-- **根因**：`arch/x86/lib/memcpy.s` 汇编版缺少 size=0 早期返回。size=0 时直接进入 byte loop，`movb (%esi), %al` 解引用 src=NULL → 页错误 → triple fault；`decl %edx` 让 0 下溢成 0xFFFFFFFF，循环 4G 次越界写。汇编版覆盖 weak C 版本，C 版本的 size=0 检查不生效。
+- **根因**：`arch/x86/lib/memcpy.s` 汇编版缺少 size=0 早期返回。size=0 时直接进入 byte loop，`movb (%esi), %al` 解引用 src=nullptr → 页错误 → triple fault；`decl %edx` 让 0 下溢成 0xFFFFFFFF，循环 4G 次越界写。汇编版覆盖 weak C 版本，C 版本的 size=0 检查不生效。
 - **修复**：memcpy.s + memset.s 入口加 `testl %edx, %edx; jz .Lret`。同时补上 `tcp_provider_send` 漏掉的 `ip_handler_send` 调用。
 
 ### 阶段 5 推迟
@@ -105,7 +152,7 @@ vmplayer 全绿：file_test ALL PASSED（create + write/read + lseek + unlink + 
 ### hrtimer 批次 3：中断集成 + 周期性 tick hrtimer
 
 - **hrtimer interrupt**：全局 `s_base` + `jlos_hrtimer_interrupt`（遍历到期 hrtimer → 回调 → forward 周期性 → 重编程 next_event）。
-- **s_base 初始化修复**：BSS 零初始化但 `jlos_rbtree_init` 未调用 → root=NULL → triple fault。加 SUBSYS 级 initcall `hrtimer_base_setup`。
+- **s_base 初始化修复**：BSS 零初始化但 `jlos_rbtree_init` 未调用 → root=nullptr → triple fault。加 SUBSYS 级 initcall `hrtimer_base_setup`。
 - **tick hrtimer**：`kernel/timek.c` tick hrtimer 实例 + 回调 + `jlos_tick_init` POST 级 initcall。
 - **调度记账分离**：`multitask.c` 加 `tick_and_schedule`；`interrupts.c` IRQ0 精简为 `hrtimer_interrupt()` + `tick_and_schedule()`，消除 arch 层耦合。
 
@@ -167,7 +214,7 @@ framebuffer 1024×768（128×48），日志输出后 Shift+PgUp 回看历史、S
 - **`jlos_network_config_t`**：`net/network.h` 定义 ip/gateway/subnet_mask/dns_server 四字段，`network_stack_t` 加 config 字段。
 - **去硬编码**：`network_init` 不再内置任何 IP，config 初始 memset 0（未配置态），IP 由 DHCP 或用户空间设置。
 - **`jlos_network_apply_config`**：将 config 写入网卡驱动 logical_address + IPv4 gateway/subnet。
-- **删冗余自检**：`network_init` 从 238 行精简到 66 行，删除所有字段级自检（检查 init 函数是否正确设置 backend/handler/hash 等字段），保留 kalloc 失败和 eth0 NULL 检查。修复 `gateway_ip_be`/`subnet_be` 未定义引用编译错误。
+- **删冗余自检**：`network_init` 从 238 行精简到 66 行，删除所有字段级自检（检查 init 函数是否正确设置 backend/handler/hash 等字段），保留 kalloc 失败和 eth0 nullptr 检查。修复 `gateway_ip_be`/`subnet_be` 未定义引用编译错误。
 
 ### 批次 3：DHCP 状态机
 
@@ -302,7 +349,7 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 - **execve 系统调用（方案 A）**：经典做法——复用内核栈，修改 trapframe（eip/cs/user\_esp/user\_ss/eflags），正常 return 由 iret 到新程序。全局 `g\_hal\_syscall\_trapframe` 在 syscall entry 设置/清除。`jlos\_cpu\_state\_set\_user\_entry` 修改 trapframe。
 
-- **argv/envp 栈布局**：System V ABI x86 32-bit 经典栈布局（环境字符串 → 参数字符串 → NULL → envp\[\] → NULL → argv\[\] → argc）。`syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈。
+- **argv/envp 栈布局**：System V ABI x86 32-bit 经典栈布局（环境字符串 → 参数字符串 → nullptr → envp\[\] → nullptr → argv\[\] → argc）。`syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈。
 
 - **用户态子项目 jlcy/**：独立子项目与内核隔离。crt0.S 汇编入口（\_start 从 esp 取 argc/argv → call main → exit syscall）+ user\_syscall.c（int $0x80 stub）+ syscall\_abi.h（syscall 号 #define，C 和汇编通用，\_\_ASSEMBLY\_\_ 保护）+ hello.c（int main(int argc, char \*\*argv) 纯 C，get\_pid + printf + return 7）+ user\_linker.ld（0x08048000 经典基址）。构建集成：根 Makefile → jlcy/user/hello.elf → FAT32 镜像 → VMDK → 内核 rootfs 挂载后 execve。
 
@@ -338,13 +385,13 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 #### 2026-09-17（v2.11）
 
-- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_beauty_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
+- **Initcall 机制完成**：新增 `kernel/initcall.h` + `kernel/initcall.c`，5 级 initcall（CORE/SUBSYS/DEVICE/LATE/POST），两层宏展开（`__JLOS_INITCALL` + `JLOS_INITCALL`）先展开 level 再字符串化。`linker.ld` 中 `.initcall0`~`.initcall4` 段替代 `.init_array`，`ALIGN(4)` 非 `ALIGN(4K)` 避免 BSS LMA 不连续。`john_sunshine_main()` 从手动调用各子系统 init 改为 `jlos_do_initcalls()` 一行，`loader.s` 删除 `call_constructors` 调用。10 个子系统按依赖级别自动注册。
 
 - **Framebuffer Console 完成**：`loader.s` 启用 `MULTIBOOT_VIDEO_MODE`（1024×768×32），`common/multiboot.h` 添加 `jlos_vbe_mode_info_t`。`arch/x86/font_8x16.h`/`.c` 256 字符 × 16 字节点阵。`arch/x86/fb_console.c` 完整实现 putc\_at/clear/scroll\_up/erase\_cursor/draw\_cursor/get\_info/invert\_at，软件光标 erase/draw 分离模式（反转字符底部 2 行），鼠标光标反转整个字符块（`visible` 标志防首次 erase）。framebuffer 映射用 write-back 缓存（去掉 CACHE\_DISABLE）。`hal/display.h` 中 `GRAPHIC` → `FRAMEBUFFER`，`set_hw_cursor` → `erase_cursor` + `draw_cursor`。`kernel/console.c` 改为 erase/draw 光标模式 + `\b` 处理 + info 预填默认值 + `display_device_init` initcall（DEVICE 级）。
 
 - **输入子系统迁移**：`tools/samples/debug_console.c` → `drivers/input/input.c`，键盘/鼠标驱动注册 + 事件回调，`JLOS_INITCALL_DEVICE` 自动注册。删除 `KERNEL_CONFIG_DEBUG_CONSOLE` 和 `KERNEL_CONFIG_DEBUG_NETWORK` 宏，删除原 `debug_console.c/.h`。
 
-- **Bug 修复**：① keyboard.c 添加 Backspace scancode 0x0E（原缺失，按键被丢弃）；② interrupts.c 删除冗余 `handles[i] = NULL` 清零（BSS 已为零，清零覆盖已注册 handler）；③ syscall.c initcall 从 SUBSYS 改为 DEVICE（依赖 IRQ manager 先初始化）；④ multitask.c VMA end 从 `stack_base + stack_size` 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE`（`[start,end)` 语义不含栈顶）。
+- **Bug 修复**：① keyboard.c 添加 Backspace scancode 0x0E（原缺失，按键被丢弃）；② interrupts.c 删除冗余 `handles[i] = nullptr` 清零（BSS 已为零，清零覆盖已注册 handler）；③ syscall.c initcall 从 SUBSYS 改为 DEVICE（依赖 IRQ manager 先初始化）；④ multitask.c VMA end 从 `stack_base + stack_size` 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE`（`[start,end)` 语义不含栈顶）。
 
 - **方向变更**：原计划阶段 A（VGA 文本模式三层重构 + 日志环形缓冲 + 键盘翻页 + 硬件光标 + 串口宏开关）改为直接实现 framebuffer console（原阶段 B 内容）。VBE framebuffer 与 VGA 文本互斥，一旦 loader.s 请求 VIDEO\_MODE，0xB8000 文本显存失效，因此直接跳到 framebuffer 方案。日志环形缓冲 + 键盘翻页 + 串口宏开关仍为后续待办。
 
@@ -392,9 +439,9 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
 - **Bug 2: rq\_dequeue** **`__builtin_ctz(0)`** **UB（卡死根因之二）**:
 
-  - 根因: `int l = __builtin_ctz(self->rq_nonempty); if (!self->rq_nonempty) return NULL;` —— `__builtin_ctz(0)` 是未定义行为, GCC 在 UB 假设下可能优化掉后面的判空检查 → runqueue 真空时 ctz 返回垃圾值 → `self->rq[l]` 越界 → `first=&head`（自指）→ `jlos_list_del(head)` 删 head 自己 → runqueue 链表彻底损坏 → 后续 rq\_dequeue 返回野指针 → schedule `return cpustate` 不切换 → ZOMBIE prev 恢复 halt → 死循环卡死
+  - 根因: `int l = __builtin_ctz(self->rq_nonempty); if (!self->rq_nonempty) return nullptr;` —— `__builtin_ctz(0)` 是未定义行为, GCC 在 UB 假设下可能优化掉后面的判空检查 → runqueue 真空时 ctz 返回垃圾值 → `self->rq[l]` 越界 → `first=&head`（自指）→ `jlos_list_del(head)` 删 head 自己 → runqueue 链表彻底损坏 → 后续 rq\_dequeue 返回野指针 → schedule `return cpustate` 不切换 → ZOMBIE prev 恢复 halt → 死循环卡死
 
-  - 修复: 调换顺序, 先 `if (!rq_nonempty) return NULL;` 再 `__builtin_ctz`
+  - 修复: 调换顺序, 先 `if (!rq_nonempty) return nullptr;` 再 `__builtin_ctz`
 
   - 文件: kernel/multitask.c
 
@@ -460,7 +507,7 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 
   - memory\_test.c: 统一 K\&R 大括号风格, 删冗余空行, 简化日志上下文标签
 
-  - multitask\_test.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child\*, 子返回 NULL, 调用方据此判 is\_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
+  - multitask\_test.c: 删除裸写汇编的 `JLOS_INLINE_FORK` 宏, 改用 HAL `jlos_arch_fork_invoke` 接口 (父返回 child\*, 子返回 nullptr, 调用方据此判 is\_child); 保留 omit-frame-pointer (子栈 memcpy 父 ebp 指向父 kstack, 必须 esp 寻址)
 
 - **HAL 层架构合规重构** (HAL 不含汇编, 汇编全在 arch/):
 

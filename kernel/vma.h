@@ -27,8 +27,8 @@ typedef enum {
 } jlos_vma_type_t;
 
 typedef struct jlos_vma {
-    uint32_t            start;
-    uint32_t            end;
+    uintptr_t           start;
+    uintptr_t           end;
     uint32_t            flags;
     jlos_vma_type_t     type;
     jlos_rbtree_node_t  rb_node;
@@ -39,9 +39,9 @@ typedef struct jlos_vma {
 typedef struct jlos_mm {
     jlos_paging_context_t   *pc;
     jlos_rbtree_t           vma_tree;
-    uint32_t                brk_start;
-    uint32_t                brk_end;
-    uint32_t                brk_limit;
+    uintptr_t               brk_start;
+    uintptr_t               brk_end;
+    uintptr_t               brk_limit;
     jlos_spinlock_t         lock;
     jlos_atomic_t           refcount;
 } jlos_mm_t;
@@ -51,15 +51,15 @@ void jlos_mm_destroy(jlos_mm_t *mm);
 void jlos_mm_ref_inc(jlos_mm_t *mm);
 bool jlos_mm_clone_user(jlos_mm_t *dst, jlos_mm_t *src);
 
-jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uint32_t addr);
-jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uint32_t start, uint32_t end, uint32_t flags, jlos_vma_type_t type);
-bool jlos_vma_remove_range(jlos_mm_t *mm, uint32_t start, uint32_t end);
+jlos_vma_t *jlos_vma_find(jlos_mm_t *mm, uintptr_t addr);
+jlos_vma_t *jlos_vma_add(jlos_mm_t *mm, uintptr_t start, uintptr_t end, uint32_t flags, jlos_vma_type_t type);
+bool jlos_vma_remove_range(jlos_mm_t *mm, uintptr_t start, uintptr_t end);
 
-uint32_t jlos_vma_find_free_area(jlos_mm_t *mm, uint32_t base, uint32_t limit, uint32_t hint, uint32_t len);
+uintptr_t jlos_vma_find_free_area(jlos_mm_t *mm, uintptr_t base, uintptr_t limit, uintptr_t hint, uintptr_t len);
 
-jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uint32_t start, uint32_t new_end, uint32_t flags, jlos_vma_type_t type);
-bool jlos_vma_shrink_tail(jlos_mm_t *mm, uint32_t new_end, jlos_vma_type_t type);
+jlos_vma_t *jlos_vma_grow_tail(jlos_mm_t *mm, uintptr_t start, uintptr_t new_end, uint32_t flags, jlos_vma_type_t type);
+bool jlos_vma_shrink_tail(jlos_mm_t *mm, uintptr_t new_end, jlos_vma_type_t type);
 
-bool jlos_vma_demand_map(jlos_mm_t *mm, uint32_t fault_addr);
+bool jlos_vma_demand_map(jlos_mm_t *mm, uintptr_t fault_addr);
 
 #endif

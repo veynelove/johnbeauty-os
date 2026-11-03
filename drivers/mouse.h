@@ -41,7 +41,7 @@ void jlos_mouse_event_handler_mouse_move(jlos_mouse_event_handler_t* self, int32
 
 void jlos_mouse_driver_init(jlos_mouse_driver_t* self, jlos_irq_manager_t *manager, jlos_mouse_event_handler_t *handler);
 void jlos_mouse_driver_destroy(jlos_mouse_driver_t* self);
-uint32_t jlos_mouse_driver_handle_interrupt(jlos_mouse_driver_t* self, uint32_t esp);
+uintptr_t jlos_mouse_driver_handle_interrupt(jlos_irq_handler_t* self, uintptr_t esp);
 void jlos_mouse_driver_activate(jlos_mouse_driver_t* self);
 
 #endif

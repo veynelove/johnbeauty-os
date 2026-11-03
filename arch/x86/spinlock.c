@@ -53,11 +53,16 @@ uint32_t jlos_spin_lock_irqsave(jlos_spinlock_t *lock)
     if (!lock) {
         return 0;
     }
+#ifdef CONFIG_X86_64
+    uint64_t flags;
+    __asm__ __volatile__("pushfq; popq %0; cli" : "=r"(flags) :: "memory");
+#else
     uint32_t flags;
     __asm__ __volatile__("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+#endif
 
     jlos_spin_lock(lock);
-    return flags;
+    return (uint32_t)flags;
 }
 
 void jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags)
@@ -66,5 +71,9 @@ void jlos_spin_unlock_irqrestore(jlos_spinlock_t *lock, uint32_t flags)
         return;
     }
     jlos_spin_unlock(lock);
+#ifdef CONFIG_X86_64
+    __asm__ __volatile__("pushq %0; popfq" :: "r"((uint64_t)flags) : "memory", "cc");
+#else
     __asm__ __volatile__("push %0; popf" :: "r"(flags) : "memory", "cc");
+#endif
 }

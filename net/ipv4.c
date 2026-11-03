@@ -21,7 +21,7 @@ void jlos_internet_protocol_handler_init(jlos_internet_protocol_handler_t* self,
 void jlos_internet_protocol_handler_destroy(jlos_internet_protocol_handler_t* self)
 {
     if (self->backend->handlers[self->ip_protocol] == self) {
-        self->backend->handlers[self->ip_protocol] = NULL;
+        self->backend->handlers[self->ip_protocol] = nullptr;
     }
 }
 
@@ -47,14 +47,13 @@ static bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_interne
     jlos_ipv4_message_t *ip_message = (jlos_ipv4_message_t *)skb->data;
     bool send_back = false;
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
-    if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend) || ip_message->dst_ip == JLOS_IPV4_BROADCAST) {
+    if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend) || ip_message->dst_ip == JLOS_IPV4_BROADCAST || (ip_message->dst_ip & JLOS_IPV4_LOOPBACK_MASK) == JLOS_IPV4_LOOPBACK_NET) {
         printk_debug("packet is for us\n");
         int length = JLOS_SWAP_ENDIAN_16(ip_message->total_length);
         if (length > (int)size) {
             length = size;
         }
         if (self->handlers[ip_message->protocol]) {
-            printk_debug("handler found, calling it\n");
             skb->src_ip = ip_message->src_ip;
             skb->dst_ip = ip_message->dst_ip;
             skb->protocol = ip_message->protocol;
@@ -88,7 +87,7 @@ void jlos_internet_protocol_provider_init(jlos_internet_protocol_provider_t* sel
     self->gateway_ip = gateway_ip;
     self->subnet_mask = subnet_mask;
     for (int i = 0; i < 255; i++) {
-        self->handlers[i] = NULL;
+        self->handlers[i] = nullptr;
     }
 }
 
@@ -111,9 +110,18 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     message->protocol = protocol;
     message->dst_ip = dstIP_BE;
     message->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
+    if ((dstIP_BE & JLOS_IPV4_LOOPBACK_MASK) == JLOS_IPV4_LOOPBACK_NET) {
+        message->src_ip = dstIP_BE;
+    }
     message->checksum = 0;
     message->checksum =
         jlos_internet_protocol_provider_csum_fold(jlos_internet_protocol_provider_csum_partial(message, sizeof(jlos_ipv4_message_t), 0));
+    if ((dstIP_BE & JLOS_IPV4_LOOPBACK_MASK) == JLOS_IPV4_LOOPBACK_NET) {
+
+        jlos_internet_protocol_provider_on_ether_frame_received(self, skb);
+        jlos_net_skb_free(skb);
+        return;
+    }
     uint64_t dst_mac;
     if (dstIP_BE == JLOS_IPV4_BROADCAST) {
         dst_mac = JLOS_ETHER_BROADCAST_MAC;

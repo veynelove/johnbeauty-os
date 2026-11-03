@@ -95,7 +95,7 @@ JLOS_TEST(pfa, owner_type)
     void *va = jlos_page_frame_malloc();
     JLOS_ASSERT_NOT_NULL(va);
     uint32_t phys = VIRT_TO_PHYS(va);
-    uint32_t marker = 0xDEADBEEF;
+    uintptr_t marker = 0xDEADBEEF;
     jlos_page_frame_set_owner_type(phys, (void *)marker, JLOS_PAGE_FRAME_TYPE_KERN_STACK);
     JLOS_TEST_EQ(jlos_page_frame_get_type(phys), JLOS_PAGE_FRAME_TYPE_KERN_STACK);
     JLOS_TEST_PTR_EQ(jlos_page_frame_get_owner(phys), (void *)marker);

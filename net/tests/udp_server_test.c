@@ -23,6 +23,11 @@ static void udp_handler_handle_udp_message(jlos_udp_handler_t *self, jlos_udp_so
 
 JLOS_TEST(udp, server_listen)
 {
+    /* 无网络栈（无网卡）时 g_network_stack 为 nullptr，不可解引用 */
+    if (!g_network_stack) {
+        printk_info("skip: no network stack\n");
+        return;
+    }
     jlos_udp_provider_t *udp = &g_network_stack->udp;
     udp_handler_t *udphandler = jlos_kalloc(sizeof(udp_handler_t));
     JLOS_ASSERT_NOT_NULL(udphandler);

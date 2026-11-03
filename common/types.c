@@ -100,7 +100,7 @@ char *jlos_strchr(const char *s, char c)
     if (c == 0) {
         return (char *)s;
     }
-    return NULL;
+    return nullptr;
 }
 
 int jlos_memcmp(const void *a, const void *b, size_t n)

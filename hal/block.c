@@ -7,7 +7,7 @@
 #include <hal/diag.h>
 #include <drivers/ata.h>
 
-_Static_assert(sizeof(jlos_ata_t) <= JLOS_HAL_BLOCK_PRIV_SIZE, "block priv too small for ata");
+static_assert(sizeof(jlos_ata_t) <= JLOS_HAL_BLOCK_PRIV_SIZE, "block priv too small for ata");
 
 static jlos_ata_t *block_ata(jlos_hal_block_dev_t *self)
 {
@@ -160,4 +160,16 @@ int jlos_hal_block_write(jlos_hal_block_dev_t *self, uint64_t start_lba, const u
         return -1;
     }
     return self->ops->write_sectors(self, start_lba, buf, sector_count);
+}
+
+static jlos_hal_block_dev_t *s_primary_dev;
+
+jlos_hal_block_dev_t *jlos_hal_block_primary_dev(void)
+{
+    return s_primary_dev;
+}
+
+void jlos_hal_block_set_primary_dev(jlos_hal_block_dev_t *dev)
+{
+    s_primary_dev = dev;
 }

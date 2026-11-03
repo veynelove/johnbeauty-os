@@ -56,7 +56,7 @@ static bool pci_device_has_functions(jlos_hal_pci_controller_t *self, uint16_t b
 
 static jlos_driver_t *pci_network_controller_handle(jlos_hal_pci_controller_t *self, jlos_hal_pci_device_t dev, jlos_irq_manager_t *interrupts)
 {
-    jlos_driver_t *driver = NULL;
+    jlos_driver_t *driver = nullptr;
     switch (dev.vendor_id) {
         case 0x1022 : {
             uint16_t command = jlos_hal_pci_config_read16(self, dev.bus, dev.device, dev.function, 0x04);
@@ -68,7 +68,7 @@ static jlos_driver_t *pci_network_controller_handle(jlos_hal_pci_controller_t *s
                     printk_debug("allocating amd am79c973 driver structure\n");
                     driver = (jlos_driver_t *)jlos_kalloc(sizeof(jlos_amd_am79c973_t));
                     if (driver) {
-                        printk_debug("amd am79c9973 driver allocated at: 0x%x\n", (uint32_t)driver);
+                        printk_debug("amd am79c9973 driver allocated at: 0x%lx\n", (uintptr_t)driver);
                         jlos_amd_am79c973_init((jlos_amd_am79c973_t *)driver, &dev, interrupts);
                         return driver;
                     }
@@ -93,7 +93,7 @@ static jlos_driver_t *pci_get_driver(jlos_hal_pci_controller_t *self, jlos_hal_p
         default:
             break;
     }
-    return NULL;
+    return nullptr;
 }
 
 jlos_hal_pci_device_t jlos_hal_pci_get_device_descriptor(jlos_hal_pci_controller_t* self, uint16_t bus, uint16_t dev, uint16_t func)
@@ -118,7 +118,7 @@ jlos_hal_pci_device_t jlos_hal_pci_get_device_descriptor(jlos_hal_pci_controller
 
 jlos_hal_pci_bar_t jlos_hal_pci_get_base_address_register(jlos_hal_pci_controller_t* self, uint16_t bus, uint16_t dev, uint16_t func, uint16_t bar)
 {
-    jlos_hal_pci_bar_t result = {false, NULL, 0, JLOS_HAL_PCI_MEMORY_MAPPING};
+    jlos_hal_pci_bar_t result = {false, nullptr, 0, JLOS_HAL_PCI_MEMORY_MAPPING};
     uint32_t headertype = jlos_hal_pci_config_read8(self, bus, dev, func, 0x0E) & 0x7F;
     int maxbars = 6 - (4 * headertype);
     if (bar >= (uint16_t)maxbars) {
@@ -139,14 +139,14 @@ jlos_hal_pci_bar_t jlos_hal_pci_get_base_address_register(jlos_hal_pci_controlle
         uint32_t bar_size = (~size_value) + 1;
         result.size = bar_size;
         jlos_hal_pci_config_write32(self, bus, dev, func, 0x10 + 4 * bar, bar_value);
-        result.address = (uint8_t *)(bar_value & ~0x3);
+        result.address = (uint8_t *)(uintptr_t)(bar_value & ~0x3);
         result.prefetchable = false;
     } else {
         size_value &= ~0xF;
         uint32_t bar_size = (~size_value) + 1;
         result.size = bar_size;
         jlos_hal_pci_config_write32(self, bus, dev, func, 0x10 + 4 * bar, bar_value);
-        result.address = (uint8_t *)(bar_value & ~0xF);
+        result.address = (uint8_t *)(uintptr_t)(bar_value & ~0xF);
         result.prefetchable = (bar_value & 0x8) != 0;
     }
     return result;
@@ -166,11 +166,11 @@ void jlos_hal_pci_enumerate_and_bind_drivers(void)
                 for (int bar_num = 0; bar_num < 6; bar_num++) {
                     jlos_hal_pci_bar_t bar = jlos_hal_pci_get_base_address_register(self, bus, device, function, bar_num);
                     if (bar.address && (bar.type == JLOS_HAL_PCI_INPUT_OUTPUT)) {
-                        dev.port_base = (uint32_t)bar.address;
+                        dev.port_base = (uint32_t)(uintptr_t)bar.address;
                     }
                 }
                 jlos_driver_t *driver = pci_get_driver(self, dev, jlos_active_irq_manager);
-                if (driver != NULL) {
+                if (driver != nullptr) {
                     jlos_driver_manager_add_driver(g_driver_manager_ptr, driver);
                 }
             }

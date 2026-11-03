@@ -1,95 +1,141 @@
 # Copyright 2026 veyne.
 # SPDX-License-Identifier: Apache-2.0
 
-# ==================john_kernel=================
-JLOS := johnkernel
-ARCH := x86
+# =========================================================================
+#  JohnSunshine OS 内核编译子系统（JLOS Kernel Build Subsystem）
+# =========================================================================
+#  用法:
+#    make                      # 默认 ARCH=x86 BITS=64
+#    make ARCH=x86 BITS=32     # 32 位 x86
+#    make ARCH=arm64           # ARM64 交叉编译
+#    make V=1                  # 回显完整编译命令（调试）
+#    make run ARCH=arm64       # QEMU 启动（架构片段提供 run 目标）
+#
+#  交叉编译前请将工具链 bin 目录加入 PATH，或命令行覆盖 CROSS_COMPILE。
+# =========================================================================
 
-# 磁盘镜像构建开关（1=构建, 0=跳过）
+ARCH ?= x86
+BITS ?= 64
+
 BUILD_DISK ?= 1
 
-ifeq ($(BUILD_DISK),1)
-all: $(JLOS).iso disk
+srctree := $(CURDIR)
+
+ifeq ($(V),1)
+  quiet :=
 else
-all: $(JLOS).iso
+  quiet := quiet_
 endif
 
-# 实际编译用的完整参数
-CPARAMS = -m32 -I. -nostdlib -fno-builtin -fno-exceptions \
-		-fno-leading-underscore -std=gnu11 \
-		-ffreestanding -fno-stack-protector \
-		-fno-pic -fno-pie \
-		-Wall -Wextra -Wno-address-of-packed-member \
-		-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx \
-		-O2 -g
+include $(srctree)/arch/$(ARCH)/Makefile
 
-# clangd 专用参数（去掉 -fno-leading-underscore，clangd 不认识它）
-CLANGD_CPARAMS = $(filter-out -fno-leading-underscore,$(CPARAMS))
+.DEFAULT_GOAL := all
 
-ASPARAMS = --32 -I.
-LDPARAMS = -melf_i386
+objtree := out/$(ARCH)$(OBJTREE_SUFFIX)
 
-SRC_DIRS := kernel arch/$(ARCH) drivers net fs hal dsa common
-OBJ_DIR := obj
+CROSS_COMPILE ?=
+CC      := $(CROSS_COMPILE)gcc
+AS      := $(CROSS_COMPILE)as
+LD      := $(CROSS_COMPILE)ld
+OBJCOPY := $(CROSS_COMPILE)objcopy
+OBJDUMP := $(CROSS_COMPILE)objdump
 
-C_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.c")
-AS_SRCS := $(shell find $(SRC_DIRS) -type f -name "*.s")
-C_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS))
-AS_OBJS := $(patsubst %.s,$(OBJ_DIR)/%.o,$(AS_SRCS))
-OBJS := $(C_OBJS) $(AS_OBJS)
+CFLAGS := -I$(srctree) -nostdlib -ffreestanding -fno-builtin -std=gnu2x -fno-stack-protector -fno-pic -fno-pie -Wall -Wextra -Wno-address-of-packed-member -O2 -g -Werror $(ARCH_DEFINE) $(ARCH_CFLAGS)
 
-# 实际编译用 CPARAMS（完整参数）
-$(OBJ_DIR)/%.o: %.c
+LDFLAGS := $(ARCH_LDFLAGS)
+
+src-dirs := kernel arch/$(ARCH) drivers net fs hal dsa common
+
+C_SRCS   := $(shell find $(src-dirs) -type f -name '*.c')
+ASM_SRCS := $(shell find $(src-dirs) -type f -name '*.S')
+ASM_SRCS := $(filter-out $(LDSCRIPT),$(ASM_SRCS))
+
+C_OBJS   := $(patsubst %.c,$(objtree)/%.o,$(C_SRCS))
+ASM_OBJS := $(patsubst %.S,$(objtree)/%.o,$(ASM_SRCS))
+OBJS     := $(C_OBJS) $(ASM_OBJS)
+
+LDSCRIPT_BIN := $(objtree)/linker.lds
+
+quiet_cmd_cc_o_c =  CC      $@
+      cmd_cc_o_c = $(CC) $(CFLAGS) -c -o $@ $<
+
+quiet_cmd_as_o_S =  AS      $@
+      cmd_as_o_S = $(CC) $(CFLAGS) -x assembler-with-cpp -c -o $@ $<
+
+quiet_cmd_lds    =  LDS     $@
+      cmd_lds    = $(CC) $(ARCH_DEFINE) -E -P -x assembler-with-cpp -o $@ $<
+
+quiet_cmd_link   =  LD      $@
+      cmd_link   = $(LD) $(LDFLAGS) -T $(LDSCRIPT_BIN) -o $@ $(OBJS)
+
+cmd = @set -e; \
+	$(if $($(quiet)cmd_$(1)), echo '  $($(quiet)cmd_$(1))';) \
+	$(cmd_$(1))
+
+all: banner
+	@t0=$$(date +%s); \
+	$(MAKE) -s --no-print-directory $(TARGET_BIN) $(EXTRA_TARGETS) && \
+		{ echo '  ============================================================'; \
+		  echo "  BUILD OK    : $$(($$(date +%s)-t0))s"; \
+		  echo '  ============================================================'; } || \
+		{ echo '  ============================================================'; \
+		  echo "  BUILD FAIL  : $$(($$(date +%s)-t0))s"; \
+		  echo '  ============================================================'; exit 1; }
+
+.PHONY: banner
+banner:
+	@echo ''
+	@echo '  ============================================================'
+	@echo '  JohnSunshine OS Kernel  (JLOS)'
+	@echo '  ============================================================'
+	@echo "   TARGET   : $(TARGET_BIN)"
+	@echo "   ARCH     : $(ARCH)  ($(JLOS_BITS)-bit)"
+	@echo "   CC       : $(shell $(CC) --version | head -n 1)"
+	@echo "   CFLAGS   : $(CFLAGS)"
+	@echo '  ============================================================'
+	@echo ''
+
+$(LDSCRIPT_BIN): $(LDSCRIPT)
 	@mkdir -p $(@D)
-	@gcc $(CPARAMS) -o $@ -c $<
+	$(call cmd,lds)
 
-$(OBJ_DIR)/%.o: %.s
+$(objtree)/%.o: %.c
 	@mkdir -p $(@D)
-	@as $(ASPARAMS) -o $@ $<
+	$(call cmd,cc_o_c)
 
-$(JLOS).bin: arch/$(ARCH)/linker.ld  $(OBJS)
-	@ld $(LDPARAMS) -T $< -o $(JLOS).bin $(OBJS)
+$(objtree)/%.o: %.S
+	@mkdir -p $(@D)
+	$(call cmd,as_o_S)
 
-install: $(JLOS).bin
-	@sudo cp $< /boot/$(JLOS).bin
+$(TARGET_BIN): $(LDSCRIPT_BIN) $(OBJS)
+	$(call cmd,link)
 
-$(JLOS).iso: $(JLOS).bin
-	@rm -rf iso
-	@mkdir -p iso/boot/grub
-	@cp $< iso/boot/$(JLOS).bin
-	@echo 'set timeout=0' > iso/boot/grub/grub.cfg
-	@echo 'set default=0' >> iso/boot/grub/grub.cfg
-	@echo '' >> iso/boot/grub/grub.cfg
-	@echo 'menuentry "johnlove operating system" {' >> iso/boot/grub/grub.cfg
-	@echo ' multiboot /boot/$(JLOS).bin' >> iso/boot/grub/grub.cfg
-	@echo ' boot' >> iso/boot/grub/grub.cfg
-	@echo '}' >> iso/boot/grub/grub.cfg
-	@grub-mkrescue --output=$@ iso
-	@rm -rf iso
-
-# ==================用户态程序（jlcy 子项目）==================
-.PHONY: disk
-disk:
-	@$(MAKE) -C jlcy disk
-
+.PHONY: clean
 clean:
-	@rm -rf $(OBJ_DIR) $(JLOS).bin $(JLOS).iso
-	@$(MAKE) -C jlcy clean
-	@echo 'clean success.'
+	@echo 'clean artifacts'
+	@rm -rf out iso
+	@rm -f johnkernel-*.bin johnkernel-*.iso johnkernel-*.elf johnkernel-*.img
+	@rm -f disk-arm64.img disk.img disk.vmdk disk-flat.vmdk
+	@$(MAKE) -s --no-print-directory -C jlcy clean ARCH=$(ARCH) BITS=$(JLOS_BITS)
 
-# ==================clangd 支持==================
-# 生成 compile_commands.json 到 build/ 目录（使用 CLANGD_CPARAMS，去掉了不支持的参数）
+.PHONY: install
+install: $(TARGET_BIN)
+	@sudo cp $(TARGET_BIN) /boot/$(TARGET_BIN)
+
+COMPDB_DIR := build/$(ARCH)$(OBJTREE_SUFFIX)
+
 .PHONY: compdb
 compdb:
-	@mkdir -p build
-	@echo "[" > build/compile_commands.json
-	@for f in $(C_SRCS); do \
-		echo "  {" >> build/compile_commands.json; \
-		echo "    \"directory\": \"$(shell pwd)\"," >> build/compile_commands.json; \
-		echo "    \"command\": \"gcc $(CLANGD_CPARAMS) -c $$f -o /dev/null\"," >> build/compile_commands.json; \
-		echo "    \"file\": \"$$f\"" >> build/compile_commands.json; \
-		echo "  }," >> build/compile_commands.json; \
-	done
-	@sed -i '$$ s/,$$//' build/compile_commands.json
-	@echo "]" >> build/compile_commands.json
-	@echo "compile_commands.json generated in build/ directory"
+	@echo '  GEN     $(COMPDB_DIR)/compile_commands.json'
+	@mkdir -p $(COMPDB_DIR)
+	@{ \
+		echo '['; \
+		first=1; \
+		for f in $(C_SRCS); do \
+			if [ $$first -eq 1 ]; then first=0; else echo ','; fi; \
+			printf '  { "directory": "%s", "command": "%s %s %s -c %s -o /dev/null", "file": "%s" }\n' \
+				"$(srctree)" "$(CC)" "$(CFLAGS)" "$(JLOS_COMPDB_TARGET)" "$$f" "$$f"; \
+		done; \
+		echo ']'; \
+	} > $(COMPDB_DIR)/compile_commands.json
+	@echo '  DONE    clangd database ready'

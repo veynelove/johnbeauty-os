@@ -12,13 +12,13 @@
 static int test_anon_rw(void)
 {
     uint32_t len = 2 * PAGE_SIZE;
-    void *p = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if ((int32_t)p < 0) {
-        printf("mmap_test: anon map FAIL ret=%d\n", (int32_t)p);
+    void *p = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if ((intptr_t)p < 0) {
+        printf("mmap_test: anon map FAIL ret=%d\n", (int32_t)(intptr_t)p);
         return 0;
     }
-    if ((uint32_t)p & (PAGE_SIZE - 1)) {
-        printf("mmap_test: addr not aligned p=%u\n", (uint32_t)p);
+    if ((uintptr_t)p & (PAGE_SIZE - 1)) {
+        printf("mmap_test: addr not aligned p=%lu\n", (unsigned long)(uintptr_t)p);
         return 0;
     }
 
@@ -42,10 +42,10 @@ static int test_anon_rw(void)
 
 static int test_multi_fixed(void)
 {
-    void *a = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    void *b = mmap(NULL, 3 * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if ((int32_t)a < 0 || (int32_t)b < 0) {
-        printf("mmap_test: multi map FAIL a=%u b=%u\n", (uint32_t)a, (uint32_t)b);
+    void *a = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    void *b = mmap(nullptr, 3 * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if ((intptr_t)a < 0 || (intptr_t)b < 0) {
+        printf("mmap_test: multi map FAIL a=%lu b=%lu\n", (unsigned long)(uintptr_t)a, (unsigned long)(uintptr_t)b);
         return 0;
     }
 
@@ -61,7 +61,7 @@ static int test_multi_fixed(void)
     void *f = mmap((void *)FIXED_VADDR, PAGE_SIZE, PROT_READ | PROT_WRITE,
                    MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0);
     if (f != (void *)FIXED_VADDR) {
-        printf("mmap_test: fixed map FAIL f=%u\n", (uint32_t)f);
+        printf("mmap_test: fixed map FAIL f=%lu\n", (unsigned long)(uintptr_t)f);
         return 0;
     }
     unsigned char *cf = (unsigned char *)f;

@@ -7,16 +7,18 @@
 #include <hal/ext_state.h>
 #include <hal/hal.h>
 #include <hal/spinlock.h>
+#include <hal/smp.h>
 #include <kernel/multitask.h>
 #include <kernel/memory_manager.h>
 
-static jlos_task_t      *s_fpu_owner = NULL;
+#define JLOS_KERNEL_LOG_SUBSYS "fpu"
+#include <kernel/printk.h>
+
+static jlos_task_t      *s_fpu_owner[JLOS_MAX_CPUS];
 static jlos_spinlock_t  s_fpu_lock = JLOS_SPINLOCK_INIT;
 static bool             s_init_template_done = false;
 
 static uint8_t          s_fxsave_template[JLOS_ARCH_EXT_STATE_SIZE] __attribute__((aligned(JLOS_ARCH_EXT_STATE_ALIGN)));
-
-extern jlos_task_t *g_current_task_ptr;
 
 static void build_clean_template(void)
 {
@@ -45,37 +47,49 @@ void jlos_arch_task_ext_init(jlos_task_t *task)
 void jlos_arch_task_ext_destroy(jlos_task_t *task)
 {
     uint32_t fl = jlos_spin_lock_irqsave(&s_fpu_lock);
-    if (s_fpu_owner == task) {
-        s_fpu_owner = NULL;
+    for (uint32_t c = 0; c < JLOS_MAX_CPUS; c++) {
+        if (s_fpu_owner[c] == task) {
+            s_fpu_owner[c] = nullptr;
+        }
     }
     jlos_spin_unlock_irqrestore(&s_fpu_lock, fl);
 }
 
 void jlos_arch_task_ext_switch(void)
 {
+#ifdef CONFIG_X86_64
+    __asm__ __volatile__(
+        "movq %%cr0, %%rax\n\t"
+        "orl $8, %%eax\n\t"
+        "movq %%rax, %%cr0\n\t"
+        ::: "rax", "memory"
+    );
+#else
     __asm__ __volatile__(
         "mov %%cr0, %%eax\n\t"
         "or $8, %%eax\n\t"
         "mov %%eax, %%cr0\n\t"
         ::: "eax", "memory"
     );
+#endif
 }
 
 void jlos_arch_task_ext_trap_body(void)
 {
     __asm__ __volatile__("clts\n\t" ::: "memory");
-    jlos_task_t *curr = g_current_task_ptr;
+    jlos_task_t *curr = jlos_hal_current_task();
     if (!curr) {
         return;
     }
+    uint32_t cpu = jlos_hal_get_cpu_id();
     uint32_t fl = jlos_spin_lock_irqsave(&s_fpu_lock);
-    if (s_fpu_owner == curr) {
+    if (s_fpu_owner[cpu] == curr) {
         goto clear_ts_and_out;
     }
-    if (s_fpu_owner) {
+    if (s_fpu_owner[cpu]) {
         __asm__ __volatile__(
             "fxsave %0\n\t"
-            : "=m"(s_fpu_owner->ext_state.raw)
+            : "=m"(s_fpu_owner[cpu]->ext_state.raw)
             :
             : "memory"
         );
@@ -86,7 +100,7 @@ void jlos_arch_task_ext_trap_body(void)
         : "m"(curr->ext_state.raw)
         : "memory"
     );
-    s_fpu_owner = curr;
+    s_fpu_owner[cpu] = curr;
     curr->ext_state.used = true;
 
 clear_ts_and_out:

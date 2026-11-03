@@ -43,7 +43,7 @@ uint64_t jlos_clocksource_cycles_to_ns(uint64_t delta)
 
 static void clocksource_select(void)
 {
-    jlos_clocksource_t *best = NULL;
+    jlos_clocksource_t *best = nullptr;
     jlos_clocksource_t *d;
     jlos_list_for_each_entry(d, &s_cs_devs, list) {
         if (!best || d->rating > best->rating) {

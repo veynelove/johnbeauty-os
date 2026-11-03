@@ -27,6 +27,8 @@
 
 #define JLOS_KERNEL_LOG_REALTIME        1
 
+#define JLOS_WALLCLOCK_UTC_OFFSET_SEC   (8 * 3600) //东8区
+
 #define JLOS_SERIAL_ECHO                1
 
 #endif

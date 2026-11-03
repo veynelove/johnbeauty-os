@@ -1,14 +1,24 @@
 # JohnSunshine OS 内核架构升级计划
 
-版本: v3.9 | 日期: 2026-10-07 | 作者: JohnLove
+版本: v4.4 | 日期: 2026-10-26 | 作者: JohnLove
 
-> v3.9 变更：SMP 升级 Step 1（per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` section + GS 段访问）与 Step 2（LAPIC 驱动 + fixmap/MMIO/MSR/cache 属性抽象）落地；修复 `jlos_page_frame_get_free` 漏计 per-CPU cache 的记账 bug；确立 SMP 8 步实施计划。详见 history_update.md。
+> v4.4 变更：**ARM64/AArch64 架构移植完成**（多架构目标 P2 落地）——启动链（boot.S EL2→EL1 + 早期页表 + FDT + PL011）/ 真实分页 / 中断异常 / 信号 / syscall / 惰性 FPU / 通用 NIC 抽象 + virtio-net（udp/http 真实跑通）全通，单核 54/54；**ARM64 SMP 完成**（PSCI AP 启动 + GIC per-CPU + SGI IPI + TLB shootdown + per-CPU tick，`-smp 4` 54/54；QEMU virt/gic-v3 验证，无真机）。关键根因：`.data..percpu` 段被 linker `.data.*` 通配符吞致 per-CPU 机制失效（多核总根因）、ESR 翻译 WnR 漏判 CEL、AP per-CPU 继承 BSP 运行时状态、AP 启动栈/idle 栈共用、AP 自建 identity、GIC SGI 未使能（详见 Phase 10.1）。另完成 arm64 A/B 优化（A: FPU owner per-CPU + PAN/uaccess；B: ASID + memcpy/memset 汇编 + 2MB 大页 + IPI 合并，详见 Phase 10.2）。arm64 0 警告，x86-64/32 0 警告 0 错误。
 
-> v3.8 变更：内部测试框架（section-based 自注册 + 12 套件 54 用例全 PASS）+ 修复 jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched 两个内核 bug + printk 宽度修饰支持（flags/width 解析）+ 升级优先级纠正（SMP P0 → 64位 P1 → 多架构 P2），详见 history_update.md。
+> v4.3 变更：64 位化 8 步全部完成 + 运行时验证 54/54 全 PASS。关键修复：fork 子进程 rax 返回值（64 位分支遗漏设 0）、signal_handlers uintptr_t 升级、syscall ABI 64 位化（jlcy syscall() 参数 uintptr_t + mmap_arg_struct_t.addr uintptr_t）、中断处理链返回类型 uintptr_t、TSS 104 字节布局、GDT 语义化宏、signal frame 偏移量 sizeof(uintptr_t)。双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS。
 
-> v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构），详见 history_update.md。
+> v4.2 变更：C23 标准升级完成（-std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删除 types.h 冲突定义）；slab per-CPU partial 跨核 free 损坏修复（per-CPU lock + limbo 哨兵 + owner 字段，SLUB 风格加锁版）+ reap_all_zombies 无限循环修复（prev_task 占用检查）；清理诊断 printk + 删除废弃 atomic64 代码。54/54 全 PASS。
 
-> v3.6 变更：FS 缓存统一 page cache（per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space），详见 history_update.md。
+> v4.1 变更：确立项目核心愿景——"基于现代计算机世界全面成果，一气呵成、优雅、充分利用近几十年计算机发展成果的内核"（非 Linux 复制品）。后续路线更新：C23 标准升级（先于 64 位化——语言基础设施先于架构变更，64 位化重写代码时直接用现代语法避免返工）；64 位化（P1）采用同目录 + #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64，同时支持 32/64 位，嵌入式场景保留 32 位）。
+
+> v4.0 变更：SMP 8 步全部完成——per-CPU 基础 + LAPIC + ACPI/AP 启动 + 中断改造 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC。衡生竞态修复 3 项：时间系统 SMP 竞态（s_ticks 4 倍速 + monotonic_ns 竞态）、fork 子进程生命周期竞态（rq_enqueue 延后）、zombie reaping 竞态（per-CPU prev_task 防跨核释放）。VMware 4 核 54/54 测试全 PASS。
+
+> v3.9 变更：SMP 升级 Step 1（per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` section + GS 段访问）与 Step 2（LAPIC 驱动 + fixmap/MMIO/MSR/cache 属性抽象）落地；修复 `jlos_page_frame_get_free` 漏计 per-CPU cache 的记账 bug；确立 SMP 8 步实施计划。
+
+> v3.8 变更：内部测试框架（section-based 自注册 + 12 套件 54 用例全 PASS）+ 修复 jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched 两个内核 bug + printk 宽度修饰支持（flags/width 解析）+ 升级优先级纠正（SMP P0 → 64位 P1 → 多架构 P2）。
+
+> v3.7 变更：net 子系统 sk_buff 统一网络缓冲区（head/data/tail/end 四指针 + refcount + 分档分配 + 发送/接收路径零拷贝 + csum_partial/csum_fold 重构）。
+
+> v3.6 变更：FS 缓存统一 page cache（per-inode address_space + get_block + readpage/writepage + 删 buffer_cache + dirent 走 dir->address_space）。
 
 > v3.5 变更：hrtimer 高精度定时器（红黑树 + PIT oneshot + 周期性 tick + sleeper/nanosleep syscall）+ 测试体系改造（initcall TEST 级别自注册 + 测试文件迁移到各子系统 tests/ + tag 规范化 + config.h 移到 include/ + tools/ 目录删除）。
 
@@ -34,7 +44,21 @@
 8. **生产级内核, vmplayer测试，目标运行在硬件上**
 9. **魔法字面量用语义宏命名**：裸数值（如 512/256/1024）用有语义的宏替代（如 `JLOS_BLOCK_SECTOR_SIZE`、`JLOS_IDT_ENTRIES`）；KB/MB 等计算机科学定义好的单位换算（如 `1024` KB→字节、`4*1024*1024` 4MB 对齐）不需定义宏。
 10. **方案直接对齐成熟系统已验证的最终形态，不给过渡/演进路径**：Linux 等成熟系统已走过并验证的最终结构（如 page cache 统一）直接作为目标落地；不做「先分离再统一」式历史演进，不为迁就现有过渡代码退回折中方案。返工是必要成本，绕路才浪费时间。
+11. **AIOS 无崩溃约束**：崩溃理论不允许——内核**绝不采用 `halt`/`panic` 式终止**。任何异常/错误场景都必须有恢复处理（错误隔离、子系统重启、降级运行、状态回滚），保证系统持续运行。断言语义 = **记录 + 恢复/告警**，**绝不终止**；外部输入用错误码（EFAULT/EINVAL）。
 12. **不以收益或工作量作为取舍依据**：经典结构 + 性能优先是唯一准绳；即使当前负载小、短期收益不明显、改动较大，只要经典结构正确、性能更优就照做，不做收益/工作量导向的折中或过渡方案。
+13. **一个源文件 = 一个子系统；新增文件必须归属明确子系统**：顶层目录（`kernel/`、`fs/`、`net/`、`hal/`、`drivers/`、`dsa/`、`arch/`、`common/`）下每个 `.c` 对应一个明确的（子）子系统，不得存在"无处安放的零散工具"文件。新增文件前必须能回答"它属于哪个（子）子系统"；归属判定看**语义 + 唯一消费者 + 生命周期 + 内聚/规模**，不看谁生产数据。确为新子系统才单开，否则并入所属子系统文件。
+14. **命名缩写规则——代码符号慎缩写、日志可缩写**：函数/结构体/类型/全局变量等**代码符号**须用可读的全称或业界通行缩写（**隐晦缩写会阻塞代码理解**，如 `daemon` 不写成 `dmn`、`kthread` 不写成 `kthd`）；而**日志内容与线程显示名可用缩写**——日志不参与代码逻辑、含义可由对应代码反查，缩写能让日志更简洁（如 `kth_daemon`）。
+
+***
+
+## 升级方向（长期愿景）
+
+| 方向 | 说明 | 前置依赖 | 备注 |
+| --- | --- | --- | --- |
+| **AIOS（AI Operating System）** | 从「生产级内核」演进为面向 AI/机器人负载的操作系统内核；硬约束：无崩溃、只做错误恢复 | P1-P4 地基 + 实时调度类 + tickless/hrtimer + 底半部 + 低延迟 IPC + 可靠资源保障 | 用户明确规划做 AIOS |
+| **内核态机器人子系统** | 内核完善后在内核态引入机器人子系统（调度/控制/感知/执行器配套） | AIOS 地基 + 实时性 + 资源隔离 + 确定性调度 | 后续独立阶段，与 P1-P5 并行不冲突 |
+
+> 详见记忆文件 `project_jlos_aios_vision_robotics.md`。
 
 ***
 
@@ -82,6 +106,15 @@
 | 内部测试框架 | section-based 自注册（JLOS_TEST 宏 + .jlos_test 段）+ 12 套件 54 用例 + 汇总表格 | 54 passed 0 failed |
 | 内核 bug 修复 | jlos_task_sleep_until 缺 schedule + sync 唤醒缺 rq_enqueue/need_resched | 测试驱动发现并修复 |
 | printk 宽度修饰 | flags(-/0) + width 解析 + printk_fmt_uint/int + emit_padded | 汇总表格列对齐 |
+| SMP 多核支持 | per-CPU 基础 + LAPIC + ACPI/AP 启动 + IPI/TLB shootdown + 调度器 SMP 化 + 锁优化 + IOAPIC | VMware 4 核 54/54 全 PASS |
+| SMP 竞态修复 | 时间系统（s_ticks 4 倍速 + monotonic_ns 竞态）+ fork 子进程生命周期（enqueue 延后）+ zombie reaping（per-CPU prev_task） | 54/54 全 PASS |
+| C23 标准升级 | -std=gnu2x + nullptr/[[noreturn]]/static_assert/typeof + 删 types.h 冲突定义 + \_\_typeof\_\_→typeof + NULL→nullptr + \_\_attribute\_\_((noreturn))→[[noreturn]] + \_Static\_assert→static_assert | 54/54 全 PASS |
+| slab per-CPU 加锁修复 | per-CPU lock 串行化 pop/push + limbo 哨兵（owner=-2）转移中页 + s_slab_lock→cs->lock 锁序 + reap_all_zombies prev_task 占用检查防无限循环 | 54/54 全 PASS |
+| 64 位化升级 | x86-64 long mode：4 级页表（PML4/PDPT/PD/PT）+ 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef（CONFIG_X86_32/CONFIG_X86_64）+ jlcy syscall ABI 64 位化 | 双架构 0 警告 0 错误，VMware 4 核 54/54 全 PASS |
+| 64 位化运行时修复 | fork 子进程 rax 返回值（64 位分支遗漏设 0）+ signal_handlers uintptr_t 升级 + mmap_arg_struct_t.addr uintptr_t + 中断处理链返回类型 uintptr_t + signal frame 偏移 sizeof(uintptr_t) | 54/54 全 PASS |
+| ARM64 架构移植 | AArch64 启动链（boot.S EL2→EL1 + 早期页表 + FDT/boot-info + PL011）+ 真实分页 + 中断/异常/信号/syscall + 惰性 FPU（用户态 FP 启用）+ 通用 NIC 抽象（hal/net.h）+ virtio-net | 单核 54/54（QEMU virt/gic-v3） |
+| ARM64 SMP | per-CPU 基础设施 + PSCI AP 启动 + GIC per-CPU redistributor + SGI IPI + TLB shootdown + per-CPU tick + AP idle 栈分离 | `-smp 4` 54/54 全 PASS |
+| ARM64 A/B 优化 | A：FPU owner per-CPU + PAN/uaccess；B：ASID + memcpy/memset 汇编 + 2MB 大页 + reschedule IPI 合并 | 单核与 -smp 4 均 54/54 |
 
 ***
 
@@ -189,29 +222,29 @@ graph TD
 | MT-SlotIdx  | **slot\_idx 维护 UAF 修复**：free 紧凑删除（末尾搬到被删位置）未更新被搬任务的 slot\_idx → 该任务 slot\_idx 失效 → schedule fallback 失败 → 越界写入错误位置 → tasks\[] stale 指针 → UAF。加 `tasks[idx]==task` 校验 + 搬移后更新被搬任务 slot\_idx                                                             | ✅      | multitask.c               |
 | MT-RqUB     | **rq\_dequeue** **`__builtin_ctz(0)`** **UB 修复**：先 ctz 后判空, GCC 在 UB 假设下可能优化掉判空 → runqueue 真空时 ctz 返回垃圾值 → `rq[l]` 越界 → `first=&head`（自指）→ `list_del(head)` 删 head 自己 → runqueue 彻底损坏 → schedule `return cpustate` 死循环卡死。调换为先判空再 ctz                        | ✅      | multitask.c               |
 | MT-ForkList | **fork 浅拷贝链表节点修复**：`*child=*parent` 复制了 `rq_node`/`zombie_node`（指向 parent 节点地址, 非 child 自己）只重置了 `pid_hash_node` → `task_on_rq(child)` enqueue 前误判 true + `jlos_task_free` 误判 child 在 zombie 链表。补 `jlos_list_init` 重置两个链表节点                                        | ✅      | multitask.c               |
-| MT-TF | **exit 泄漏全局 syscall trapframe（严重 Bug）**：`jlos_process_exit` 经 syscall 路径永不返回 → `s_x86_syscall_entry` 尾部清空 `g_hal_syscall_trapframe` 永不执行 → 全局残留指向已释放栈的死 trapframe → 下一个内核任务 exec 误走 via-trapframe 分支（写死帧 + 返回 0）→ 调用方从 naked stub 掉落 → triple fault（vmplayer 禁用 CPU）。修复：exit 开头补 `g_hal_syscall_trapframe = NULL` | ✅      | multitask.c + arch/x86/kernel_syscall.c |
+| MT-TF | **exit 泄漏全局 syscall trapframe（严重 Bug）**：`jlos_process_exit` 经 syscall 路径永不返回 → `s_x86_syscall_entry` 尾部清空 `g_hal_syscall_trapframe` 永不执行 → 全局残留指向已释放栈的死 trapframe → 下一个内核任务 exec 误走 via-trapframe 分支（写死帧 + 返回 0）→ 调用方从 naked stub 掉落 → triple fault（vmplayer 禁用 CPU）。修复：exit 开头补 `g_hal_syscall_trapframe = nullptr` | ✅      | multitask.c + arch/x86/kernel_syscall.c |
 | MT-Cleanup  | **冗余字段/死代码清理**：删 `jlos_task_t.fds_size`（边界检查全用 `JLOS_TASK_FDS_NUM` 常量, 该字段仅写不读）+ 删 `set_blocked`/`set_waiting` 中 `yield=true` 死赋值（两函数同时改 status, 进不了 schedule 的 RUNNING 分支读 yield）。`yield` 字段本身保留（`syscall_yield`/`need_resched`/降优先级判断真实使用） | ✅      | multitask.h + multitask.c |
 
 ### 设计决策
 
 | 决策                                         | 理由                                                                                        |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 NULL，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
+| 用 pid hash 替代 parent 指针 + children 链表 | parent 被 free 后 hash 自动返回 nullptr，无悬空指针风险；当前无信号/ptrace，不需要 parent 指针 |
 | task struct 仅加 1 个字段 (`next_hash`)      | 不加 `parent`/`children_head`/`next_sibling`/`prev_sibling`，将来加信号系统时再补           |
 | 保持 swap-with-last O(1) 删除                | 倒序遍历 + swap 不会跳过元素（已确认正确）                                                  |
 
 ***
 
-## Phase 4: SMP 预留（多 CPU 准备）
+## Phase 4: SMP 预留 → SMP 实现 ✅ 已完成
 
-本阶段不实现 SMP，而是为 SMP 预留清晰的扩展点。当前单核实现中就把架构搭好，避免未来重写。
+本阶段原为 SMP 预留扩展点，现已在 SMP Step 1-8 中全部实现落地。
 
 | 序号 | 任务                                                                               | 涉及文件                   | 复杂度 | 状态 |
 | ---- | ---------------------------------------------------------------------------------- | -------------------------- | ------ | ---- |
 | 4.1  | PFA: per-CPU frame cache (order-0 batch refill/drain)                              | page\_frame\_allocator.c/h | 中     | ✅   |
-| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     | ✅ 接口已声明，实现空 stub 归 SMP |
-| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     | ⏸ 结构就位，锁未无锁化，归 SMP |
-| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     | ✅ rq+cpu 已完成，cpumask 待 SMP |
+| 4.2  | Paging: TLB shootdown IPI 抽象接口 `jlos_hal_paging_tlb_shootdown(cpu_mask, addr)` | hal/paging.h + 实现占位    | 低     | ✅   |
+| 4.3  | MM: slab per-CPU freelist 无锁快路径 + batch drain to global                        | memory\_manager.c          | 中     | ✅   |
+| 4.4  | Multitask: per-CPU runqueue + task->cpu + task->cpumask                            | multitask.h + multitask.c  | 高     | ✅   |
 | 4.5  | HAL: 抽象 `jlos_hal_get_cpu_id()` / `jlos_hal_num_cpus()`                          | hal/smp.h                  | 低     | ✅ section-based per-CPU 实现 |
 | 4.6  | Spinlock: ticket lock 替换当前实现（为多核公平性）                                 | hal/spinlock.c             | 中     | ✅   |
 
@@ -225,12 +258,12 @@ graph TD
 | ------- | -------------------------------------------------------------------- | ---- |
 | Step 1  | per-CPU 基础设施：`DEFINE_PER_CPU` + `.data..percpu` + GS 段访问     | ✅   |
 | Step 2  | LAPIC 驱动 + 抽象（fixmap / MMIO 读写 / MSR / cache PCD 属性）       | ✅   |
-| Step 3  | ACPI MADT 解析（RSDP→XSDT→MADT 提取 CPU/IOAPIC）+ AP 启动            | ⏳   |
-| Step 4  | per-CPU GDT/TSS + 中断改造（切 APIC 模式）                           | ⏳   |
-| Step 5  | IPI + TLB shootdown                                                  | ⏳   |
-| Step 6  | 调度器 SMP 化                                                        | ⏳   |
-| Step 7  | 锁粒度优化                                                           | ⏳   |
-| Step 8  | IOAPIC                                                               | ⏳   |
+| Step 3  | ACPI MADT 解析（RSDP→XSDT→MADT 提取 CPU/IOAPIC）+ AP 启动            | ✅   |
+| Step 4  | per-CPU GDT/TSS + 中断改造（切 APIC 模式）                           | ✅   |
+| Step 5  | IPI + TLB shootdown                                                  | ✅   |
+| Step 6  | 调度器 SMP 化                                                        | ✅   |
+| Step 7  | 锁粒度优化                                                           | ✅   |
+| Step 8  | IOAPIC                                                               | ✅   |
 
 测试策略教训（Step 2 暴露）：记账类接口语义须对齐「系统总量」（`get_free` = buddy + Σper-CPU cache）；测试断言优先用恒等式/不变量（`free + occupied == total`）而非前后差值守恒，避免缺陷藏在不变量里被初始稳态掩盖。
 
@@ -292,7 +325,7 @@ graph TD
 | PFA-7 | per-CPU cache 补 `percpu_refill`（原只有 drain 无 refill，malloc miss 走 `alloc_n` 每次持 buddy 锁）+ `s_free_frames` 对称记账 | refill 漏减 s_free_frames 致 free 计数虚高；malloc 热路径原持锁取 1 个 | kernel/page_frame_allocator.c | ✅ |
 | MT-9 | exit 孤儿 zombie 回收 + schedule skip-prev 防 UAF | 孤儿无父 wait 泄漏 PCB；schedule 在 context_switch 前 free 当前 task 栈 = UAF | kernel/multitask.c | ✅ |
 | PAG-8 | PT slab cache（pgtable_cache）评估 | 被 PFA per-CPU refill 替代（per-CPU 无锁快路径 > slab 全局锁），不再单独做 | paging.c | ✅ 结论 |
-| MM-6 | slab per-CPU freelist 无锁快路径 | 单核无锁竞争收益为负，归 Phase 4.3（SMP 阶段随 per-CPU runqueue 一起做） | memory_manager.c | ⏸ 归 SMP |
+| MM-6 | slab per-CPU freelist 无锁快路径 | 单核无锁竞争收益为负，SMP 阶段已随 per-CPU runqueue 一起做 | memory_manager.c | ✅ |
 
 验证：spinlock/pfa/multitask 全测试 ALL PASSED。
 
@@ -308,7 +341,7 @@ graph TD
 | 链接器段定义 | ✅ | `linker.ld` 中 `.initcall0`~`.initcall5` 段 + `__initcallN_start/end` 符号，`ALIGN(4)` 非 `ALIGN(4K)` |
 | `jlos_do_initcalls()` | ✅ | `kernel/initcall.c`，按级别顺序遍历 6 个段执行 |
 | 删除 `call_constructors` | ✅ | `loader.s` 删除调用 + `kernel.c` 删除函数定义 + `linker.ld` 删除 `.init_array` 段 |
-| `john_beauty_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
+| `john_sunshine_main()` 精简 | ✅ | 仅保留底层依赖链 (hal/mmu/tss/device/pfa/paging) + `jlos_do_initcalls()` + tests + halt |
 
 **Initcall 级别分配：**
 
@@ -350,7 +383,7 @@ graph TD
 | # | 问题 | 修复 | 文件 |
 | --- | --- | --- | --- |
 | BC-1 | Backspace scancode 0x0E 缺失 | 添加 `case 0x0E: key_down('\b')` | drivers/keyboard.c |
-| BC-2 | `handles[i] = NULL` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
+| BC-2 | `handles[i] = nullptr` 覆盖已注册 handler | 删除冗余清零（BSS 已为零） | arch/x86/interrupts.c |
 | BC-3 | syscall initcall 与 IRQ manager 同级，handles 清零覆盖 | syscall 从 SUBSYS 改为 DEVICE | kernel/syscall.c |
 | BC-4 | 用户栈 VMA end 不含栈顶 `0xBFFFF000` | 改为 `JLOS_TASK_USER_STACK_TOP + JLOS_PAGE_FRAME_SIZE` (= `0xC0000000`) | kernel/multitask.c |
 
@@ -390,7 +423,7 @@ graph TD
 | execve 方案 A | ✅ | 经典做法：复用内核栈，修改 trapframe（eip/cs/user\_esp/user\_ss/eflags），正常 return 由 iret 到新程序 |
 | trapframe 修改 | ✅ | `jlos\_cpu\_state\_set\_user\_entry`（hal/cpu\_state.h + arch/x86/cpu\_state.c） |
 | 全局 trapframe | ✅ | `g\_hal\_syscall\_trapframe`（hal/kernel\_syscall.c）在 syscall entry 设置/清除 |
-| argv/envp 栈布局 | ✅ | System V ABI x86 32-bit 经典栈布局：环境字符串 → 参数字符串 → NULL → envp\[\] → NULL → argv\[\] → argc |
+| argv/envp 栈布局 | ✅ | System V ABI x86 32-bit 经典栈布局：环境字符串 → 参数字符串 → nullptr → envp\[\] → nullptr → argv\[\] → argc |
 | 用户空间拷贝 | ✅ | `syscall\_copy\_strings` 从用户空间拷贝 argv/envp + `jlos\_exec\_setup\_user\_stack` 写入用户栈 |
 
 ### 8.4 用户态子项目（jlcy/）
@@ -458,7 +491,7 @@ multitask: ALL PASSED  (ring3: exited=1, exit_code=7, argc=1, argv[0]=/hello.elf
 | 接收路径改造 | ✅ | NIC 收帧 alloc_skb+memcpy → 各层 on_received 改 skb + skb_pull 跳过头部 + send_back in-place 回送 |
 | csum_partial + csum_fold | ✅ | 替换 check_sum：csum_partial 分段累加 + csum_fold 折叠取反；TCP 用栈上 pseudo header + 分段累加，零临时 kalloc |
 | skb_push bug 修复 | ✅ | 删除错误的 `tail -= len`，push 只动 data 不动 tail（否则 skb_len 不随 push 增加，NIC 发包缺头部） |
-| TCP 崩溃修复 | ✅ | `arch/x86/lib/memcpy.s` + `memset.s` 入口加 size=0 早期返回（原汇编版无检查，jlos_memcpy(dst,NULL,0) 解引用 NULL → triple fault） |
+| TCP 崩溃修复 | ✅ | `arch/x86/lib/memcpy.s` + `memset.s` 入口加 size=0 早期返回（原汇编版无检查，jlos_memcpy(dst,nullptr,0) 解引用 nullptr → triple fault） |
 | 阶段 5 推迟 | ⏸ | 队列（backlog/发送）+ clone 在当前架构无消费者（无 softirq/packet socket，NIC 同步发送），推迟至需求出现时 |
 | 验证 | ✅ | DHCP/ARP/ICMP/UDP/TCP 全通：三次握手 + HTTP GET/响应 + 四次挥手；所有内核测试全绿 |
 
@@ -551,13 +584,14 @@ P0 阶段（Phase 0/1/2/3/6/7/8）已全部完成，Phase 5 四个子阶段均�
 | ~~**1（P1）**~~ | ~~F5 open/close/read/write/seek syscall + FS-1 FAT32 写支持~~ | **已完成**：open/close/read/write/lseek/unlink syscall + fat32 write/create/unlink + file\_test（write/read match、lseek、unlink+reopen-fail）ALL PASSED | Phase 8 ✅ |
 | ~~**2（P1）**~~ | ~~5.1/5.4 接口收尾：PAG-7 + PFA-5~~ | **已完成**：PAG-7 `s_active_paging_context[JLOS_MAX_CPUS]` per-CPU 化（arch/x86/paging.c）；PFA-5 `jlos_page_frame_alloc_n/free_n` 统一多帧 API，mm/paging/测试全量切换 | 无 |
 | ~~**3（P1/P2）**~~ | ~~F7 signal/kill + F11 mmap/munmap（匿名映射）~~ | **已完成**：F7 signal/kill（signal\_test ALL PASSED）+ F11 mmap/munmap（mmap\_test ALL PASSED）+ F8 fork/clone（COW + ret\_from\_fork）压测通过 | 批次 2 ✅ |
-| ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init NULL/fork clear），exit 经 kfree 隐式回收 | 无 |
+| ~~**3.5（穿插加固）**~~ | ~~调度器加固三件套：schedule() 入口 cli+eflags 恢复（竞态窗口根治）、IRQ0 EOI 前移到 schedule 之前（消除切换后中断压制）、syscall trapframe 全局改 per-task（wait\_pid 阻塞窗口与 MT-TF 同机制，一并根治）~~ | **已完成**：schedule() 入口 `jlos_hal_irq_save` + 三出口 `irq_restore`（multitask.c:479/527/544/558）；IRQ0 early-EOI 先于 schedule（interrupts.c:306-312→324）；syscall trapframe 已 per-task 化为 `jlos_task_t.syscall_tf`（入口 set/返回 clear/init nullptr/fork clear），exit 经 kfree 隐式回收 | 无 |
 | ~~**4（P2）**~~ | ~~经典化收尾~~ | **已完成**：MT-4 残留已不存在（fork 入口无硬上限，max\_tasks 动态翻倍）；FS-3 dentry LRU 淘汰已实现（DCACHE\_MAX=256 + dentry\_shrink）；PAG-4 内核 4KB PDE 浅拷贝共享已实现；MM-3 per-type 专用 cache 跳过（通用 size class 已覆盖，收益太小） | 批次 3 ✅ |
 | ~~**5（P3）**~~ | ~~SMP 预留（Phase 4：4.1 per-CPU frame cache / 4.2 TLB shootdown 抽象 / 4.3 per-CPU freelist / 4.4 per-CPU runqueue / 4.5 cpu id 抽象 / 4.6 ticket lock）+ A2/A3 恒等映射与 boot 页表清理~~ | **已完成**：4.1~4.6 全部落地，multitask ALL PASSED；A2（0~1MB 恒等映射）核验无残留，A3（boot_page_dir 4KB）已释放（PFA init 末尾调用 `jlos_arch_paging_free_boot_tables`，refcount_dec 回收） | 批次 4 ✅ |
+| ~~**6（P0）**~~ | ~~SMP 实现（Step 1-8：per-CPU + LAPIC + ACPI/AP + 中断改造 + IPI + 调度器 SMP + 锁优化 + IOAPIC）~~ | **已完成**：8 步全部落地 + 3 项衡生竞态修复（时间/fork/zombie reaping），VMware 4 核 54/54 全 PASS | 批次 5 ✅ |
 | ~~**7（时间子系统）**~~ | ~~clocksource/clock_event_device 分离 + TSC + timekeeping + RTC + wall-clock + 日志真实时间戳 + HAL cpu_relax 抽象~~ | **已完成**：阶段 1-3 + 4a 全部落地，详见下方时间子系统升级记录 | 无 |
 | ~~穿插~~ | ~~F9 DHCP + F10 DNS；F14 日志环形缓冲 + F15 串口宏开关 + CON-1~2 console 遗留~~ | **已完成**：F9/F10 v3.3、F14/F15 v3.4、CON-1/CON-2 已实现，CON-3（PCI 枚举上提）保留 | 无 |
 
-完成后进入 Phase 4 SMP 实现 + 多架构（ARM/RISC-V）阶段。
+SMP 8 步 + C23 升级 + 64 位化 + **ARM64/AArch64 架构移植（含 SMP 与 A/B 优化）** 均已全部完成。下一阶段：用户态运行时 / socket syscall / 调度器优化 / TCP 修复 / 中断现代化。
 
 ***
 
@@ -663,19 +697,89 @@ BOUND: ip = 192.168.159.133, mask = 255.255.255.0, gw = 192.168.159.2, dns = 192
 - `curl http://192.168.159.133:1234` — HTTP/1.1 200 OK（内核 HTTP 服务器响应）
 - `echo "johnbeauty" | nc -u 192.168.159.133 5678` — UDP 回显正常
 
-### 后续规划（v3.4 路线，基于项目核心子系统扫描）
+### 后续规划（v4.1 路线，基于项目核心子系统扫描）
+
+#### 项目核心愿景
+
+**JLOS 不是 Linux 的复制品。** 目标是做一个基于现代计算机世界全面成果的内核——一气呵成、优雅、充分利用近几十年来计算机发展的成果和经验。相比 Linux 因长期发展而累积的历史包袱，JLOS 从设计之初就采用现代最佳实践：现代 C 标准（C23）、现代硬件特性（64 位/SMP/现代中断控制器）、现代内核设计理念（HAL 分层/经典数据结构/生产级正确性）。
 
 NTP 同步走用户空间守护进程路线（经典做法），内核只提供 syscall。以下按依赖与收益排序：
 
 | 优先级 | 阶段 | 内容 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- |
-| **高** | SMP 实现 | APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化 | — | P0 架构性升级，Phase 4 预留接口已就位；详见 Phase 9 |
+| ~~**高**~~ | ~~SMP 实现~~ | ~~APIC+IPI+per-CPU 激活+AP 启动+负载均衡+锁粒度细化~~ | — | **已完成**：8 步全部落地 + 3 项竞态修复，54/54 全 PASS |
+| ~~**高**~~ | ~~C23 标准升级~~ | ~~[[attribute]] + nullptr + constexpr + typeof + 数字分隔符 + 二进制字面量 + enum : type~~ | SMP ✅ | **已完成**：-std=gnu2x + 核心特性落地（nullptr/[[noreturn]]/static_assert/typeof），其余特性（constexpr/[[maybe_unused]]/[[fallthrough]] 等）写新代码时自然采用 |
+| ~~**高**~~ | ~~64 位化（P1）~~ | ~~x86-64 long mode：4 级页表 + 64 位 GDT/IDT/TSS + syscall 指令 + ELF64 + 同目录 #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64 同时支持 32/64 位）~~ | C23 ✅ | **已完成**：8 步全部落地 + 运行时验证 54/54 全 PASS。关键修复：fork 子进程 rax、signal_handlers uintptr_t、syscall ABI 64 位化、中断处理链返回类型、TSS 104 字节布局、GDT 语义化宏、signal frame 偏移。嵌入式场景保留 32 位 |
 | 中 | 用户态运行时 | malloc/free 用户态堆管理（基于 brk，经典 free-list） | brk（已完成） | 解锁用户态应用开发，NTP 守护进程前置 |
 | 中 | 4c | 网络 socket syscall（socket/bind/connect/send/recv/close） | 无 | 向用户空间暴露内核 UDP/TCP 栈，大工程 |
 | 中 | 调度器优化 | sleep_queue O(n)→红黑树、zombie 扫描优化、考虑 CFS | hrtimer | 性能热点 |
 | 中 | TCP 修复 | send 忙等 spin→睡眠、补全 FSM（LAST_ACK）、拥塞控制 | hrtimer | 功能性 bug |
 | 低 | 4d | 用户空间 NTP 客户端 | 4b + 4c | NTP 服务器地址从命令行参数读取 |
-| 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP | |
+| 低 | 中断现代化 | 软中断/tasklet（8259→APIC 随 SMP 一并完成） | SMP ✅ | |
+| ~~低~~ | ~~多架构（P2）~~ | ~~ARM64/AArch64 架构支持（凑 x86-64 + ARM64 两套架构；HAL 层已就位）~~ | 64 位化 ✅ | **已完成（v4.4）**：`arch/arm64/` 落地，单核 + `-smp 4`（QEMU qemu-system-aarch64 `virt,gic-v3`）均 54/54；无真机硬件；RISC-V64 暂缓 |
+
+#### C23 标准升级特性分析（基于 JLOS freestanding 实际情况）
+
+**实际约束**：`-nostdlib -fno-builtin -ffreestanding`，不链接 libc/libgcc，不包含标准头文件（`common/types.h` 自定义所有类型）。内核已有自己的 `jlos_memset`/`jlos_memcpy`/`jlos_strlen`/`jlos_popcount32`（查表法）等实现。
+
+**GCC 版本结论**：GCC 13.3 `-std=gnu2x` 已覆盖 JLOS 需要的全部 C23 特性，**暂不升级 GCC**。唯一缺失的 `#embed`（需 GCC 15+）是便利特性非核心，当前手动 C 数组能工作。`-std=gnu2x`（草案名）与 `-std=gnu23`（最终标准名，需 GCC 14+）语义基本相同。硬件兼容性无差异——GCC 版本不影响目标架构（`-m32`/`-m64` 均支持）。
+
+**判断标准**：前置条件=无副作用+不会带来安全问题；使用好处=提升代码阅读清晰度 / 让内核更优雅、安全、提升性能、简化冗余。
+
+**表 1：必须用在内核内的 C23 新特性**（GCC 13.3 `-std=gnu2x` 全部 ✅）
+
+| 特性 | 说明 | 好处 |
+|------|------|------|
+| `nullptrptr` | 类型安全空指针常量（独立类型 `nullptrptr_t`） | 消除 `nullptr` 被定义为 `((void*)0)` 的整数/指针歧义，类型安全 |
+| `constexpr` | 编译期常量对象 | 比 `#define` 有类型信息且调试器可见；比 `static const` 明确编译期求值；可用于数组维度、位域宽度 |
+| `typeof`/`typeof_unqual` | 标准化类型推断 | `container_of` 宏从依赖 GCC `__typeof__` 扩展变为标准 C，多架构可移植 |
+| `[[noreturn]]` | 函数不返回 | 替代 `_Noreturn`/`[[noreturn]]`，标准化属性语法 |
+| `[[maybe_unused]]` | 抑制未使用警告 | 条件编译中未使用的变量/参数，明确标注意图 |
+| `[[fallthrough]]` | switch 穿透标注 | 替代 `/* fall through */` 注释，编译器认可，消除 `-Wimplicit-fallthrough` 警告 |
+| `[[nodiscard]]` | 返回值不可忽略 | 忽略返回值时编译警告，安全检查（如 `jlos_paging_map` 返回错误码被忽略） |
+| `[[deprecated]]` | 标记弃用 | 弃用 API 时编译警告，迁移引导 |
+| 数字分隔符 `'` | `1'000'000` / `0xFFFF'FFFF` | 长数字可读性大幅提升，内核页表/地址常量受益 |
+| 二进制字面量 `0b` | `0b1010'1010` | 位掩码比十六进制更直观，内核中断/页表标志位受益 |
+| `enum : type` | 枚举显式底层类型 | `enum irq_level : uint8_t {...}` 明确内存布局，避免枚举溢出，控制结构体大小 |
+| `#elifdef`/`#elifndef` | 简化条件编译 | `#elifdef CONFIG_X86_64` 比 `#elif defined(CONFIG_X86_64)` 简洁，配合 32/64 位 #ifdef |
+| `__VA_OPT__` | 可变参数宏优化 | `#define LOG(fmt, ...) kprintf(fmt __VA_OPT__(,) __VA_ARGS__)` 消除 `## __VA_ARGS__` GCC 扩展 hack |
+| 空初始化器 `{}` | 零初始化 | `jlos_pde_t pde = {};` 比 `= {0}` 语义更明确 |
+| `static_assert`（无消息） | 编译期断言 | `static_assert(sizeof(jlos_task_t) <= 64);` 比 `_Static_assert(..., "msg")` 简洁 |
+| `alignas`/`alignof` | 对齐关键字 | `alignas(64) char cache_line[64];` 比 `_Alignas(64)` 简洁，不再需要 `<stdalign.h>` |
+
+**表 2：不能用在内核里的 C23 新特性**
+
+| 特性 | 不能用的原因 |
+|------|-------------|
+| `#embed` | GCC 13.3 不支持（需 15+）。特性本身无副作用，当前工具链不可用，将来 GCC 15+ 后再评估 |
+| `_BitInt(N)` | GCC 13.3 不支持（需 14+）。且 freestanding 无 libgcc，算术运算可能回退调用 libgcc，有链接失败风险 |
+| `[[unsequenced]]`/`[[reproducible]]` | GCC 13.3 识别但忽略（`-Wattributes` 警告）。标注错误会导致未定义行为——安全风险大于优化收益 |
+| `<stdbit.h>` | freestanding 不引用标准头文件。且 `stdc_leading_zeros` 等可能回退调用 libgcc，已有查表法 `jlos_popcount32` 替代 |
+| `<stdckdint.h>` | freestanding 不引用标准头文件。`ckd_add` 等虽是内建不依赖 libgcc，但需包含标准头，与自包含类型系统冲突 |
+| `<stdatomic.h>` | freestanding 不引用标准头文件。已有 `hal/atomic.h` 用 GCC `__atomic` 内建，功能完整 |
+| `thread_local` | 内核不用 C 线程模型。用 `DEFINE_PER_CPU` + GS 段实现 per-CPU 变量，语义不同（per-CPU 非 per-thread） |
+| `memccpy`/`strdup`/`strndup` | freestanding 不使用标准库。已有 `jlos_strlcpy`/`jlos_strlen`/`jlos_strcmp` 等自己的实现 |
+
+**表 3：必须覆盖 C11 的 C23 特性**（C11 做法 → C23 替代）
+
+| C11 做法 | C23 替代 | JLOS 当前用法 |
+|----------|----------|--------------|
+| `#define nullptr ((void*)0)` | `nullptrptr` | `common/types.h:24` |
+| `typedef unsigned char bool` + `#define true/false` | `bool`/`true`/`false` 关键字 | `common/types.h:21-23` |
+| `__typeof__((type *)0)->member)` | `typeof(...)` | `common/types.h:48` container_of |
+| `_Static_assert(cond, "msg")` | `static_assert(cond)` | JLOS 已有 `_Static_assert` 用法 |
+| `_Alignas(64)`/`_Alignof(type)` | `alignas(64)`/`alignof(type)` | JLOS 用 `__attribute__((aligned(64)))` |
+| `_Noreturn` | `[[noreturn]]` | JLOS 用 `[[noreturn]]` |
+| `#define CONST 4096` | `constexpr int CONST = 4096` | JLOS 大量用 `#define` 常量 |
+| `int arr[4] = {0}` | `int arr[4] = {}` | JLOS 有 `= {0}` 用法 |
+| `## __VA_ARGS__` hack | `__VA_OPT__(,)` | 消除 GCC 扩展 hack |
+| K&R 函数声明 | 移除（C23 强制原型） | JLOS 应已全部用原型声明 |
+| 隐式函数声明（C11 警告） | 错误（C23） | `-Wall -Wextra` 已捕获 |
+| VLA（C11 必须） | VLA 可选（C23） | 可禁用 VLA，消除栈溢出风险 |
+
+**注意**：C23 标准属性**不包含** `packed`/`aligned`/`section`/`weak`/`noinline` 等 GCC 专属属性，这些仍需 `__attribute__((...))`——内核中大量使用，无法完全替代。`bool` 关键字类型是 `_Bool`（1 字节），与当前 `unsigned char` 一致，无 ABI 影响。`size_t` 仍需自己定义（不包含 `<stddef.h>`），64 位化时改为 `typedef uint64_t size_t`。
+
+**升级方式**：~~Makefile `-std=gnu11` → `-std=gnu2x`（内核 + jlcy），删除 `common/types.h` 中被 C23 关键字取代的 `bool`/`true`/`false`/`nullptr` 定义（避免与关键字冲突），逐步采用 C23 特性。~~ **已完成（2026-10-15）**：-std=gnu2x 落地 + nullptr/[[noreturn]]/static_assert/typeof 核心特性采用 + types.h 冲突定义删除。constexpr/[[maybe_unused]]/[[fallthrough]]/[[nodiscard]]/enum : type/数字分隔符/二进制字面量/alignas 等为编码风格层面，写新代码时自然采用，不作为升级步骤批量改造。
 
 ### 实施优先级（历史，已被批次规划取代）
 
@@ -693,8 +797,106 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | **P1** | F5/F7 | open/close/read/write syscall + signal/kill 信号机制                | F5/F7 → 批次 1/3 |
 | **P2** | 5.3   | 经典化 / 扩展性                                                     | ✅ MT-4 已核销（残留 fork 上限 → 批次 4），仅剩 MM-3 |
 | **P2** | F11/F8 | mmap/munmap syscall + 线程支持（clone）                            | → 批次 3 |
-| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成 |
+| **P3** | 4.x/5.4 | SMP 预留 + 多架构 HAL 接口                                        | ✅ PAG-5/PFA-5 已核销；4.1~4.6 → 批次 5 已完成；SMP 实现 → 批次 6 已完成 |
 | **P3** | F9/F10 | DHCP + DNS 网络栈完善                                              | ✅ 已完成（v3.3） |
+
+***
+
+## Phase 9: 64 位化升级（x86-64 long mode）✅ 已完成（2026-10-19，v4.3）
+
+x86-64 long mode 8 步全部落地，同目录 + #ifdef 方式（CONFIG_X86_32/CONFIG_X86_64）同时支持 32/64 位，嵌入式场景保留 32 位。
+
+### 9.1 八步实施
+
+| 步骤 | 内容 | 状态 |
+| ---- | ---- | ---- |
+| Step 1 | 引导切换：bootloader 检测 CPUID + long mode 支持 → 进入 long mode（CR0.PG + CR4.PAE + EFER.LME + EFER.LME→LMA） | ✅ |
+| Step 2 | 4 级页表：PML4/PDPT/PD/PT + 64 位内存布局（PML4[0] 用户区 / PML4[256] direct map 0xFFFF800000000000 / PML4[511] kernel 0xFFFFFFFF80000000 + heap 0xFFFFFFFF00000000） | ✅ |
+| Step 3 | 64 位 GDT/IDT/TSS：GDT 语义化宏（非 magic number）+ TSS 104 字节布局 + IDT 64 位 gate | ✅ |
+| Step 4 | 中断入口：64 位中断入口/出口（interrupts_asm.S）+ 中断处理链返回类型 uintptr_t | ✅ |
+| Step 5 | 上下文切换：64 位 trapframe（jlos_x86_regs_t 176B = 15 GPR + vector + error + rip + cs + eflags + user_esp + user_ss）+ swtch 汇编 64 位 | ✅ |
+| Step 6 | syscall：syscall/sysret 指令 + 参数截断 + jlcy syscall ABI 64 位化 | ✅ |
+| Step 7 | SMP 适配：per-CPU GDT/TSS 64 位 + AP 启动 long mode + IPI 64 位 | ✅ |
+| Step 8 | ELF/用户态：ELF64 加载器 + jlcy 用户库 64 位 + signal frame 偏移 sizeof(uintptr_t) | ✅ |
+
+### 9.2 关键运行时修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| BIT64-1 | **fork 子进程 rax 返回值**（严重 Bug）：64 位 `jlos_arch_task_copy_thread` 中子进程 rax 设为 `pregs->rax`（=SYSCALL_FORK syscall number），而 32 位正确设为 0 → 子进程 fork() 返回非零 → 不进入 `pid==0` 分支 → fork_test/signal_test FAIL | `top[14] = 0` | arch/x86/context_switch.c |
+| BIT64-2 | **signal_handlers 类型升级**：`uint32_t signal_handlers[]` → `uintptr_t signal_handlers[]`（64 位指针截断） | signal_handlers 字段 + syscall.c/multitask.c 局部变量 | kernel/multitask.h + kernel/syscall.c + kernel/multitask.c |
+| BIT64-3 | **syscall ABI 64 位化**：jlcy `syscall()` 参数 `uint32_t` → `uintptr_t`，返回值 `int32_t` → `intptr_t`，所有 wrapper `(uint32_t)ptr` → `(uintptr_t)ptr` + `mmap_arg_struct_t.addr` `uint32_t` → `uintptr_t` | 消除全部 pointer-to-int-cast 警告 | jlcy/include/types.h + jlcy/lib/x86/syscall.c + jlcy/lib/syscall.h + jlcy/include/syscall_abi.h + kernel/syscall.c + jlcy/user/mmap_test.c + jlcy/user/file_test.c |
+| BIT64-4 | **中断处理链返回类型**：uintptr_t 升级 | 中断处理函数返回类型 | arch/x86/ |
+| BIT64-5 | **TSS 104 字节布局**：64 位 TSS 104 字节布局对齐 | TSS 结构 + GDT 语义化宏 | arch/x86/ |
+| BIT64-6 | **GDT 语义化宏**：硬编码用宏替代（非 magic number） | GDT entry 定义 | arch/x86/ |
+| BIT64-7 | **signal frame 偏移**：`sizeof(uint32_t)` → `sizeof(uintptr_t)`（64 位信号栈帧偏移） | signal frame setup/restore | arch/x86/signal.c |
+
+### 9.3 64 位内存布局
+
+```
+PML4[0]:     用户区      0x0000000000000000 - 0x000007FFFFFFFFFF
+PML4[256]:   direct map  0xFFFF800000000000
+PML4[511]:   kernel text/data 0xFFFFFFFF80000000
+             kernel heap      0xFFFFFFFF00000000
+```
+
+- `KERNEL_DIRECT_MAP_BASE = 0xFFFF800000000000`
+- `KERNEL_VIRTUAL_BASE = 0xFFFFFFFF80000000`
+- 用户栈顶 `JLOS_TASK_USER_STACK_TOP = 0xBFFFF000`（< 4GB，用户代码低地址）
+
+### 9.4 验证
+
+```
+双架构编译：0 警告 0 错误（make BITS=32 / make BITS=64）
+VMware 4 核：54 passed / 0 failed
+```
+
+***
+
+## Phase 10: ARM64 架构移植（已完成，2026-10-26）
+
+QEMU virt/gic-v3 验证（无真机）。进度：A1 启动链、A2 FDT+boot-info、A3 分页真实实现、**单核测试套件 54/54 全 PASS**、惰性 FPU（用户态 FP 已启用）、通用 NIC 抽象 + virtio-net（udp/http 真实跑通）均已完成。
+
+SMP 移植：**Phase A/B/C/D 全部完成**。`-smp 4` 下 AP 1/2/3 online，且**测试套件 54/54 全 PASS**（连续多次稳定）；单核亦 54/54。多核怪象的总根因见 ARM64-16（`.data..percpu` 段被吞致 per-CPU 机制失效），随后 ARM64-17（ESR WnR 漏判 CEL）收尾。
+
+### 10.1 关键运行时修复
+
+| # | 问题 | 修复 | 文件 |
+| --- | --- | --- | --- |
+| ARM64-1 | **int8_t 跨架构符号性**（严重 Bug）：`typedef char int8_t` 依赖 ABI 符号性——x86-64 plain char 有符号，AArch64（AAPCS64）无符号 → arm64 上 int8_t 实为 0~255：am79c973 `-1` 哨兵变 255 且 `>= 0` 恒真（recv 游标错乱）、mouse console 下溢钳位失效、mouse.c PS/2 delta 符号扩展失效（鼠标单向移动） | `typedef signed char int8_t`（符合 C 标准 int8_t 定义，x86 行为零变化） | common/types.h |
+| ARM64-2 | exec-on-self 后 `eret` 到地址 0（`exec return entry 0x0`）：对**当前任务自身** exec 时 `init_arch_user` 在活跃栈顶写初始切换帧，覆盖同帧内 `entry` 局部槽 | 仅对**非当前运行任务**预置切换帧（exec 路径由 `exec_return` 直接 eret） | kernel/multitask.c |
+| ARM64-3 | 用户 ELF 文本段取指权限 fault（`ESR 0x8200000f`，UXN）：`elf_flags_to_pte_flags` 从不设 `JLOS_PG_EXEC`；x86 `pte_prot` 不置 NX 故无感，arm64 对非 EXEC 页显式置 UXN | 可执行段（PF_X）加 `JLOS_PG_EXEC` | fs/elf.c |
+| ARM64-4 | `ring3_mmap` 页错误被误杀：通用处理器按 **x86 错误码语义**解读 `context->error`，而 arm64 存的是原始 ESR | arm64 侧翻译 ESR（EC/DFSC/WnR）→ present/write/user 位 | arch/arm64/interrupts.c |
+| ARM64-5 | paging 单测全 FAIL：arm64 `map_entry` 直接用 `ctx->root`（未分配即失败），x86 有惰性根表分配 | 补 `root_ensure`，user 段惰性分配根表 | arch/arm64/paging.c |
+| ARM64-6 | fork/信号子进程 SIGSEGV（退出码 1/2）：COW 路径硬编码 `JLOS_PG_USER_RW` 映射，丢失 EXEC（文本/栈变 NX） | COW 克隆与写时复制按**源页权限**保留 EXEC | kernel/paging.c |
+| ARM64-7 | `ring3_signal` FAIL：`arch/arm64/signal.c` 为空 stub（信号帧未实现） | 实现 sigreturn 跳板 + 用户上下文保存/恢复；信号跳板在用户栈故栈需可执行 | arch/arm64/signal.c + kernel/multitask.c |
+| ARM64-8 | 用户态执行 FP/SIMD 触发 `EC 0x7`（`pc=0x400030`）：内核未放开 EL0 FP | arm64 惰性 FPU（`CPACR_EL1.FPEN` 只 trap EL0 + `ext_state` 扩到 528B + `EC 0x7` 接 `ext_trap_body`）；jlcy 恢复用户态 FP | arch/arm64/fpu.c + hal/ext_state.h + jlcy/Makefile |
+| ARM64-9 | 网络栈与 AMD 驱动硬耦合（`etherframe.h` 直接 include amd 头、backend 为具体类型），arm64 无 NIC | 引入通用 NIC 抽象（`hal/net.h`：`jlos_hal_net_dev_t`+ops+primary_dev，回调走原始 buffer）+ 改 amd/etherframe/network + arm64 virtio-net | hal/net.* + drivers/amd_am79c973.* + net/* + arch/arm64/virtio_net.c |
+| ARM64-10 | virtio-net DHCP 首发后 CPU 100% 死等：TX 写成**同步阻塞**等待 `used->idx`，而设备不立即回写（网卡 TX 本质异步） | TX 改**异步**（TX 缓冲池 + 提交即返回 + 下次发送/IRQ 回收），并补 RX 初始 `QueueNotify` | arch/arm64/virtio_net.c |
+| ARM64-11 | SMP：`boot_aps` 报 `4 cpus booted` 却无 AP 日志（AP online **假阳性**）：`smp_init` 把 BSP `online=1` 写入 per-CPU 段，`alloc_percpu_areas` **拷贝**后各 AP 也变 1 | AP per-CPU 区**清零**（对齐 x86，不再拷贝）——与 ARM64-13 同根因（拷贝 BSP 运行时 per-CPU 段），现象不同 | arch/arm64/smp.c |
+| ARM64-12 | SMP：AP 取指 `Prefetch Abort`（`ESR translation fault L0, FAR=ELR=0x4008028c`）后无 `VBAR` → 无限 abort：`paging.c` 内核页表初始化执行 `__pgtable_start[0]=0`，清掉 boot 期 identity 表；AP 复用 `TTBR0` 后低地址取指失败 | AP 次核入口（MMU off 阶段）**自建 identity 映射**（`L0_T0[0]→L1_IDMAP`，`L1_IDMAP[RAM]→RAM block`） | arch/arm64/boot.S |
+| ARM64-13 | SMP：BSP 栈被破坏（`check_pattern` 返回到 0 → `SAVE_FRAME` 用坏 `sp` 递归 **318101 次 Data Abort**）：`alloc_percpu_areas` 拷贝把 BSP 运行时 `current_task`（=BSP idle）等带给了各 AP；AP 在 `sched_init_cpu` **之前**已开中断，定时器 IRQ 以 BSP 任务为“当前”调度 → 破坏 BSP 任务/栈 | AP per-CPU 区**清零** + `ap_main` 把 `daifclr` **后置到 `sched_init_cpu` 之后** | arch/arm64/smp.c + arch/arm64/ap_boot.c |
+| ARM64-14 | SMP：AP 的 `ap_main` 运行栈与其 idle 任务栈**共用同一槽**，idle 预置帧覆盖 ap_main 活跃栈 | linker 拆 `__ap_boot_stack`（启动栈）/`__ap_idle_stack`（idle 内核栈），`boot_stack_info` 返回 idle 段 | arch/arm64/linker.lds.S + context_switch.c + smp.c |
+| ARM64-15 | SMP：GIC **SGI 未使能**（`jlos_arch_gic_irq_unmask` 只处理 `intid>=16`），目标核收不到 IPI → `tlb_shootdown` 死等 `done` | redistributor 使能 SGI 0-15；`unmask/mask` 覆盖 `intid<32`（SGI+PPI） | arch/arm64/gic.c |
+| ARM64-16 | SMP **总根因**：`.data..percpu` 输出段为空 → `percpu size = 0` → `jlos_kalloc(0)` 失败 → 各 AP 的 `per_cpu_offset` 恒 0 → **AP 与 BSP 共用同一 per-CPU 槽**（current_task / hrtimer base / gic rdist / tick 全部串台）→ 多核一切怪象（BSP tick 停摆、栈被破坏、cascade 挂起等）。根因：linker `.data : { *(.data .data.*) }` 中 **`.data.*` 通配符吞掉了 `.data..percpu` 输入段**，使后置的 `.data..percpu` 输出段为空 | 将 `.data..percpu` 输出段移到 `.data` **之前**（顺序匹配优先），段恢复非空（648B），AP offset 各异 | arch/arm64/linker.lds.S |
+| ARM64-17 | SMP：`jlos_copy_to_user`（内核写用户页）触发 `ESR 0x9600004f`（EC=0x25 同 EL Data Abort）被**误杀**：`jlos_irq_context_init` 翻译 ESR 时 **WnR 只对 `EC==0x24(LEL)` 取、漏了 `0x25(CEL)`** → 把"内核写 COW 只读页"判成 `write=0` → 走 kill 而非 COW。x86 因错误码天然含写位无此问题 | 数据 abort 的 WnR 对 **LEL/CEL 都取** | arch/arm64/interrupts.c |
+| ARM64-18 | arm64：`virtio_net_init_hw` 读 MAC 用**字节偏移** `virtio_reg_read(ctx, JLOS_VIRTIO_REG_CONFIG + i)`（i=0..5）→ 地址 `0x100+i` **未对齐**（i=1 即 `0x101`）→ Device 内存未对齐访问 fault（`kernel pf addr=0xffff00000a003d01`），**带 virtio-net 启动即崩** | 改为**按字对齐读**（读 `0x100`/`0x104` 两个字组合 6 字节 MAC） | arch/arm64/virtio_net.c |
+
+### 10.2 非阻塞优化（稳健性 A + 性能 B，2026-10-26）
+
+| 项 | 内容 | 文件 |
+| --- | --- | --- |
+| A2 | arm64 惰性 FPU 的 owner 改 **per-CPU**：原为全局 static（SMP 下两核同时用 FP 会互相踩；x86 因用户不用 FP 未暴露，arm64 用户启用 FP 故必须改）；随之去掉全局锁 | arch/arm64/fpu.c |
+| A1 | PAN/uaccess：HAL 增 `jlos_hal_uaccess_begin/end`（arm64 按 `ID_AA64PFR0_EL1.PAN` 检测后 `msr pan,#0/#1`，用 `.arch_extension pan`；x86 空实现）；包裹全部内核→用户内存访问点（copy_to/from_user、exec 用户栈、信号帧） | hal/hal_arch.h + arch/{arm64,x86}/hal_arch.c + kernel/syscall.c + kernel/multitask.c + arch/arm64/signal.c |
+| B1 | 启用 arm64 **ASID**：`jlos_paging_context_t` 加 `asid`；`tables_clone` 分配、`tables_destroy` 释放；`jlos_hal_paging_switch(root, asid)` 把 8-bit ASID 编码进 TTBR0[63:56]，**切换不再全量 flush** | hal/paging.h + arch/arm64/paging.{h,c} + arch/x86/paging.c + kernel/paging.c |
+| B2 | 随 ASID 达成：切页表免全量 flush；TLB shootdown 本就 per-mask/per-va | arch/arm64/paging.c |
+| B3 | arm64 `jlos_memcpy/memset` 汇编（`ldp/stp` 16B）覆盖 common 的 weak 版 | arch/arm64/lib/{memcpy,memset}.S |
+| B4 | 内核直接映射区 **2MB 块映射**：`map_range_entry` 对内核区（va≥`KERNEL_DIRECT_MAP_BASE`）写 PMD block；用户页保持 4KB（保 COW 语义） | arch/arm64/paging.c |
+| B5 | reschedule IPI 仅在 `need_resched` **0→1** 时发送（避免重复 SGI） | arch/arm64/smp.c |
+
+**验证**：单核 54/54、`-smp 4` 54/54；x86-64/32 clean 编译通过。**注意**：改 `hal/paging.h` 结构体布局后必须 **clean 重建**（Makefile 无头文件依赖跟踪，否则旧 .o 用旧布局导致随机崩溃）。
+
+**日志精简（2026-10-26）**：删除 arm64 运行日志中的**无用调试打印**——逐扇区 `xfer`、`elf ehdr`、`ctxsw exec return`、每条 `abort esr`、virtio 枚举/feature、`partition`/`fat32 cluster`/`udp socket` 等内部细节（**直接删语句**，不降级为 debug、不关 `JLOS_KERNEL_DEBUG`）；保留设备 `ready`、时钟选择、`rootfs mounted`、测试结果。日志行数 ~489 → ~138，`-smp 4` 54/54。连带修复 ARM64-18（virtio-net MAC 未对齐 MMIO 读）。
 
 ***
 
@@ -727,6 +929,92 @@ NTP 同步走用户空间守护进程路线（经典做法），内核只提供 
 | #   | 问题                       | 说明                                                                               |
 | --- | -------------------------- | ---------------------------------------------------------------------------------- |
 | A4  | MLFQ 不 starvation-free    | CFS weighted fair queuing 更经典但复杂度高；当前可接受                             |
+
+***
+
+***
+
+## 全项目生产级差距与后续升级路线（2026-10-26 扫描）
+
+> 依据「优化原则」第 1 条（先修 BUG）与第 5/10 条（对齐成熟系统最终形态），对 kernel/arch/hal/net/fs/drivers/构建 做代码级扫描。以下为**待办路线**，非已完成项。
+
+> **进度（2026-10-27）**：**P0 全部完成** —— 第 1 节 5 条硬 bug 与第 2 节高置信项均已修复并核验（x86 4 核 + arm64 `-smp 4` 均 54/54）。其中「老化失效」「僵尸回收」经逐行复核为**误报**（设计自洽），未改动。P2 跨架构一致性/安全主体完成（见下）。
+>
+> **进度（2026-10-28）**：**P2 全部完成** —— P2-1 异常表 uaccess（汇编 usercopy + `.ex_table`，查找/排序用新增 `dsa/search.c`、`dsa/sort.c`，基础设施归新子系统 `kernel/exception_recover.c`，中断返回写回 IP）；P2-2 PCID（x86-64 启用 CR4.PCIDE + per-ctx PCID + 复用前全核失效独立原语 `jlos_hal_paging_flush_all_tlb_shootdown`，arm64 复用 `tlbi vmalle1is`）。**三架构均 54/54**（期间修掉 32 位 cdecl `esi/edi` 未保存 bug）。
+>
+> **进度（2026-10-29）**：**P3-1 kthread 完成** —— 新子系统 `kernel/kthread.c`（内核线程：`create/run/stop/should_stop`；内核线程守护线程 `kthread daemon` 负责异步创建 + 统一父）；`jlos_task_t` 加 `kthread` 指针；`task_free_locked` 释放回调 + `reap_all_zombies` 延迟回收（避免 stop 等待期 use-after-free）。arm64 `-smp 4` 54/54。P3-2 workqueue 进行中。
+>
+> **进度（2026-11-02）**：**P3-2/3/4/5 全部完成，arm64 `-smp 4` 实测 54/54** —— P3-2 workqueue（per-CPU worker + work 去重 PENDING 位 + barrier flush + system wq）；P3-3 softirq（per-CPU 位图 + 中断退出触发，独立子系统）；P3-4 NAPI（中断 `raise(NET_RX)` → 软中断 poll 主网卡）；P3-5 socket（`net/socket.c` 统一 socket 层 + 接收队列背压 + TCP 接收失败语义对齐 Linux（丢段不 ACK 不 RST / 乱序 DUP ACK / 畸形丢弃 / 真违规才 RST）+ fd 类型 `NET_SOCKET` + syscall 30..36 + `dsa/search.c`、`dsa/sort.c` 算法库 + #14 jlcy 用户态 POSIX socket API 与 accept 地址回填）。期间修：workqueue 缺链接符号、32 位 usercopy `esi/edi` ABI、clangd per-子树 `.clangd` 入口。下一步 #3 全链路运行时验证（前置：内核 loopback 快速路径 + INADDR_ANY 通配）。
+>
+> **进度（2026-11-03）**：**#3 全链路验证 + TCP 完整化 #4/#5 完成（arm64 55/55）** —— #3 loopback 快速路径（ipv4 127/8 回注 + INADDR_ANY 通配 + port-only hash 根治 bucket 错位）+ `ring3_socket` 用户态 echo 用例（基线 54→55）；#4 TIME_WAIT/CLOSED 终态定时回收（内嵌 hrtimer，TIME_WAIT 60s / CLOSED 1s，TIME_WAIT 分支 FIN-only ACK 消除双 TIME_WAIT ACK 风暴）；#5 accept 多连接 backlog（listener 独立表 `jlos_hash_uint16` + SYN 创建独立连接 socket + accept 队列 + 半连接 3s 超时；**接收缓冲下沉 tcp_socket**（Linux sk_receive_queue 形态），**删除 handler/binding 机制**根治"数据早于绑定"竞态，UDP 保留 handler 模型）；`jlos_list_count` 补 dsa/list.h；ISN 提宏 `JLOS_TCP_INITIAL_SEQUENCE`。遗留：socket fd 引用计数（fork 继承/close 竞态）、accept 队列残留清理、#6 重传+rwnd。
+
+### 1. 已核验的正确性 Bug（逐行核对过源码）
+
+| # | 位置 | 问题 | 影响 |
+| --- | --- | --- | --- |
+| BUG-1 | kernel/vma.c:186-188 | 中间挖洞拆分 `tail->start=ov_e; tail->end=ov_s`（区间反向），丢失 `[ov_e, 原 end)` | 非法 VMA，mmap 语义错 |
+| BUG-2 | arch/arm64/paging.c:475 | `if (!pte \| !(*pte & VALID))` 用按位或（不短路），`pte==NULL` 时 `*pte` 解引用崩溃 | arm64 缺页路径崩溃 |
+| BUG-3 | arch/arm64/paging.c:534 | 销毁页表 l1 用 `PHYS_TO_VIRT(l1)`（已是 VA），l2/l3 用 `VIRT_TO_PHYS` —— 二次转换 | 地址错乱 |
+| BUG-4 | arch/x86/paging.c:404 | 释放 2MB 大页用 `JLOS_PFA_MAX_ORDER`(=10/4MB)，阶数错配 | refcount 漂移/双释放 |
+| BUG-5 | net/tcp.c:339 + net/tcp.h:39-49 | 非 SYN 时 `push(20)` 但结构 24B（含 options），`msg->options=0` 越界写 4 字节到 payload 起始 | TCP 数据包前 4 字节被清零 |
+
+### 2. 高置信 Bug（待逐条复核）
+
+| 位置 | 问题 |
+| --- | --- |
+| kernel/multitask.c:103-111 vs :78-84 | 老化失效：入队重置 `last_ready_tick`，boost 恒 0，低优先级无保护 |
+| kernel/multitask.c:665-679, :920-950 | 僵尸回收缺陷：调度器无条件 free 僵尸（不校验父 wait、不回传 exit code）+ 父在跑时子不入僵尸链 → 泄漏 |
+| kernel/syscall.c:916-944 + kernel/paging.c:192-194 | copy_from/to_user 逐字节无异常表，非法用户指针 → 内核 halt（用户可 DoS） |
+| net/tcp.c:58-64 | `cond_wait` 可能由接收中断路径调用 → 中断上下文睡眠 |
+| drivers/ata.c:57-59, :174-177 | 轮询 BSY 无计数上限，设备异常即死循环 |
+| drivers/amd_am79c973.c:259-285 | TX 忙等（50 万次 NOP）且 `current_send_buffer` 无锁，SMP 竞态 |
+| kernel/ipc.c:133-145 | pipe refcount 非原子 |
+| kernel/multitask.c:1070-1093 | SIGKILL 跨 CPU 直接改目标任务状态，无同步 |
+| net/ipv4.c:49,61 / net/tcp.c:244-245 | 用报文 IHL/data_offset 直接 pull，未校验边界 → 畸形包越界 |
+| net/ipv4.c:125-130 + net/arp.c:136-144 | ARP 未解析返回广播 MAC 即丢包 → TCP 首 SYN 发不出 |
+| fs/vfs.c:498-514 | inode 缓存失效：每次 lookup 新建 inode（不查哈希）→ 泄漏 |
+| fs/page_cache.c:329 | `sync_all` 无任何调用者，仅 LRU 淘汰回写 → 掉电丢数据 |
+| kernel/paging.c:146-148 | COW 后仅刷 src TLB，未对 dst 所在其他 CPU shootdown |
+
+### 3. 四大代际缺口（对齐生产级内核）
+
+| # | 缺口 | 影响 |
+| --- | --- | --- |
+| G1 | 无底半部（softirq/tasklet/workqueue/内核线程），网络整栈跑硬中断（drivers/amd_am79c973.c:240、net/etherframe.c:53） | 关中断不可控、延迟/吞吐瓶颈 |
+| G2 | 无页回收（reclaim/shrinker/OOM/watermark/swap） | 内存耗尽即杀进程或 halt |
+| G3 | 页缓存无后台回写（无 flusher 线程/周期 sync） | 掉电丢数据 |
+| G4 | 块层无 request queue/合并/电梯/异步（ATA 全 PIO 逐扇区轮询 hal/block.c:55-80） | I/O 阻塞、无批量/并发 |
+
+### 4. 跨架构不一致（正确性，非优化）
+
+| 项 | x86 | arm64 | 状态 |
+| --- | --- | --- | --- |
+| paging active context | per-CPU 数组 | per-CPU 数组 | ✅ 已统一 |
+| FPU owner | per-CPU 数组 | per-CPU | ✅ 已统一 |
+| NX/SMEP/SMAP/PCID | NX + SMEP + SMAP + PCID 已启用 | PXN/UXN/PAN + ASID | ✅ 已统一 |
+
+### 5. 工程化缺口（稳定性基础设施）
+
+| 缺口 | 现状 |
+| --- | --- |
+| 告警门 | ✅ 已加 `-Werror` |
+| 头文件依赖跟踪 | 决定不做（`make clean` 兜底） |
+| 崩溃诊断 | 仅 `for(;;) halt()`；AIOS 下将改为"记录 + 恢复" |
+| 测试集成 | 无 `make test`（断言/自动化方案暂缓，待重议） |
+| CI / sanitizer / kallsyms / 静态分析 / Kconfig | 无 |
+
+### 6. 分阶段实施路线
+
+| 阶段 | 内容 | 验收 |
+| --- | --- | --- |
+| P0 修 bug | ✅ 完成（2026-10-27）：第 1 节 5 条 + 第 2 节高置信项 | x86/arm64 均 54/54 |
+| P1 工程化地基 | 部分：`-Werror` 已加；`-MMD`/断言/`make test` 暂缓（方案待重议） | 回归仍人工判定 |
+| P2 跨架构一致性 + 安全 | ✅ 完成（2026-10-28）：arm64 active ctx / x86 FPU per-CPU、NX/SMEP/SMAP、COW 跨核 shootdown、signal uaccess、**异常表 uaccess**、**PCID** | x86-64/x86-32/arm64 均 54/54 |
+| P3 底半部 + 网络 | softirq/内核线程 + NAPI；socket syscall + TCP 完整化 | 吞吐可测，用户态 socket 通 |
+| P4 内存完整性 | 页回收/watermark/OOM + 回写线程 + 块层 request queue | 内存压力/掉电一致性用例 |
+| P5 HAL 收口 + fs | hal/block.c 反依赖清除、架构宏上提、arm64 stub 补齐、VFS 完善 | 分层合规检查通过 |
+
+> **断言语义（对齐 AIOS 无崩溃约束）**：断言采用 debug/release 分层编译；动作固定为**记录 + 恢复/告警**，**绝不 halt/panic**。外部输入用错误码，内部不变量用"记录 + 恢复"。详见「升级方向」栏。
 
 ***
 
