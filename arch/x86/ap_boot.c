@@ -18,6 +18,8 @@
 #include <kernel/multitask.h>
 #include <kernel/hrtimer.h>
 #include <kernel/timek.h>
+#include <kernel/softirq.h>
+#include <net/network.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
 #include <kernel/printk.h>
@@ -130,6 +132,9 @@ void jlos_ap_main(void)
     jlos_tick_init_cpu();
     
     jlos_sched_init_cpu();
+
+    jlos_net_backlog_init_cpu();
+    jlos_softirq_init_cpu();
     printk_info("ap %u idle ready\n", cpu);
 
     for (;;) {
@@ -144,8 +149,6 @@ void jlos_hal_smp_boot_aps(void)
         return;
     }
 
-    jlos_smp_alloc_percpu_areas();
-
     /* Identity-map trampoline 页: AP 开 PG 后仍在此低地址执行, 直到 ljmp 高半核 */
     bool map_ok = jlos_arch_map_entry(&s_kernel_paging_context, JLOS_X86_AP_TRAMPOLINE_PHYS,
         JLOS_X86_AP_TRAMPOLINE_PHYS, JLOS_PG_KERNEL_RW | JLOS_PG_EXEC);
@@ -156,8 +159,11 @@ void jlos_hal_smp_boot_aps(void)
     }
 
     for (uint32_t cpu = 1; cpu < num_cpus; cpu++) {
+        if (jlos_smp_per_cpu_offset(cpu) == 0) {
+            printk_err("cpu %u percpu area missing, skip\n", cpu);
+            continue;
+        }
         uint32_t apic_id = jlos_arch_smp_cpu_apic_id(cpu);
-
         void *stack_va = jlos_page_frame_malloc();
         if (!stack_va) {
             printk_err("AP %u: stack alloc failed\n", cpu);

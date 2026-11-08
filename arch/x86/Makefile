@@ -47,4 +47,4 @@ $(TARGET_ISO): $(TARGET_BIN)
 
 .PHONY: disk
 disk:
-	@$(MAKE) -C jlcy disk BITS=$(JLOS_BITS)
+	@$(MAKE) -C jlcy disk ARCH=x86 BITS=$(JLOS_BITS)

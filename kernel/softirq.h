@@ -18,5 +18,6 @@ typedef void (*jlos_softirq_fn_t)(void);
 void jlos_softirq_register(uint32_t nr, jlos_softirq_fn_t fn);
 void jlos_softirq_raise(uint32_t nr);
 void jlos_softirq_run_pending(void);
+void jlos_softirq_init_cpu(void);
 
 #endif

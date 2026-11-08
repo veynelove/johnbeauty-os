@@ -86,5 +86,6 @@ typedef struct {
 #define JLOS_ACPI_EBDA_SCAN_SIZE        0x400
 
 void jlos_acpi_init(void);
+uint32_t jlos_acpi_scan_cpus(void);
 
 #endif

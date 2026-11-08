@@ -38,4 +38,6 @@ void jlos_hal_set_need_resched_on(uint32_t cpu, bool val);
 void jlos_smp_init(void);
 void jlos_hal_smp_boot_aps(void);
 
+void jlos_smp_setup_percpu(void);
+
 #endif

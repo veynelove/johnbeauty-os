@@ -101,8 +101,16 @@ static jlos_acpi_madt_t *jlos_acpi_find_madt(jlos_acpi_rsdp_t *rsdp)
     return nullptr;
 }
 
-static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
+uint32_t jlos_acpi_scan_cpus(void)
 {
+    jlos_acpi_rsdp_t *rsdp = jlos_acpi_find_rsdp();
+    if (!rsdp) {
+        return 0;
+    }
+    jlos_acpi_madt_t *madt = jlos_acpi_find_madt(rsdp);
+    if (!madt) {
+        return 0;
+    }
     uint32_t cpu_index = 0;
     uint8_t *entry = (uint8_t *)madt + sizeof(jlos_acpi_madt_t);
     uint8_t *end = (uint8_t *)madt + madt->header.length;
@@ -118,7 +126,30 @@ static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
                 jlos_arch_smp_set_cpu_apic_id(cpu_index, lapic->apic_id);
                 cpu_index++;
             }
-        } else if (type == JLOS_ACPI_MADT_TYPE_IOAPIC && length >= sizeof(jlos_acpi_madt_ioapic_t)) {
+        }
+        entry += length;
+    }
+    if (cpu_index == 0) {
+        printk_err("no enabled local apic entries\n");
+        return 0;
+    }
+    jlos_arch_smp_set_num_cpus(cpu_index);
+    printk_debug("cpus num = %uu\n", cpu_index);
+    return cpu_index;
+}
+
+static void jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
+{
+    uint32_t cpu_index = 0;
+    uint8_t *entry = (uint8_t *)madt + sizeof(jlos_acpi_madt_t);
+    uint8_t *end = (uint8_t *)madt + madt->header.length;
+    while (entry < end && cpu_index < JLOS_MAX_CPUS) {
+        uint8_t type = entry[0];
+        uint8_t length = entry[1];
+        if (length == 0) {
+            break;
+        }
+        if (type == JLOS_ACPI_MADT_TYPE_IOAPIC && length >= sizeof(jlos_acpi_madt_ioapic_t)) {
             jlos_acpi_madt_ioapic_t *ioapic = (jlos_acpi_madt_ioapic_t *)entry;
             jlos_ioapic_add_from_madt(ioapic->ioapic_id, ioapic->ioapic_address, ioapic->gsi_base);
         } else if (type == JLOS_ACPI_MADT_TYPE_ISO && length >= sizeof(jlos_acpi_madt_iso_t)) {
@@ -127,7 +158,6 @@ static uint32_t jlos_acpi_parse_madt(jlos_acpi_madt_t *madt)
         }
         entry += length;
     }
-    return cpu_index;
 }
 
 void jlos_acpi_init(void)
@@ -148,11 +178,8 @@ void jlos_acpi_init(void)
         return;
     }
     jlos_ioapic_routes_init();
-    uint32_t num_cpus = jlos_acpi_parse_madt(madt);
-    if (num_cpus == 0) {
-        printk_err("no enabled local apic entries\n");
-        return;
-    }
+    jlos_acpi_parse_madt(madt);
+    uint32_t num_cpus = jlos_hal_num_cpus();
     jlos_arch_smp_set_num_cpus(num_cpus);
     printk_debug("cpus num = %uu, lapic base = 0x%x\n", num_cpus, madt->lapic_address);
     for (uint32_t i = 0; i < num_cpus; i++) {

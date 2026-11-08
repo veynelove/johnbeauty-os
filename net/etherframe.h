@@ -48,6 +48,7 @@ uint32_t jlos_ether_frame_handler_get_ip_address(jlos_ether_frame_handler_t* sel
 void jlos_ether_frame_provider_init(jlos_ether_frame_provider_t* self, jlos_hal_net_dev_t *dev);
 void jlos_ether_frame_provider_destroy(jlos_ether_frame_provider_t* self);
 void jlos_ether_frame_provider_send(jlos_ether_frame_provider_t* self, uint64_t dstMAC_BE, uint16_t etherType_BE, jlos_net_sk_buff_t *skb);
+void jlos_ether_frame_provider_on_frame_received(jlos_ether_frame_provider_t* self, jlos_net_sk_buff_t *skb);
 uint64_t jlos_ether_frame_provider_get_mac_address(jlos_ether_frame_provider_t* self);
 uint32_t jlos_ether_frame_provider_get_ip_address(jlos_ether_frame_provider_t* self);
 

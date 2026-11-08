@@ -15,6 +15,11 @@ typedef enum {
     JLOS_HRTIMER_MODE_ABS,
 } jlos_hrtimer_mode_t;
 
+typedef struct jlos_hrtimer_base {
+    jlos_rbtree_t   active;
+    jlos_spinlock_t lock;
+} jlos_hrtimer_base_t;
+
 typedef struct jlos_hrtimer jlos_hrtimer_t;
 
 typedef int (*jlos_hrtimer_func_t)(jlos_hrtimer_t *timer);
@@ -26,6 +31,7 @@ struct jlos_hrtimer {
     jlos_hrtimer_func_t func;
     void                *data;
     bool                active;
+    jlos_hrtimer_base_t *base;
 };
 
 struct jlos_task;
@@ -34,11 +40,6 @@ typedef struct jlos_hrtimer_sleeper {
     jlos_hrtimer_t      timer;
     struct jlos_task    *task;
 } jlos_hrtimer_sleeper_t;
-
-typedef struct {
-    jlos_rbtree_t   active;
-    jlos_spinlock_t lock;
-} jlos_hrtimer_base_t;
 
 void jlos_hrtimer_base_init(jlos_hrtimer_base_t *base);
 void jlos_hrtimer_init(jlos_hrtimer_t *timer, jlos_hrtimer_func_t func, void *data);

@@ -104,14 +104,12 @@ static int udp_match_socket(jlos_hash_node_t *node, void *args1)
 
 static bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t* self, jlos_net_sk_buff_t *skb)
 {
-    printk_debug("received packet\n");
     uint32_t size = jlos_net_skb_len(skb);
     if (size < sizeof(jlos_udp_header_t)) {
         printk_debug("packet too small\n");
         return false;
     }
     jlos_udp_header_t *msg = (jlos_udp_header_t *)skb->data;
-    printk_debug("destination port=%x%x\n", msg->dst_port & 0xFF, (msg->dst_port >> 8) & 0xFF);
 
     jlos_udp_socket_t *socket = nullptr;
     jlos_udp_key_t key = {skb->dst_ip, msg->dst_port};
@@ -123,19 +121,17 @@ static bool jlos_udp_provider_on_internet_protocol_received(jlos_udp_provider_t*
     }
     if (node) {
         socket = container_of(node, jlos_udp_socket_t, hash_node);
-        printk_debug("socket matched\n");
     }
     if (socket) {
         socket->handle_udp_message(socket, skb->data + sizeof(jlos_udp_header_t), size - sizeof(jlos_udp_header_t));
         return true;
     }
-    printk_debug("socket not matched\n");
     return false;
 }
 
 void jlos_udp_provider_init(jlos_udp_provider_t* self, jlos_internet_protocol_provider_t *backend)
 {
-    jlos_internet_protocol_handler_init(&self->base_handler, backend, 0x11);
+    jlos_internet_protocol_handler_init(&self->base_handler, backend, JLOS_IPV4_PROTO_UDP);
     self->base_handler.on_internet_protocol_received =
         (bool (*)(jlos_internet_protocol_handler_t *, jlos_net_sk_buff_t *))jlos_udp_provider_on_internet_protocol_received;
     self->num_sockets = 0;

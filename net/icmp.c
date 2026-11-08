@@ -11,10 +11,6 @@
 static bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, jlos_net_sk_buff_t *skb)
 {
     (void)self;
-    printk_debug("received packet from %x.%x.%x.%x\n", skb->src_ip & 0xFF,
-        (skb->src_ip >> 8) & 0xFF,
-        (skb->src_ip >> 16) & 0xFF,
-        (skb->src_ip >> 24) & 0xFF);
     uint32_t size = jlos_net_skb_len(skb);
     if (size < sizeof(jlos_icmp_message_t)) {
         printk_debug("packet too small\n");
@@ -23,10 +19,8 @@ static bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, jlos_net_
     jlos_icmp_message_t *msg = (jlos_icmp_message_t *)skb->data;
     switch (msg->type) {
         case 0:
-            printk_debug("echo reply received\n");
             break;
         case 8:
-            printk_debug("echo request received, sending reply\n");
             msg->type = 0;
             msg->check_sum = 0;
             msg->check_sum =
@@ -38,7 +32,7 @@ static bool jlos_icmp_on_internet_protocol_received(jlos_icmp_t* self, jlos_net_
 
 void jlos_icmp_init(jlos_icmp_t* self, jlos_internet_protocol_provider_t *backend)
 {
-    jlos_internet_protocol_handler_init(&self->base_handler, backend, 0x01);
+    jlos_internet_protocol_handler_init(&self->base_handler, backend, JLOS_IPV4_PROTO_ICMP);
     self->base_handler.on_internet_protocol_received = (bool (*)(jlos_internet_protocol_handler_t *, jlos_net_sk_buff_t *))jlos_icmp_on_internet_protocol_received;
 }
 

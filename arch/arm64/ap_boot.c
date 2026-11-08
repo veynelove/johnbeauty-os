@@ -9,6 +9,8 @@
 #include <kernel/hrtimer.h>
 #include <kernel/multitask.h>
 #include <kernel/timek.h>
+#include <kernel/softirq.h>
+#include <net/network.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
 #include <kernel/printk.h>
@@ -27,6 +29,9 @@ void jlos_ap_main(void)
     jlos_hrtimer_base_init_cpu();
     jlos_tick_init_cpu();
     jlos_sched_init_cpu();
+
+    jlos_net_backlog_init_cpu();
+    jlos_softirq_init_cpu();
 
     *this_cpu_ptr(jlos_cpu_online) = 1;
     printk_info("AP %u online\n", cpu);

@@ -78,6 +78,11 @@ static void jlos_ether_frame_provider_on_raw_data_received(void *context, uint8_
         return;
     }
     jlos_memcpy(jlos_net_skb_put(skb, size), buffer, size);
+    jlos_ether_frame_provider_on_frame_received(self, skb);
+}
+
+void jlos_ether_frame_provider_on_frame_received(jlos_ether_frame_provider_t* self, jlos_net_sk_buff_t *skb)
+{
     if (jlos_net_skb_len(skb) < sizeof(jlos_ether_frame_header_t)) {
         printk_debug("frame too small\n");
         jlos_net_skb_free(skb);
@@ -101,12 +106,6 @@ static void jlos_ether_frame_provider_on_raw_data_received(void *context, uint8_
                 jlos_hal_net_send(self->dev, skb->data, jlos_net_skb_len(skb));
             }
         }
-        else {
-            printk_debug("no handler for this type\n");
-        }
-    }
-    else {
-        printk_debug("frame not for us\n");
     }
     jlos_net_skb_free(skb);
 }

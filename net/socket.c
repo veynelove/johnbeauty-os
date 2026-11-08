@@ -170,6 +170,7 @@ int32_t jlos_socket_send(jlos_socket_t *self, const void *buf, uint32_t len)
             if (chunk > JLOS_TCP_MSS) {
                 chunk = JLOS_TCP_MSS;
             }
+
             jlos_tcp_provider_send(&g_network_stack->tcp, self->proto.tcp, (uint8_t *)buf + sent, (uint16_t)chunk, (JLOS_TCP_PSH | JLOS_TCP_ACK));
             sent += chunk;
         }
@@ -202,6 +203,7 @@ int32_t jlos_socket_recv(jlos_socket_t *self, void *buf, uint32_t len)
             if (self->closed) {
                 return -1;
             }
+
             jlos_semaphore_wait(&tcp->receive_wait);
         }
         uint32_t fl = jlos_spin_lock_irqsave(&tcp->receive_lock);

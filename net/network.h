@@ -7,6 +7,7 @@
 #define _NETWORK_H
 
 #include <net/etherframe.h>
+#include <net/skbuff.h>
 #include <net/arp.h>
 #include <net/ipv4.h>
 #include <net/icmp.h>
@@ -38,7 +39,8 @@ typedef struct {
 extern network_stack_t *g_network_stack;
 
 void network_init(void);
-
 void jlos_network_apply_config(void);
+void jlos_netif_rx(jlos_net_sk_buff_t *skb);
+void jlos_net_backlog_init_cpu(void);
 
 #endif

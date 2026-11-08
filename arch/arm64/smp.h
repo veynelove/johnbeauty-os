@@ -17,7 +17,6 @@ DECLARE_PER_CPU(uint32_t, jlos_cpu_tlb_flush_done);
 void jlos_arch_smp_send_ipi(uint32_t cpu, uint32_t sgi);
 
 void jlos_ap_main(void);
-void jlos_smp_alloc_percpu_areas(void);
 
 void jlos_arch_smp_set_num_cpus(uint32_t num_cpus);
 void jlos_arch_smp_set_cpu_mpidr(uint32_t cpu, uint64_t mpidr);

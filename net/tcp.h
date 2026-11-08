@@ -7,25 +7,31 @@
 #define _JLOS_NET_TCP_H
 
 #include <net/ipv4.h>
+#include <net/skbuff.h>
 #include <dsa/hash_chain.h>
 #include <kernel/sync.h>
 #include <kernel/hrtimer.h>
 
-#define JLOS_TCP_MSS                    1460
-#define JLOS_TCP_MSS_OPTIONS_KIND       2
-#define JLOS_TCP_MSS_OPTION_LEN         4
-#define JLOS_TCP_MIN_DATA_OFFSET        5
-#define JLOS_TCP_TIMEWAIT_TIMEOUT_NS    ((uint64_t)60 * 1000 * 1000 * 1000)
-#define JLOS_TCP_CLOSED_RELEASE_NS         ((uint64_t)1 * 1000 * 1000 * 1000)
-#define JLOS_TCP_RCVBUF_SIZE               (64 * 1024)
+#define JLOS_TCP_MSS                        1460
+#define JLOS_TCP_MSS_OPTIONS_KIND           2
+#define JLOS_TCP_MSS_OPTION_LEN             4
+#define JLOS_TCP_MIN_DATA_OFFSET            5
+#define JLOS_TCP_DATA_OFFSET_SYN            (JLOS_TCP_MIN_DATA_OFFSET + 1)
+#define JLOS_TCP_HEADER_LEN_SYN             (JLOS_TCP_DATA_OFFSET_SYN * 4)
+#define JLOS_TCP_WINDOW_MAX                 0xFFFF
+#define JLOS_TCP_SEQ_MAX                    0xFFFFFFFF
+#define JLOS_TCP_TIMEWAIT_TIMEOUT_NS        ((uint64_t)60 * 1000 * 1000 * 1000)
+#define JLOS_TCP_CLOSED_RELEASE_NS          ((uint64_t)1 * 1000 * 1000 * 1000)
+#define JLOS_TCP_RCVBUF_SIZE                (64 * 1024)
 
-#define JLOS_TCP_INITIAL_SEQUENCE       0xbeefcafe
+#define JLOS_TCP_RETRANS_TIMEOUT_INIT_MS    1000
+#define JLOS_TCP_RETRANS_TIMEOUT_MAX_MS     60000
+#define JLOS_TCP_SYNACK_RETRANS_MAX         3
 
-#define JLOS_TCP_ACCEPT_BACKLOG_MAX     16
-#define JLOS_TCP_SYNRECV_RELEASE_NS     ((uint64_t)3 * 1000 * 1000 * 1000)
+#define JLOS_TCP_ACCEPT_BACKLOG_MAX         16
 
-#define JLOS_TCP_GET_DATA_OFFSET(msg)   (((((uint8_t*)&(msg)->data_offset_flags)[0]) >> 4) & 0x0F)
-#define JLOS_TCP_GET_FLAGS(msg)         ((((uint8_t*)&(msg)->data_offset_flags)[1]) | ((((uint8_t*)&(msg)->data_offset_flags)[0] & 0x01) << 8))
+#define JLOS_TCP_GET_DATA_OFFSET(msg)       (((((uint8_t*)&(msg)->data_offset_flags)[0]) >> 4) & 0x0F)
+#define JLOS_TCP_GET_FLAGS(msg)             ((((uint8_t*)&(msg)->data_offset_flags)[1]) | ((((uint8_t*)&(msg)->data_offset_flags)[0] & 0x01) << 8))
 
 #define JLOS_TCP_SET_DATA_OFFSET_FLAGS(msg, doff, flags) \
     do { \
@@ -88,6 +94,7 @@ struct jlos_tcp_socket {
     uint32_t                local_ip;
     uint32_t                sequence_number;
     uint32_t                acknowledgement_number;
+
     jlos_tcp_provider_t     *backend;
     jlos_tcp_socket_state_t state;
     jlos_cond_t             state_cond;
@@ -101,6 +108,11 @@ struct jlos_tcp_socket {
     jlos_spinlock_t         receive_lock;
     jlos_semaphore_t        receive_wait;
     uint32_t                receive_bytes;
+    jlos_list_head_t        retrans_queue;
+    jlos_spinlock_t         retrans_lock;
+    jlos_hrtimer_t          retrans_timer;
+    uint32_t                retrans_timeout_ms;
+    uint32_t                synack_retrans_count;
     void (*send)(struct jlos_tcp_socket* self, uint8_t *data, uint16_t size);
     void (*disconnect)(struct jlos_tcp_socket* self);
 };
@@ -120,11 +132,22 @@ typedef struct {
     uint16_t port;
 } jlos_tcp_key_t;
 
+typedef struct {
+    jlos_list_head_t    list;
+    jlos_net_sk_buff_t  *skb;
+    uint32_t            len;
+    uint32_t            seq;
+    uint32_t            end_seq;
+    uint16_t            flags;
+} jlos_tcp_retrans_t;
+
 void jlos_tcp_socket_init(jlos_tcp_socket_t* self, jlos_tcp_provider_t *backend);
 void jlos_tcp_socket_destroy(jlos_tcp_socket_t* self);
 void jlos_tcp_socket_send(jlos_tcp_socket_t* self, uint8_t *data, uint16_t size);
 void jlos_tcp_socket_disconnect(jlos_tcp_socket_t* self);
 bool jlos_tcp_receive_enqueue(jlos_tcp_socket_t* self, const uint8_t *data, uint32_t size);
+
+uint32_t jlos_tcp_initial_sequence(jlos_tcp_socket_t *socket);
 
 void jlos_tcp_provider_init(jlos_tcp_provider_t* self, jlos_internet_protocol_provider_t *backend);
 void jlos_tcp_provider_destroy(jlos_tcp_provider_t* self);

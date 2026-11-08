@@ -6,6 +6,7 @@
 #include <net/network.h>
 #include <net/skbuff.h>
 #include <hal/net.h>
+#include <hal/smp.h>
 #include <kernel/memory_manager.h>
 #include <kernel/initcall.h>
 #include <kernel/softirq.h>
@@ -16,8 +17,45 @@
 
 network_stack_t *g_network_stack = nullptr;
 
+static DEFINE_PER_CPU(jlos_list_head_t, jlos_net_backlog_queue);
+static DEFINE_PER_CPU(jlos_spinlock_t, jlos_net_backlog_lock);
+
+void jlos_net_backlog_init_cpu(void)
+{
+    jlos_list_init(this_cpu_ptr(jlos_net_backlog_queue));
+    jlos_spinlock_init(this_cpu_ptr(jlos_net_backlog_lock)); 
+}
+
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_net_backlog_init_cpu);
+
+void jlos_netif_rx(jlos_net_sk_buff_t *skb)
+{
+    jlos_list_head_t *queue = this_cpu_ptr(jlos_net_backlog_queue);
+    jlos_spinlock_t *lock = this_cpu_ptr(jlos_net_backlog_lock);
+    uint32_t flags = jlos_spin_lock_irqsave(lock);
+    jlos_list_add_tail(&skb->list, queue);
+    jlos_spin_unlock_irqrestore(lock, flags);
+    jlos_softirq_raise(JLOS_SOFTIRQ_NET_RX);
+}
+
 static void jlos_net_rx_action(void)
 {
+    for (;;) {
+        jlos_list_head_t *queue = this_cpu_ptr(jlos_net_backlog_queue);
+        jlos_spinlock_t *lock = this_cpu_ptr(jlos_net_backlog_lock);
+        uint32_t flags = jlos_spin_lock_irqsave(lock);
+        jlos_list_head_t *first = nullptr;
+        if (!jlos_list_empty(queue)) {
+            first = queue->next;
+            jlos_list_del_init(first);
+        }
+        jlos_spin_unlock_irqrestore(lock, flags);
+        if (!first) {
+            break;
+        }
+        jlos_net_sk_buff_t *skb = container_of(first, jlos_net_sk_buff_t, list);
+        jlos_ether_frame_provider_on_frame_received(&g_network_stack->etherframe, skb);
+    }
     jlos_hal_net_dev_t *dev = jlos_hal_net_primary_dev();
     if (dev && dev->ops && dev->ops->poll) {
         dev->ops->poll(dev);

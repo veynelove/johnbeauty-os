@@ -6,6 +6,7 @@
 #include <hal/smp.h>
 #include <arch/x86/smp.h>
 #include <arch/x86/lapic.h>
+#include <arch/x86/acpi.h>
 #include <kernel/page_frame_allocator.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
@@ -57,6 +58,9 @@ uint32_t jlos_hal_num_cpus(void)
 
 uintptr_t jlos_smp_per_cpu_offset(uint32_t cpu)
 {
+    if (cpu >= JLOS_MAX_CPUS) {
+        return 0;
+    }
     return s_per_cpu_offsets[cpu];
 }
 
@@ -84,17 +88,25 @@ uint32_t jlos_arch_smp_cpu_apic_id(uint32_t cpu)
     return s_cpu_apic_ids[cpu];
 }
 
-void jlos_smp_alloc_percpu_areas(void)
+static void jlos_smp_alloc_percpu_areas(void)
 {
+    uint32_t size = (uint32_t)(__per_cpu_end - __per_cpu_start);
+    uint32_t num_frames = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
     for (uint32_t cpu = 1; cpu < s_num_cpus; cpu++) {
-        void *area = jlos_page_frame_malloc();
+        void *area = jlos_page_frame_alloc_n(num_frames);
         if (!area) {
             printk_err("percpu area alloc failed for cpu %u\n", cpu);
             continue;
         }
-        jlos_memset(area, 0, JLOS_PAGE_SIZE);
+        jlos_memset(area, 0, num_frames * JLOS_PAGE_SIZE);
         s_per_cpu_offsets[cpu] = (uintptr_t)((uint8_t *)area - __per_cpu_start);
     }
+}
+
+void jlos_smp_setup_percpu(void)
+{
+    jlos_acpi_scan_cpus();
+    jlos_smp_alloc_percpu_areas();
 }
 
 bool jlos_hal_need_resched(void)

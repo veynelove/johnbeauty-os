@@ -32,6 +32,7 @@ void john_sunshine_main(const jlos_hal_boot_info_t *boot_info, uintptr_t kernel_
     jlos_pfa_boot_alloc_init(VIRT_TO_PHYS(kernel_end));
     jlos_arch_paging_initialize_kernel(jlos_pfa_boot_alloc_page);
     jlos_page_frame_allocator_init();
+    jlos_smp_setup_percpu();
     printk_info("paging initialized\n");
 
     jlos_do_initcalls();

@@ -15,11 +15,9 @@ DEFINE_PER_CPU(jlos_atomic_t, jlos_softirq_pending);
 
 static jlos_softirq_fn_t s_softirq_handlers[JLOS_SOFTIRQ_MAX];
 
-static void jlos_softirq_init(void)
+void jlos_softirq_init_cpu(void)
 {
-    for (uint32_t cpu = 0; cpu < JLOS_MAX_CPUS; cpu++) {
-        jlos_atomic_set(per_cpu_ptr_cpu(jlos_softirq_pending, cpu), 0);
-    }
+    jlos_atomic_set(this_cpu_ptr(jlos_softirq_pending), 0);
 }
 
 void jlos_softirq_register(uint32_t nr, jlos_softirq_fn_t fn)
@@ -51,4 +49,4 @@ void jlos_softirq_run_pending(void)
     }
 }
 
-JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_softirq_init);
+JLOS_INITCALL(JLOS_INITCALL_SUBSYS, jlos_softirq_init_cpu);

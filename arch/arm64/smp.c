@@ -10,6 +10,7 @@
 #include <common/types.h>
 #include <kernel/initcall.h>
 #include <kernel/memory_manager.h>
+#include <kernel/page_frame_allocator.h>
 
 #define JLOS_KERNEL_LOG_SUBSYS "smp"
 #include <kernel/printk.h>
@@ -105,18 +106,24 @@ void jlos_smp_init(void)
     *this_cpu_ptr(jlos_cpu_online) = 1;
 }
 
-void jlos_smp_alloc_percpu_areas(void)
+static void jlos_smp_alloc_percpu_areas(void)
 {
     uint32_t size = (uint32_t)(__per_cpu_end - __per_cpu_start);
+    uint32_t num_frames = JLOS_EXCEPT_CEIL(size, JLOS_PAGE_SIZE);
     for (uint32_t cpu = 1; cpu < s_num_cpus; cpu++) {
-        uint8_t *area = (uint8_t *)jlos_kalloc(size);
+        uint8_t *area = (uint8_t *)jlos_page_frame_alloc_n(num_frames);
         if (!area) {
             printk_err("percpu area alloc failed for cpu %u\n", cpu);
             continue;
         }
-        jlos_memset(area, 0, size);
+        jlos_memset(area, 0, num_frames * JLOS_PAGE_SIZE);
         s_per_cpu_offsets[cpu] = (uintptr_t)area - (uintptr_t)__per_cpu_start;
     }
+}
+
+void jlos_smp_setup_percpu(void)
+{
+    jlos_smp_alloc_percpu_areas();
 }
 
 bool jlos_hal_need_resched(void)
@@ -153,10 +160,13 @@ void jlos_hal_smp_boot_aps(void)
         printk_err("no psci, cannot boot aps\n");
         return;
     }
-    jlos_smp_alloc_percpu_areas();
 
     uintptr_t entry_phys = (uintptr_t)(void *)&_secondary_start - JLOS_ARM64_KIMAGE_PA_OFFSET;
     for (uint32_t cpu = 1; cpu < num; cpu++) {
+        if (jlos_smp_per_cpu_offset(cpu) == 0) {
+            printk_err("cpu %u percpu area missing, skip\n", cpu);
+            continue;
+        }
         uintptr_t stack_va = (uintptr_t)(__ap_boot_stack_base + cpu * JLOS_ARM64_AP_STACK_SIZE);
         uint64_t mpidr = jlos_arch_smp_cpu_mpidr(cpu);
         if (jlos_arch_psci_cpu_on(mpidr, entry_phys, stack_va) != 0) {

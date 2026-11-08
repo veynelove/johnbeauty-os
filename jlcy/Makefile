@@ -5,7 +5,11 @@
 ARCH ?= x86
 BITS ?= 64
 
-OBJ_DIR := obj/$(ARCH)
+ifeq ($(ARCH), arm64)
+OBJ_DIR := obj/arm64
+else
+OBJ_DIR := obj/x86_$(BITS)
+endif
 
 CC := gcc
 LD := ld
@@ -51,7 +55,7 @@ LIB_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIB_C_SRCS)) \
             $(patsubst %.S,$(OBJ_DIR)/%.o,$(LIB_ASM_SRCS))
 
 USER_C_SRCS := $(shell find user -type f -name "*.c")
-USER_ELFS := $(patsubst user/%.c,user/%.elf,$(USER_C_SRCS))
+USER_ELFS := $(patsubst user/%.c,$(OBJ_DIR)/user/%.elf,$(USER_C_SRCS))
 
 C_SRCS := $(LIB_C_SRCS) $(USER_C_SRCS)
 ALL_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRCS)) $(patsubst %.S,$(OBJ_DIR)/%.o,$(LIB_ASM_SRCS))
@@ -68,7 +72,8 @@ $(OBJ_DIR)/%.o: %.S
 	@mkdir -p $(@D)
 	@$(CC) $(CPARAMS) -o $@ -c $<
 
-user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/$(LINKER_LD)
+$(OBJ_DIR)/user/%.elf: $(OBJ_DIR)/user/%.o $(LIB_OBJS) user/$(ARCH)/$(LINKER_LD)
+	@mkdir -p $(@D)
 	@$(LD) $(LDPARAMS) -T user/$(ARCH)/$(LINKER_LD) -o $@ $< $(LIB_OBJS)
 
 # ==================磁盘镜像生成==================

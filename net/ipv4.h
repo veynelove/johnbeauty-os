@@ -12,6 +12,10 @@
 #define JLOS_EPHEMERAL_PORT_START   1024
 #define JLOS_IPV4_BROADCAST         0xFFFFFFFF
 
+#define JLOS_IPV4_PROTO_ICMP        1
+#define JLOS_IPV4_PROTO_TCP         6
+#define JLOS_IPV4_PROTO_UDP         17
+
 #define JLOS_IPV4_ANY               0
 #define JLOS_IPV4_LOOPBACK_NET      0x7F000000
 #define JLOS_IPV4_LOOPBACK_MASK     0xFF000000

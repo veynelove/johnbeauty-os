@@ -38,7 +38,6 @@ static bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, jlos_net_sk_buff_
             && arp->protocol_address_size == 4 && arp->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend)) {
             switch (arp->command) {
                 case 0x0100: // ARP Request
-                    printk_debug("received ARP request\n");
                     arp->command = 0x0200;
                     arp->dst_ip = arp->src_ip;
                     for (int i = 0; i < 6; i++) {
@@ -46,15 +45,12 @@ static bool jlos_arp_on_ether_frame_received(jlos_arp_t* self, jlos_net_sk_buff_
                     }
                     arp->src_ip = jlos_ether_frame_provider_get_ip_address(self->base_handler.backend);
                     uint64_to_mac(jlos_ether_frame_provider_get_mac_address(self->base_handler.backend), arp->src_mac);
-                    printk_debug("sending ARP reply\n");
                     return true;
                 case 0x0200: // ARP Reply
-                    printk_debug("received ARP reply\n");
                     if (self->num_cache_entries < 128) {
                         self->ip_cache[self->num_cache_entries] = arp->src_ip;
                         self->mac_cache[self->num_cache_entries] = mac_to_uint64(arp->src_mac);
                         self->num_cache_entries++;
-                        printk_debug("cache updated\n");
                     }
                     break;
             }
@@ -96,7 +92,6 @@ void jlos_arp_broadcast_mac_address(jlos_arp_t* self, uint32_t IP_BE)
     uint64_to_mac(dst_mac_be, arp->dst_mac);
     arp->dst_ip = IP_BE;
     jlos_ether_frame_handler_send(&self->base_handler, dst_mac_be, self->base_handler.etherType_BE, skb);
-    printk_debug("broadcast complete\n");
 }
 
 void jlos_arp_request_mac_address(jlos_arp_t* self, uint32_t IP_BE)
@@ -120,7 +115,6 @@ void jlos_arp_request_mac_address(jlos_arp_t* self, uint32_t IP_BE)
     }
     arp->dst_ip = IP_BE;
     jlos_ether_frame_handler_send(&self->base_handler, 0xFFFFFFFFFFFF, self->base_handler.etherType_BE, skb);
-    printk_debug("request sent\n");
 }
 
 uint64_t jlos_arp_get_mac_from_cache(jlos_arp_t* self, uint32_t IP_BE)
@@ -137,7 +131,6 @@ uint64_t jlos_arp_lookup_or_request(jlos_arp_t* self, uint32_t IP_BE)
 {
     uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
     if (result == 0xFFFFFFFFFFFF) {
-        printk_debug("lookup miss, sending request for %x\n", IP_BE);
         jlos_arp_request_mac_address(self, IP_BE);
     }
     return result;
@@ -147,7 +140,6 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
 {
     uint64_t result = jlos_arp_get_mac_from_cache(self, IP_BE);
     if (result == 0xFFFFFFFFFFFF) {
-        printk_debug("sending request for %x\n", IP_BE);
         jlos_arp_request_mac_address(self, IP_BE);
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }
@@ -158,9 +150,7 @@ uint64_t jlos_arp_resolve(jlos_arp_t* self, uint32_t IP_BE)
         timeout++;
         result = jlos_arp_get_mac_from_cache(self, IP_BE);
     }
-    if (result != 0xFFFFFFFFFFFF) {
-        printk_debug("resolved MAC=0x%X%X\n", (uint32_t)(result >> 32), (uint32_t)(result & 0xFFFFFFFF));
-    } else {
+    if (result == 0xFFFFFFFFFFFF) {
         printk_warn("resolve timeout for %x\n", IP_BE);
     }
     return result;

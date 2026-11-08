@@ -44,6 +44,4 @@ void jlos_arch_smp_set_num_cpus(uint32_t n);
 void jlos_arch_smp_set_cpu_apic_id(uint32_t cpu, uint32_t apic_id);
 uint32_t jlos_arch_smp_cpu_apic_id(uint32_t cpu);
 
-void jlos_smp_alloc_percpu_areas(void);
-
 #endif

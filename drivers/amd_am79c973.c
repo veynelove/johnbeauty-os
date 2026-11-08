@@ -275,7 +275,6 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size
     {
         *dst = *src;
     }
-    printk_debug("send: %d bytes\n", size);
     self->send_buffer_descr[send_descriptor].avail = 0x8000;
     self->send_buffer_descr[send_descriptor].flags2 = 0;
     self->send_buffer_descr[send_descriptor].reserved = 0;
@@ -285,25 +284,11 @@ void jlos_amd_am79c973_send(jlos_amd_am79c973_t* self, uint8_t *buffer, int size
     jlos_io16_write(&self->register_data_port, 0x48);
 
     {
-        uint32_t sflags = 0;
-        int sent = 0;
         for (volatile int delay = 0; delay < 500000; delay++) {
             __asm__("nop");
-            sflags = self->send_buffer_descr[send_descriptor].flags;
-            if ((sflags & 0x80000000) == 0) { sent = 1; break; }
         }
         jlos_io16_write(&self->register_address_port, 0);
-        uint16_t csr0_send = jlos_io16_read(&self->register_data_port);
-        printk_debug("post-send CSR0=0x%x RINT=%x TINT=%x INTR=%x INEA=%x RXON=%x TXON=%x sent=%x sflags=0x%x\n",
-            csr0_send,
-            (csr0_send & 0x0400) ? 1 : 0,
-            (csr0_send & 0x0200) ? 1 : 0,
-            (csr0_send & 0x0080) ? 1 : 0,
-            (csr0_send & 0x0040) ? 1 : 0,
-            (csr0_send & 0x0020) ? 1 : 0,
-            (csr0_send & 0x0010) ? 1 : 0,
-            sent,
-            sflags);
+      
     }
     jlos_spin_unlock_irqrestore(&self->send_lock, fl);
 }

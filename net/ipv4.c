@@ -4,6 +4,7 @@
  */
 
 #include <net/ipv4.h>
+#include <net/network.h>
 #include <kernel/memory_manager.h>
 #include <include/config.h>
 
@@ -48,7 +49,6 @@ static bool jlos_internet_protocol_provider_on_ether_frame_received(jlos_interne
     bool send_back = false;
     uint8_t header_length = JLOS_IPV4_GET_IHL(ip_message);
     if (ip_message->dst_ip == jlos_ether_frame_provider_get_ip_address(self->base_handler.backend) || ip_message->dst_ip == JLOS_IPV4_BROADCAST || (ip_message->dst_ip & JLOS_IPV4_LOOPBACK_MASK) == JLOS_IPV4_LOOPBACK_NET) {
-        printk_debug("packet is for us\n");
         int length = JLOS_SWAP_ENDIAN_16(ip_message->total_length);
         if (length > (int)size) {
             length = size;
@@ -117,9 +117,14 @@ void jlos_internet_protocol_provider_send(jlos_internet_protocol_provider_t* sel
     message->checksum =
         jlos_internet_protocol_provider_csum_fold(jlos_internet_protocol_provider_csum_partial(message, sizeof(jlos_ipv4_message_t), 0));
     if ((dstIP_BE & JLOS_IPV4_LOOPBACK_MASK) == JLOS_IPV4_LOOPBACK_NET) {
-
-        jlos_internet_protocol_provider_on_ether_frame_received(self, skb);
-        jlos_net_skb_free(skb);
+        jlos_ether_frame_header_t *frame = (jlos_ether_frame_header_t *)jlos_net_skb_push(skb, sizeof(jlos_ether_frame_header_t));
+        uint64_t local_mac = jlos_ether_frame_provider_get_mac_address(self->base_handler.backend);
+        for (uint8_t i = 0; i < 6; i++) {
+            frame->dstMAC[i] = (uint8_t)(local_mac >> (8 * i));
+            frame->srcMAC[i] = frame->dstMAC[i];
+        }
+        frame->etherType_BE = self->base_handler.etherType_BE;
+        jlos_netif_rx(skb);
         return;
     }
     uint64_t dst_mac;
